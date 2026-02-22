@@ -80,7 +80,7 @@ function PulseDot({ color }: { color: string }) {
         Animated.timing(blink, { toValue: 1, duration: 600, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [blink]);
   return <Animated.View style={[styles.pulseDot, { backgroundColor: color, opacity: blink }]} />;
 }
 
