@@ -236,7 +236,7 @@ export default function ScanResult() {
           <Text style={styles.alertIcon}>🚨</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.alertTitle}>Emergency Information</Text>
-            <Text style={styles.alertSub}>This card was scanned from a student's Safety QR</Text>
+            <Text style={styles.alertSub}>This card was scanned from a student &apos;s Safety QR</Text>
           </View>
         </Animated.View>
 
