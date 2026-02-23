@@ -1,21 +1,21 @@
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
+  Alert,
+  Animated,
+  Image,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Image,
-  StatusBar,
-  Alert,
-  Animated,
-  Platform,
   useWindowDimensions,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { useState, useRef, useEffect } from "react";
-import * as ImagePicker from "expo-image-picker";
 
 // ─── Theme (matches Dashboard, Welcome, Updates, Profile) ─────────────────────
 
@@ -45,14 +45,12 @@ const THEME = {
 // ─── Field Config ─────────────────────────────────────────────────────────────
 
 const FIELDS = [
-  { key: "fullName",  label: "FULL NAME",              icon: "👤", required: true,  multiline: false, keyboard: "default"   as const },
-  { key: "guardian",  label: "GUARDIAN NAME",           icon: "🛡",  required: true,  multiline: false, keyboard: "default"   as const },
-  { key: "emergency", label: "EMERGENCY CONTACT",       icon: "📞", required: true,  multiline: false, keyboard: "phone-pad" as const },
-  { key: "blood",     label: "BLOOD TYPE",              icon: "🩸", required: true,  multiline: false, keyboard: "default"   as const },
-  { key: "medical",   label: "MEDICAL INFO (OPTIONAL)", icon: "🏥", required: false, multiline: true,  keyboard: "default"   as const },
+  { key: "fullName", label: "FULL NAME", icon: "👤", required: true, multiline: false, keyboard: "default" },
+  { key: "guardian", label: "GUARDIAN NAME", icon: "🛡", required: true, multiline: false, keyboard: "default" },
+  { key: "emergency", label: "EMERGENCY CONTACT", icon: "📞", required: true, multiline: false, keyboard: "phone-pad" },
+  { key: "blood", label: "BLOOD TYPE", icon: "🩸", required: true, multiline: false, keyboard: "default" },
+  { key: "medical", label: "MEDICAL INFO (OPTIONAL)", icon: "🏥", required: false, multiline: true, keyboard: "default" },
 ];
-
-type FormKeys = "fullName" | "guardian" | "emergency" | "blood" | "medical";
 
 // ─── Animated Field Row ───────────────────────────────────────────────────────
 
@@ -65,15 +63,6 @@ function FieldRow({
   onFocus,
   onBlur,
   scale,
-}: {
-  field: typeof FIELDS[0];
-  value: string;
-  focused: boolean;
-  index: number;
-  onChange: (v: string) => void;
-  onFocus: () => void;
-  onBlur: () => void;
-  scale: (n: number) => number;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(14)).current;
@@ -148,7 +137,7 @@ const fStyles = StyleSheet.create({
 
 // ─── Progress Bar ─────────────────────────────────────────────────────────────
 
-function ProgressBar({ filled, total }: { filled: number; total: number }) {
+function ProgressBar({ filled, total }) {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -178,13 +167,17 @@ export default function Profile() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
-  const scale = (size: number) => (width / 375) * size;
+  const scale = (size) => (width / 375) * size;
   const hPad = isTablet ? width * 0.18 : 20;
 
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [form, setForm] = useState<Record<FormKeys, string>>({
-    fullName: "", guardian: "", emergency: "", blood: "", medical: "",
+  const [photo, setPhoto] = useState(null);
+  const [focusedField, setFocusedField] = useState(null);
+  const [form, setForm] = useState({
+    fullName: "",
+    guardian: "",
+    emergency: "",
+    blood: "",
+    medical: "",
   });
 
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -207,7 +200,7 @@ export default function Profile() {
     ]).start();
   }, []);
 
-  const handleChange = (key: FormKeys, value: string) =>
+  const handleChange = (key, value) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const pickImage = async () => {
@@ -230,14 +223,14 @@ export default function Profile() {
     if (!result.canceled) setPhoto(result.assets[0].uri);
   };
 
-  const requiredKeys: FormKeys[] = ["fullName", "guardian", "emergency", "blood"];
+  const requiredKeys = ["fullName", "guardian", "emergency", "blood"];
   const filledCount = requiredKeys.filter((k) => form[k].length > 0).length + (photo ? 1 : 0);
   const totalCount = requiredKeys.length + 1;
   const isComplete = filledCount === totalCount;
 
-  const pressIn = (anim: Animated.Value) =>
+  const pressIn = (anim) =>
     Animated.spring(anim, { toValue: 0.96, useNativeDriver: true }).start();
-  const pressOut = (anim: Animated.Value) =>
+  const pressOut = (anim) =>
     Animated.spring(anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true }).start();
 
   const avatarSize = scale(isTablet ? 130 : 108);
@@ -313,10 +306,10 @@ export default function Profile() {
               <FieldRow
                 key={field.key}
                 field={field}
-                value={form[field.key as FormKeys]}
+                value={form[field.key]}
                 focused={focusedField === field.key}
                 index={index}
-                onChange={(v) => handleChange(field.key as FormKeys, v)}
+                onChange={(v) => handleChange(field.key, v)}
                 onFocus={() => setFocusedField(field.key)}
                 onBlur={() => setFocusedField(null)}
                 scale={scale}
