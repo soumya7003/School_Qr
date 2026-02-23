@@ -1,19 +1,17 @@
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
+  Animated,
+  Platform,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Animated,
-  Platform,
   useWindowDimensions,
-  NativeSyntheticEvent,
-  TextInputKeyPressEventData,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { useState, useRef, useEffect } from "react";
 
 // ─── Theme (matches full app) ─────────────────────────────────────────────────
 
@@ -53,12 +51,6 @@ function OtpBox({
   hasError,
   index,
   scale,
-}: {
-  value: string;
-  focused: boolean;
-  hasError: boolean;
-  index: number;
-  scale: (n: number) => number;
 }) {
   const borderAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -161,7 +153,7 @@ const boxStyles = StyleSheet.create({
 
 // ─── Resend Timer ─────────────────────────────────────────────────────────────
 
-function ResendTimer({ onResend }: { onResend: () => void }) {
+function ResendTimer({ onResend }) {
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
   const canResend = seconds === 0;
   const fade = useRef(new Animated.Value(0)).current;
@@ -221,7 +213,7 @@ const timerStyles = StyleSheet.create({
 
 // ─── Status Badge (blinking, same as Dashboard) ───────────────────────────────
 
-function StatusBadge({ label, color, bg }: { label: string; color: string; bg: string }) {
+function StatusBadge({ label, color, bg }) {
   const blink = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
@@ -251,14 +243,14 @@ export default function OTPVerification() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
-  const scale = (n: number) => (width / 375) * n;
+  const scale = (n) => (width / 375) * n;
   const hPad = isTablet ? width * 0.18 : 20;
 
-  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
   const [activeIndex, setActiveIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
   const [verified, setVerified] = useState(false);
-  const inputs = useRef<(TextInput | null)[]>([]);
+  const inputs = useRef([]);
 
   // Entrance animations
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -292,7 +284,7 @@ export default function OTPVerification() {
 
   const isFilled = otp.every((d) => d.length === 1);
 
-  const handleChange = (text: string, index: number) => {
+  const handleChange = (text, index) => {
     const digit = text.replace(/[^0-9]/g, "").slice(-1);
     const newOtp = [...otp];
     newOtp[index] = digit;
@@ -304,7 +296,7 @@ export default function OTPVerification() {
     }
   };
 
-  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>, index: number) => {
+  const handleKeyPress = (e, index) => {
     if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
       inputs.current[index - 1]?.focus();
       setActiveIndex(index - 1);

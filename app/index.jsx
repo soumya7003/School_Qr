@@ -1,16 +1,16 @@
+import { useRouter } from "expo-router";
+import { useEffect, useRef } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
   Animated,
   Platform,
-  useWindowDimensions,
   ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useRef, useEffect } from "react";
 
 // ─── Theme (matches Dashboard) ────────────────────────────────────────────────
 
@@ -31,9 +31,21 @@ const THEME = {
     white: "#FFFFFF",
   },
   font: {
-    display: Platform.select({ ios: "Georgia", android: "serif", default: "Georgia" }),
-    body: Platform.select({ ios: "Helvetica Neue", android: "sans-serif", default: "sans-serif" }),
-    mono: Platform.select({ ios: "Courier New", android: "monospace", default: "monospace" }),
+    display: Platform.select({
+      ios: "Georgia",
+      android: "serif",
+      default: "Georgia",
+    }),
+    body: Platform.select({
+      ios: "Helvetica Neue",
+      android: "sans-serif",
+      default: "sans-serif",
+    }),
+    mono: Platform.select({
+      ios: "Courier New",
+      android: "monospace",
+      default: "monospace",
+    }),
   },
   radius: { sm: 10, md: 16, lg: 24, pill: 50 },
 };
@@ -48,7 +60,7 @@ const FEATURES = [
 
 // ─── Animated Pulse Ring (reused from Dashboard) ───────────────────────────────
 
-function PulseRing({ size }: { size: number }) {
+function PulseRing({ size }) {
   const pulse = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.5)).current;
 
@@ -56,14 +68,30 @@ function PulseRing({ size }: { size: number }) {
     Animated.loop(
       Animated.parallel([
         Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.08, duration: 1800, useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 1800, useNativeDriver: true }),
+          Animated.timing(pulse, {
+            toValue: 1.08,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
         ]),
         Animated.sequence([
-          Animated.timing(pulseOpacity, { toValue: 0.1, duration: 1800, useNativeDriver: true }),
-          Animated.timing(pulseOpacity, { toValue: 0.45, duration: 1800, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, {
+            toValue: 0.1,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseOpacity, {
+            toValue: 0.45,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
         ]),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -91,9 +119,17 @@ function StatusBadge() {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(blink, { toValue: 0.2, duration: 700, useNativeDriver: true }),
-        Animated.timing(blink, { toValue: 1, duration: 700, useNativeDriver: true }),
-      ])
+        Animated.timing(blink, {
+          toValue: 0.2,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(blink, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
     ).start();
   }, []);
 
@@ -139,7 +175,7 @@ export default function Welcome() {
   const isTablet = width >= 768;
   const hPad = isTablet ? width * 0.18 : 20;
 
-  const scale = (size: number) => (width / 375) * size;
+  const scale = (size) => (width / 375) * size;
   const logoSize = scale(isTablet ? 110 : 88);
 
   // Entrance animations
@@ -161,53 +197,108 @@ export default function Welcome() {
     Animated.stagger(100, [
       // Wordmark
       Animated.parallel([
-        Animated.timing(headerFade, { toValue: 1, duration: 420, useNativeDriver: true }),
-        Animated.spring(headerSlide, { toValue: 0, tension: 70, friction: 10, useNativeDriver: true }),
+        Animated.timing(headerFade, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.spring(headerSlide, {
+          toValue: 0,
+          tension: 70,
+          friction: 10,
+          useNativeDriver: true,
+        }),
       ]),
       // Logo
       Animated.parallel([
-        Animated.timing(logoFade, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.spring(logoScale, { toValue: 1, tension: 65, friction: 9, useNativeDriver: true }),
+        Animated.timing(logoFade, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.spring(logoScale, {
+          toValue: 1,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }),
       ]),
       // Title + subtitle
       Animated.parallel([
-        Animated.timing(heroFade, { toValue: 1, duration: 450, useNativeDriver: true }),
-        Animated.spring(heroSlide, { toValue: 0, tension: 70, friction: 10, useNativeDriver: true }),
+        Animated.timing(heroFade, {
+          toValue: 1,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+        Animated.spring(heroSlide, {
+          toValue: 0,
+          tension: 70,
+          friction: 10,
+          useNativeDriver: true,
+        }),
       ]),
       // Feature pills
-      Animated.timing(pillsFade, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.timing(pillsFade, {
+        toValue: 1,
+        duration: 380,
+        useNativeDriver: true,
+      }),
       // Buttons
       Animated.parallel([
-        Animated.timing(btnFade, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.spring(btnSlide, { toValue: 0, tension: 70, friction: 10, useNativeDriver: true }),
+        Animated.timing(btnFade, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(btnSlide, {
+          toValue: 0,
+          tension: 70,
+          friction: 10,
+          useNativeDriver: true,
+        }),
       ]),
     ]).start();
   }, []);
 
-  const pressIn = (anim: Animated.Value) =>
+  const pressIn = (anim) =>
     Animated.spring(anim, { toValue: 0.95, useNativeDriver: true }).start();
-  const pressOut = (anim: Animated.Value) =>
-    Animated.spring(anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true }).start();
+  const pressOut = (anim) =>
+    Animated.spring(anim, {
+      toValue: 1,
+      tension: 200,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={THEME.colors.bg} />
 
       {/* Decorative background blobs */}
-      <View style={[styles.blob, {
-        width: width * 0.8,
-        height: width * 0.8,
-        borderRadius: width * 0.4,
-        top: -width * 0.22,
-        left: -width * 0.25,
-      }]} />
-      <View style={[styles.blobSm, {
-        width: width * 0.5,
-        height: width * 0.5,
-        borderRadius: width * 0.25,
-        bottom: height * 0.1,
-        right: -width * 0.18,
-      }]} />
+      <View
+        style={[
+          styles.blob,
+          {
+            width: width * 0.8,
+            height: width * 0.8,
+            borderRadius: width * 0.4,
+            top: -width * 0.22,
+            left: -width * 0.25,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.blobSm,
+          {
+            width: width * 0.5,
+            height: width * 0.5,
+            borderRadius: width * 0.25,
+            bottom: height * 0.1,
+            right: -width * 0.18,
+          },
+        ]}
+      />
 
       {/* Accent right edge stripe */}
       <View style={styles.stripe} />
@@ -218,7 +309,10 @@ export default function Welcome() {
       >
         {/* ── Wordmark ── */}
         <Animated.View
-          style={[styles.wordmark, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}
+          style={[
+            styles.wordmark,
+            { opacity: headerFade, transform: [{ translateY: headerSlide }] },
+          ]}
         >
           <View style={styles.wordmarkDot} />
           <Text style={styles.wordmarkText}>SAFETY QR</Text>
@@ -230,7 +324,10 @@ export default function Welcome() {
 
         {/* ── Hero Logo ── */}
         <Animated.View
-          style={[styles.logoSection, { opacity: logoFade, transform: [{ scale: logoScale }] }]}
+          style={[
+            styles.logoSection,
+            { opacity: logoFade, transform: [{ scale: logoScale }] },
+          ]}
         >
           <PulseRing size={logoSize} />
           <View
@@ -247,19 +344,31 @@ export default function Welcome() {
             <View style={styles.shieldWrap}>
               <View style={styles.shieldTop} />
               <View style={styles.shieldBottom} />
-              <Text style={[styles.shieldGlyph, { fontSize: scale(isTablet ? 22 : 18) }]}>✦</Text>
+              <Text
+                style={[
+                  styles.shieldGlyph,
+                  { fontSize: scale(isTablet ? 22 : 18) },
+                ]}
+              >
+                ✦
+              </Text>
             </View>
           </View>
         </Animated.View>
 
         {/* ── Title & Subtitle ── */}
         <Animated.View
-          style={[styles.heroText, { opacity: heroFade, transform: [{ translateY: heroSlide }] }]}
+          style={[
+            styles.heroText,
+            { opacity: heroFade, transform: [{ translateY: heroSlide }] },
+          ]}
         >
           <Text style={[styles.title, { fontSize: scale(isTablet ? 36 : 30) }]}>
             Your Digital{"\n"}Emergency ID
           </Text>
-          <Text style={[styles.subtitle, { fontSize: scale(isTablet ? 17 : 14) }]}>
+          <Text
+            style={[styles.subtitle, { fontSize: scale(isTablet ? 17 : 14) }]}
+          >
             One scan. All the info that matters.
           </Text>
         </Animated.View>
@@ -279,7 +388,10 @@ export default function Welcome() {
 
         {/* ── Buttons ── */}
         <Animated.View
-          style={[styles.btnGroup, { opacity: btnFade, transform: [{ translateY: btnSlide }] }]}
+          style={[
+            styles.btnGroup,
+            { opacity: btnFade, transform: [{ translateY: btnSlide }] },
+          ]}
         >
           <Animated.View style={{ transform: [{ scale: primaryScale }] }}>
             <TouchableOpacity
@@ -287,7 +399,7 @@ export default function Welcome() {
               activeOpacity={1}
               onPressIn={() => pressIn(primaryScale)}
               onPressOut={() => pressOut(primaryScale)}
-              onPress={() => router.push("/auth")}
+              onPress={() => router.push("/scan")}
               accessibilityRole="button"
               accessibilityLabel="Register"
             >
@@ -308,7 +420,9 @@ export default function Welcome() {
               accessibilityRole="button"
               accessibilityLabel="Log in"
             >
-              <Text style={styles.secondaryText}>Already have an account? Log in</Text>
+              <Text style={styles.secondaryText}>
+                Already have an account? Log in
+              </Text>
             </TouchableOpacity>
           </Animated.View>
 
@@ -511,6 +625,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     backgroundColor: "rgba(255,255,255,0.2)",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -518,6 +633,9 @@ const styles = StyleSheet.create({
     color: THEME.colors.white,
     fontSize: 18,
     fontWeight: "600",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   secondaryBtn: {
     borderWidth: 1.5,
