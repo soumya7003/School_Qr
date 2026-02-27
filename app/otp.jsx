@@ -40,8 +40,8 @@ const THEME = {
   radius: { sm: 10, md: 16, lg: 24, pill: 50 },
 };
 
-const OTP_LENGTH = 4;
-const RESEND_SECONDS = 25;
+const OTP_LENGTH = 6;
+const RESEND_SECONDS = 30;
 
 // ─── Single OTP Box ───────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ function OtpBox({
     outputRange: [THEME.colors.card, "#191E2E"],
   });
 
-  const boxSize = scale(62);
+  const boxSize = scale(52);
 
   return (
     <Animated.View
@@ -145,7 +145,7 @@ const boxStyles = StyleSheet.create({
   },
   digit: {
     color: THEME.colors.light,
-    fontWeight: "700",
+    fontWeight: "700",cardHeaderLabel
     fontFamily: THEME.font.mono,
     letterSpacing: 2,
   },
@@ -308,7 +308,7 @@ export default function OTPVerification() {
 
   const handleSubmit = () => {
     // Demo: treat "1234" as correct
-    if (otp.join("") === "1234") {
+    if (otp.join("") === "123456") {
       setHasError(false);
       setVerified(true);
       Animated.parallel([
@@ -434,7 +434,7 @@ export default function OTPVerification() {
 
             {/* Hint */}
             <Text style={styles.hintText}>
-              Demo: enter <Text style={styles.hintCode}>1234</Text> to verify
+              Demo: enter <Text style={styles.hintCode}>123456</Text> to verify
             </Text>
           </View>
         </Animated.View>
@@ -517,10 +517,15 @@ const styles = StyleSheet.create({
   },
   cardHeaderLabel: { fontSize: 10, fontFamily: THEME.font.mono, color: THEME.colors.muted, letterSpacing: 2, fontWeight: "700" },
   cardHeaderDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: THEME.colors.accent },
-  cardBody: { padding: 28, alignItems: "center" },
+  cardBody: { padding: 22,paddingHorizontal:18, alignItems: "center" },
 
   // OTP
-  otpRow: { flexDirection: "row", gap: 14, marginBottom: 8 },
+  otpRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  width: "100%",
+  marginBottom: 8,
+  } ,
   hiddenInput: {
     position: "absolute", opacity: 0,
     width: "100%", height: "100%",
