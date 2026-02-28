@@ -7,30 +7,30 @@
  *   ?mode=login     →  "Welcome back" (mobile only)
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
-  View,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Platform,
-  KeyboardAvoidingView,
-  ScrollView,
-  Keyboard,
   TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Svg, Path, Rect, Line, Circle } from 'react-native-svg';
+import { Svg, Path, Rect, Line } from 'react-native-svg';
 import Animated, {
-  FadeInDown,
   FadeIn,
-  useSharedValue,
+  FadeInDown,
   useAnimatedStyle,
-  withTiming,
+  useSharedValue,
   withSequence,
+  withTiming,
   Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,30 +38,36 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // ─── Tokens ────────────────────────────────────────────────────────────────────
 
 const C = {
-  bg:           '#0D0D0F',
-  bgDeep:       '#120909',
-  surface:      '#161619',
-  red:          '#FF3B30',
-  redDark:      '#C8211A',
-  redSubtle:    'rgba(255,59,48,0.10)',
-  redBorder:    'rgba(255,59,48,0.38)',
-  white:        '#FFFFFF',
-  muted:        'rgba(255,255,255,0.42)',
-  dim:          'rgba(255,255,255,0.22)',
-  border:       'rgba(255,255,255,0.08)',
-  inputBorder:  'rgba(255,255,255,0.11)',
-  focusBorder:  'rgba(255,59,48,0.60)',
-  inputBg:      'rgba(255,255,255,0.05)',
-  tabBg:        'rgba(255,255,255,0.06)',
-  tabInactive:  'rgba(255,255,255,0.40)',
-  divider:      'rgba(255,255,255,0.09)',
+  bg:          '#0D0D0F',
+  bgDeep:      '#120909',
+  surface:     '#161619',
+  red:         '#FF3B30',
+  redDark:     '#C8211A',
+  redSubtle:   'rgba(255,59,48,0.10)',
+  redBorder:   'rgba(255,59,48,0.38)',
+  white:       '#FFFFFF',
+  muted:       'rgba(255,255,255,0.42)',
+  dim:         'rgba(255,255,255,0.22)',
+  border:      'rgba(255,255,255,0.08)',
+  inputBorder: 'rgba(255,255,255,0.11)',
+  focusBorder: 'rgba(255,59,48,0.60)',
+  inputBg:     'rgba(255,255,255,0.05)',
+  tabBg:       'rgba(255,255,255,0.06)',
+  tabInactive: 'rgba(255,255,255,0.40)',
+  divider:     'rgba(255,255,255,0.09)',
 };
 
-// ─── SVG Icons ─────────────────────────────────────────────────────────────────
+// ─── Icons ─────────────────────────────────────────────────────────────────────
 
 const ArrowLeftIcon = () => (
   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 12H5M5 12l7-7M5 12l7 7" stroke={C.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path
+      d="M19 12H5M5 12l7-7M5 12l7 7"
+      stroke={C.white}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </Svg>
 );
 
@@ -89,17 +95,22 @@ const QrBoxIcon = () => (
     <Rect x="3" y="3" width="7" height="7" rx="1" stroke={C.red} strokeWidth="1.8" />
     <Rect x="14" y="3" width="7" height="7" rx="1" stroke={C.red} strokeWidth="1.8" />
     <Rect x="3" y="14" width="7" height="7" rx="1" stroke={C.red} strokeWidth="1.8" />
-    <Path d="M14 14h3v3M17 14h3M14 17v3h3M17 20h3v-3" stroke={C.red} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <Path
+      d="M14 14h3v3M17 14h3M14 17v3h3M17 20h3v-3"
+      stroke={C.red}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </Svg>
 );
 
-// ─── Segmented Control ─────────────────────────────────────────────────────────
+// ─── SegmentedControl ─────────────────────────────────────────────────────────
 
 function SegmentedControl({ value, onChange }) {
-  const tabs = ['Manual Entry', 'Scan QR'];
   return (
     <View style={seg.wrap}>
-      {tabs.map((tab) => {
+      {['Manual Entry', 'Scan QR'].map((tab) => {
         const active = value === tab;
         return (
           <TouchableOpacity
@@ -136,29 +147,16 @@ const seg = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.inputBorder,
   },
-  tab: {
-    flex: 1,
-    borderRadius: 9,
-    overflow: 'hidden',
-  },
+  tab: { flex: 1, borderRadius: 9, overflow: 'hidden' },
   tabActive: {
     shadowColor: C.red,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.40,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 6,
   },
-  gradient: {
-    paddingVertical: 11,
-    alignItems: 'center',
-    borderRadius: 9,
-  },
-  labelActive: {
-    color: C.white,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
+  gradient: { paddingVertical: 11, alignItems: 'center', borderRadius: 9 },
+  labelActive: { color: C.white, fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
   labelInactive: {
     color: C.tabInactive,
     fontSize: 14,
@@ -169,11 +167,10 @@ const seg = StyleSheet.create({
   },
 });
 
-// ─── Input ─────────────────────────────────────────────────────────────────────
+// ─── AppInput ─────────────────────────────────────────────────────────────────
 
 function AppInput({ label, value, onChangeText, placeholder, keyboardType, icon, prefix }) {
   const [focused, setFocused] = useState(false);
-
   return (
     <View style={inp.wrapper}>
       {label ? <Text style={inp.label}>{label}</Text> : null}
@@ -222,28 +219,12 @@ const inp = StyleSheet.create({
     height: 54,
   },
   iconWrap: { marginRight: 10 },
-  prefix: {
-    color: C.muted,
-    fontSize: 15,
-    fontWeight: '600',
-    marginRight: 6,
-  },
-  prefixLine: {
-    width: 1,
-    height: 20,
-    backgroundColor: C.inputBorder,
-    marginRight: 12,
-  },
-  field: {
-    flex: 1,
-    color: C.white,
-    fontSize: 15.5,
-    fontWeight: '500',
-    letterSpacing: 0.4,
-  },
+  prefix: { color: C.muted, fontSize: 15, fontWeight: '600', marginRight: 6 },
+  prefixLine: { width: 1, height: 20, backgroundColor: C.inputBorder, marginRight: 12 },
+  field: { flex: 1, color: C.white, fontSize: 15.5, fontWeight: '500', letterSpacing: 0.4 },
 });
 
-// ─── Scan Box ──────────────────────────────────────────────────────────────────
+// ─── ScanBox ──────────────────────────────────────────────────────────────────
 
 function ScanBox() {
   return (
@@ -270,25 +251,25 @@ const scan = StyleSheet.create({
   label: { color: C.red, fontSize: 15, fontWeight: '600' },
 });
 
-// ─── Divider ───────────────────────────────────────────────────────────────────
+// ─── OrDivider ────────────────────────────────────────────────────────────────
 
-function Divider() {
+function OrDivider() {
   return (
-    <View style={div.row}>
-      <View style={div.line} />
-      <Text style={div.text}>or enter manually</Text>
-      <View style={div.line} />
+    <View style={divStyle.row}>
+      <View style={divStyle.line} />
+      <Text style={divStyle.text}>or enter manually</Text>
+      <View style={divStyle.line} />
     </View>
   );
 }
 
-const div = StyleSheet.create({
+const divStyle = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   line: { flex: 1, height: 1, backgroundColor: C.divider },
   text: { color: C.dim, fontSize: 12.5, letterSpacing: 0.2 },
 });
 
-// ─── Screen ────────────────────────────────────────────────────────────────────
+// ─── LoginScreen ──────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -301,7 +282,9 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const btnScale = useSharedValue(1);
-  const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
+  const btnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: btnScale.value }],
+  }));
 
   const canSubmit = isRegister
     ? card.trim().length > 0 && mobile.length === 10
@@ -315,7 +298,7 @@ export default function LoginScreen() {
     if (!canSubmit || loading) return;
     Keyboard.dismiss();
     btnScale.value = withSequence(
-      withTiming(0.96, { duration: 80, easing: Easing.out(Easing.quad) }),
+      withTiming(0.96, { duration: 80,  easing: Easing.out(Easing.quad) }),
       withTiming(1.00, { duration: 120, easing: Easing.out(Easing.back(2)) })
     );
     setLoading(true);
@@ -336,8 +319,6 @@ export default function LoginScreen() {
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
-
-      {/* ambient glow bottom */}
       <View style={s.glow} pointerEvents="none" />
 
       <KeyboardAvoidingView
@@ -353,7 +334,6 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-
             {/* Back */}
             <Animated.View entering={FadeIn.duration(400)}>
               <TouchableOpacity style={s.backBtn} onPress={handleBack} activeOpacity={0.7}>
@@ -376,14 +356,9 @@ export default function LoginScreen() {
 
             {/* Form */}
             <Animated.View entering={FadeInDown.duration(500).delay(200)} style={s.card}>
-
-              {isRegister && (
-                <SegmentedControl value={tab} onChange={setTab} />
-              )}
-
+              {isRegister && <SegmentedControl value={tab} onChange={setTab} />}
               {isRegister && tab === 'Scan QR' && <ScanBox />}
-
-              {isRegister && tab === 'Scan QR' && <Divider />}
+              {isRegister && tab === 'Scan QR' && <OrDivider />}
 
               {isRegister && (
                 <AppInput
@@ -405,7 +380,6 @@ export default function LoginScreen() {
                 prefix="+91"
               />
 
-              {/* Submit */}
               <Animated.View style={btnStyle}>
                 <TouchableOpacity
                   onPress={handleSubmit}
@@ -426,7 +400,6 @@ export default function LoginScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
               </Animated.View>
-
             </Animated.View>
 
             {/* Footer */}
@@ -448,7 +421,6 @@ export default function LoginScreen() {
                 </Text>
               </TouchableOpacity>
             </Animated.View>
-
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -456,11 +428,10 @@ export default function LoginScreen() {
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-
   glow: {
     position: 'absolute',
     bottom: -80,
@@ -471,9 +442,7 @@ const s = StyleSheet.create({
     backgroundColor: C.red,
     opacity: 0.04,
   },
-
   scroll: { paddingHorizontal: 22, flexGrow: 1 },
-
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -483,7 +452,6 @@ const s = StyleSheet.create({
     marginBottom: 30,
   },
   backLabel: { color: C.white, fontSize: 15.5, fontWeight: '600' },
-
   header: { marginBottom: 26, gap: 10 },
   title: {
     fontSize: 34,
@@ -499,7 +467,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.1,
     maxWidth: 320,
   },
-
   card: {
     backgroundColor: C.surface,
     borderRadius: 20,
@@ -513,7 +480,6 @@ const s = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-
   submitWrap: {
     borderRadius: 15,
     overflow: 'hidden',
@@ -535,7 +501,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.4,
   },
-
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
