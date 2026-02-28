@@ -14,36 +14,36 @@
  *   plugins: ['react-native-reanimated/plugin']
  */
 
-import React, { useState, useCallback } from 'react';
+import { router } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { Svg, Path, Rect, Circle } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Circle, Path, Rect, Svg } from 'react-native-svg';
 
 // ─── Design Tokens ─────────────────────────────────────────────────────────────
 
 const COLORS = {
-  bg:              '#0D0F14', // Very dark background matching the UI
-  surface:         '#181B22', // Input and tab backgrounds
-  surfaceLight:    '#252830', // Borders and dividers
-  primary:         '#E94033', // Brand Red
-  primaryFaded:    'rgba(233, 64, 51, 0.12)', // For the scan area background
-  primaryBorder:   'rgba(233, 64, 51, 0.4)',  // For the scan area border
-  white:           '#FFFFFF',
-  textMuted:       '#8A8F9A',
-  textDim:         '#5A5E67',
-  focusRing:       '#E94033',
+  bg: '#0D0F14', // Very dark background matching the UI
+  surface: '#181B22', // Input and tab backgrounds
+  surfaceLight: '#252830', // Borders and dividers
+  primary: '#E94033', // Brand Red
+  primaryFaded: 'rgba(233, 64, 51, 0.12)', // For the scan area background
+  primaryBorder: 'rgba(233, 64, 51, 0.4)',  // For the scan area border
+  white: '#FFFFFF',
+  textMuted: '#8A8F9A',
+  textDim: '#5A5E67',
+  focusRing: '#E94033',
 };
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
@@ -93,12 +93,12 @@ const PhoneIcon = ({ size = 20, color = COLORS.textMuted }) => (
 
 export default function LinkCardScreen() {
   const insets = useSafeAreaInsets();
-  
+
   // State
   const [activeTab, setActiveTab] = useState('manual'); // 'manual' | 'scan'
   const [cardNumber, setCardNumber] = useState('SQ-2024-004891');
   const [mobileNumber, setMobileNumber] = useState('');
-  
+
   // Focus State for styling
   const [focusedInput, setFocusedInput] = useState('card'); // 'card' | 'mobile' | null
 
@@ -128,9 +128,9 @@ export default function LinkCardScreen() {
         >
           {/* ── Header ── */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <TouchableOpacity 
-              activeOpacity={0.7} 
-              onPress={handleBack} 
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleBack}
               style={styles.backButton}
               accessibilityRole="button"
               accessibilityLabel="Go back"
@@ -189,7 +189,7 @@ export default function LinkCardScreen() {
 
           {/* ── Form Inputs ── */}
           <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.formContainer}>
-            
+
             {/* Card Number Input */}
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>CARD NUMBER</Text>
@@ -242,7 +242,7 @@ export default function LinkCardScreen() {
         </ScrollView>
 
         {/* ── Footer Button ── */}
-        <Animated.View 
+        <Animated.View
           entering={FadeInDown.duration(500).delay(700)}
           style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}
         >

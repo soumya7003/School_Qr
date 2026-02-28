@@ -12,55 +12,55 @@
  *                    expo-camera
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  View,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  Platform,
-  KeyboardAvoidingView,
-  ScrollView,
-  Keyboard,
   TouchableWithoutFeedback,
+  View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Svg, Path, Rect, Line } from 'react-native-svg';
 import Animated, {
-  FadeInDown,
-  FadeIn,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSequence,
   Easing,
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Line, Path, Rect, Svg } from 'react-native-svg';
 
 // ─── Design Tokens ─────────────────────────────────────────────────────────────
 
 const COLORS = {
-  bg:              '#0D0D0F',
-  bgDeep:          '#120909',
-  surface:         '#161619',
-  surfaceHover:    '#1C1C1F',
-  red:             '#FF3B30',
-  redDark:         '#C8211A',
-  redSubtle:       'rgba(255,59,48,0.12)',
-  redBorder:       'rgba(255,59,48,0.35)',
-  white:           '#FFFFFF',
-  textMuted:       'rgba(255,255,255,0.42)',
-  textDim:         'rgba(255,255,255,0.22)',
-  cardBorder:      'rgba(255,255,255,0.06)',
-  inputBorder:     'rgba(255,255,255,0.10)',
-  inputBorderFocus:'rgba(255,59,48,0.55)',
-  inputBg:         'rgba(255,255,255,0.05)',
-  tabInactive:     'rgba(255,255,255,0.07)',
-  tabInactiveTxt:  'rgba(255,255,255,0.45)',
-  divider:         'rgba(255,255,255,0.09)',
+  bg: '#0D0D0F',
+  bgDeep: '#120909',
+  surface: '#161619',
+  surfaceHover: '#1C1C1F',
+  red: '#FF3B30',
+  redDark: '#C8211A',
+  redSubtle: 'rgba(255,59,48,0.12)',
+  redBorder: 'rgba(255,59,48,0.35)',
+  white: '#FFFFFF',
+  textMuted: 'rgba(255,255,255,0.42)',
+  textDim: 'rgba(255,255,255,0.22)',
+  cardBorder: 'rgba(255,255,255,0.06)',
+  inputBorder: 'rgba(255,255,255,0.10)',
+  inputBorderFocus: 'rgba(255,59,48,0.55)',
+  inputBg: 'rgba(255,255,255,0.05)',
+  tabInactive: 'rgba(255,255,255,0.07)',
+  tabInactiveTxt: 'rgba(255,255,255,0.45)',
+  divider: 'rgba(255,255,255,0.09)',
 };
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ export default function LoginScreen() {
   const isRegister = mode === 'register';
 
   const [activeTab, setActiveTab] = useState('Manual Entry');
-  const [cardNumber, setCardNumber]   = useState('');
+  const [cardNumber, setCardNumber] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -457,7 +457,7 @@ export default function LoginScreen() {
               {/* Scan QR Box — visible when Scan QR tab active */}
               {isRegister && (
                 <View style={styles.scanSection}>
-                  <ScanQRBox onPress={() => {}} />
+                  <ScanQRBox onPress={() => { }} />
                   <OrDivider />
                 </View>
               )}

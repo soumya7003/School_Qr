@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const [active, setActive] = useState(true);
@@ -553,7 +553,7 @@ export default function Home() {
                 <span className="avatar-letter">A</span>
                 <div className="verified">
                   <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                    <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="#050810" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="#050810" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
               </div>
@@ -564,7 +564,7 @@ export default function Home() {
             <div className="chip-row">
               <span className="chip chip-blue">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                  <path d="M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" />
                 </svg>
                 Delhi Public School
               </span>
@@ -615,7 +615,7 @@ export default function Home() {
                 <span className="sh-title">Emergency Info</span>
                 <button className="icon-btn">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                    <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                   </svg>
                 </button>
               </div>
@@ -623,7 +623,7 @@ export default function Home() {
               <div className="blood-row">
                 <div className="blood-icon">
                   <svg width="17" height="17" viewBox="0 0 24 24">
-                    <path d="M12 2C12 2 4.5 10.5 4.5 15.5a7.5 7.5 0 0 0 15 0C19.5 10.5 12 2 12 2z" fill="#FF3131"/>
+                    <path d="M12 2C12 2 4.5 10.5 4.5 15.5a7.5 7.5 0 0 0 15 0C19.5 10.5 12 2 12 2z" fill="#FF3131" />
                   </svg>
                 </div>
                 <div className="blood-meta">
@@ -634,10 +634,10 @@ export default function Home() {
 
               <div className="igrid">
                 {[
-                  { label: "Allergies",    value: "Peanuts",     red: false },
-                  { label: "Conditions",   value: "Mild Asthma", red: false },
-                  { label: "Doctor",       value: "Dr. Mehta",   red: false },
-                  { label: "Doctor Phone", value: "+91 9876...", red: true  },
+                  { label: "Allergies", value: "Peanuts", red: false },
+                  { label: "Conditions", value: "Mild Asthma", red: false },
+                  { label: "Doctor", value: "Dr. Mehta", red: false },
+                  { label: "Doctor Phone", value: "+91 9876...", red: true },
                 ].map(({ label, value, red }) => (
                   <div className="gcell" key={label}>
                     <div className="gc-eye">{label}</div>
@@ -655,13 +655,13 @@ export default function Home() {
                 <span className="sh-title">Emergency Contacts</span>
                 <button className="icon-btn">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14"/>
+                    <path d="M12 5v14M5 12h14" />
                   </svg>
                 </button>
               </div>
 
               {[
-                { initials: "P", name: "Priya Sharma",  rel: "Mother", primary: true,  avi: "cavi-red"  },
+                { initials: "P", name: "Priya Sharma", rel: "Mother", primary: true, avi: "cavi-red" },
                 { initials: "R", name: "Rajesh Sharma", rel: "Father", primary: false, avi: "cavi-blue" },
               ].map(({ initials, name, rel, primary, avi }) => (
                 <div className="citem" key={name}>
@@ -677,7 +677,7 @@ export default function Home() {
                   </div>
                   <button className="call-btn">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.13.67.32 1.33.57 1.97a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6.1 6.1l1.27-1.27a2 2 0 0 1 2.11-.45c.64.25 1.3.44 1.97.57A2 2 0 0 1 22 16.92z"/>
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.13.67.32 1.33.57 1.97a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6.1 6.1l1.27-1.27a2 2 0 0 1 2.11-.45c.64.25 1.3.44 1.97.57A2 2 0 0 1 22 16.92z" />
                     </svg>
                   </button>
                 </div>
@@ -686,49 +686,6 @@ export default function Home() {
           </div>
 
         </div>
-
-        {/* ── TAB BAR ── */}
-        <nav className="tabbar">
-          <button className="titem on">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-            </svg>
-            Home
-          </button>
-
-          <button className="titem">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-              <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-              <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-              <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-            </svg>
-            QR
-          </button>
-
-          <div className="tfab">
-            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
-              <rect x="9" y="9" width="6" height="6" rx="1"/>
-            </svg>
-          </div>
-
-          <button className="titem">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            Update
-          </button>
-
-          <button className="titem">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            Settings
-          </button>
-        </nav>
       </div>
     </div>
   );

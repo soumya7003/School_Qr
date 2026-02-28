@@ -16,68 +16,65 @@
  * babel.config.js must include: plugins: ['react-native-reanimated/plugin']
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  StatusBar,
-  Platform,
-  Keyboard,
-  KeyboardAvoidingView,
-  ScrollView,
+  View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Svg, Path } from 'react-native-svg';
 import Animated, {
-  useSharedValue,
+  FadeIn,
+  FadeInDown,
   useAnimatedStyle,
-  withTiming,
+  useSharedValue,
   withDelay,
-  withRepeat,
   withSequence,
   withSpring,
-  Easing,
-  FadeInDown,
-  FadeIn,
-  runOnJS,
+  withTiming
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Path, Svg } from 'react-native-svg';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const OTP_LENGTH     = 6;
+const OTP_LENGTH = 6;
 const RESEND_SECONDS = 120; // 2 min timer shown in image
 
 const COLORS = {
-  bg:             '#0D0D0F',
-  bgMid:          '#120909',
-  surface:        '#161820',
-  card:           '#1A1B22',
-  cardBorder:     'rgba(255,255,255,0.08)',
-  red:            '#FF3B30',
-  redDark:        '#C8211A',
-  redGlow:        'rgba(255,59,48,0.18)',
-  redFaint:       'rgba(255,59,48,0.07)',
-  boxBg:          '#1C1D24',
-  boxBgFilled:    '#211215',
-  boxBorder:      'rgba(255,255,255,0.10)',
-  boxBorderActive:'#FF3B30',
-  boxBorderFilled:'rgba(255,59,48,0.55)',
-  white:          '#FFFFFF',
-  textMuted:      'rgba(255,255,255,0.45)',
-  textDim:        'rgba(255,255,255,0.22)',
-  timerBg:        'rgba(255,255,255,0.07)',
-  timerBorder:    'rgba(255,255,255,0.10)',
-  timerDot:       '#FF9500',
-  green:          '#2ECC71',
-  greenSoft:      'rgba(46,204,113,0.12)',
-  danger:         '#FF3B30',
-  dangerSoft:     'rgba(255,59,48,0.12)',
+  bg: '#0D0D0F',
+  bgMid: '#120909',
+  surface: '#161820',
+  card: '#1A1B22',
+  cardBorder: 'rgba(255,255,255,0.08)',
+  red: '#FF3B30',
+  redDark: '#C8211A',
+  redGlow: 'rgba(255,59,48,0.18)',
+  redFaint: 'rgba(255,59,48,0.07)',
+  boxBg: '#1C1D24',
+  boxBgFilled: '#211215',
+  boxBorder: 'rgba(255,255,255,0.10)',
+  boxBorderActive: '#FF3B30',
+  boxBorderFilled: 'rgba(255,59,48,0.55)',
+  white: '#FFFFFF',
+  textMuted: 'rgba(255,255,255,0.45)',
+  textDim: 'rgba(255,255,255,0.22)',
+  timerBg: 'rgba(255,255,255,0.07)',
+  timerBorder: 'rgba(255,255,255,0.10)',
+  timerDot: '#FF9500',
+  green: '#2ECC71',
+  greenSoft: 'rgba(46,204,113,0.12)',
+  danger: '#FF3B30',
+  dangerSoft: 'rgba(255,59,48,0.12)',
 };
 
 // ─── Phone Icon ────────────────────────────────────────────────────────────────
@@ -105,13 +102,13 @@ const ArrowRight = () => (
 // ─── Single OTP Box ────────────────────────────────────────────────────────────
 
 const OtpBox = ({ value, isFocused, hasError, index }) => {
-  const scale   = useSharedValue(0.8);
+  const scale = useSharedValue(0.8);
   const opacity = useSharedValue(0);
 
   // Entrance stagger
   useEffect(() => {
     opacity.value = withDelay(300 + index * 70, withTiming(1, { duration: 300 }));
-    scale.value   = withDelay(300 + index * 70, withSpring(1, { damping: 14, stiffness: 160 }));
+    scale.value = withDelay(300 + index * 70, withSpring(1, { damping: 14, stiffness: 160 }));
   }, []);
 
   // Pop when value changes
@@ -119,14 +116,14 @@ const OtpBox = ({ value, isFocused, hasError, index }) => {
   useEffect(() => {
     if (value) {
       pop.value = withSequence(
-        withSpring(1.18, { damping: 8,  stiffness: 260 }),
-        withSpring(1,    { damping: 12, stiffness: 260 })
+        withSpring(1.18, { damping: 8, stiffness: 260 }),
+        withSpring(1, { damping: 12, stiffness: 260 })
       );
     }
   }, [value]);
 
   const containerStyle = useAnimatedStyle(() => ({
-    opacity:   opacity.value,
+    opacity: opacity.value,
     transform: [{ scale: scale.value }],
   }));
 
@@ -176,7 +173,7 @@ const OtpBox = ({ value, isFocused, hasError, index }) => {
 // ─── Resend Timer ──────────────────────────────────────────────────────────────
 
 const ResendTimer = ({ onResend }) => {
-  const [secs, setSecs]       = useState(RESEND_SECONDS);
+  const [secs, setSecs] = useState(RESEND_SECONDS);
   const [canResend, setResend] = useState(false);
 
   useEffect(() => {
@@ -225,13 +222,13 @@ const ResendTimer = ({ onResend }) => {
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
-  const phone  = params.phone  || '+91 98765 43210';
-  const mode   = params.mode   || 'register';
+  const phone = params.phone || '+91 98765 43210';
+  const mode = params.mode || 'register';
 
-  const [otp,         setOtp]       = useState(Array(OTP_LENGTH).fill(''));
-  const [activeIndex, setActive]    = useState(0);
-  const [hasError,    setError]     = useState(false);
-  const [verified,    setVerified]  = useState(false);
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
+  const [activeIndex, setActive] = useState(0);
+  const [hasError, setError] = useState(false);
+  const [verified, setVerified] = useState(false);
   const inputRefs = useRef([]);
 
   // Shake animation value
@@ -248,7 +245,7 @@ export default function OtpScreen() {
 
   const handleChange = useCallback((text, index) => {
     const digit = text.replace(/\D/g, '').slice(-1);
-    const next  = [...otp];
+    const next = [...otp];
     next[index] = digit;
     setOtp(next);
     setError(false);
@@ -273,12 +270,12 @@ export default function OtpScreen() {
 
   const triggerShake = () => {
     shakeX.value = withSequence(
-      withTiming( 9,  { duration: 55 }),
-      withTiming(-9,  { duration: 55 }),
-      withTiming( 6,  { duration: 55 }),
-      withTiming(-6,  { duration: 55 }),
-      withTiming( 3,  { duration: 55 }),
-      withTiming( 0,  { duration: 55 }),
+      withTiming(9, { duration: 55 }),
+      withTiming(-9, { duration: 55 }),
+      withTiming(6, { duration: 55 }),
+      withTiming(-6, { duration: 55 }),
+      withTiming(3, { duration: 55 }),
+      withTiming(0, { duration: 55 }),
     );
   };
 
@@ -303,7 +300,7 @@ export default function OtpScreen() {
     setTimeout(() => inputRefs.current[0]?.focus(), 100);
   }, []);
 
-  const onPressIn  = () => { if (isFilled) btnScale.value = withSpring(0.96, { damping: 14 }); };
+  const onPressIn = () => { if (isFilled) btnScale.value = withSpring(0.96, { damping: 14 }); };
   const onPressOut = () => { btnScale.value = withSpring(1, { damping: 14 }); };
 
   return (
@@ -503,7 +500,7 @@ export default function OtpScreen() {
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
 const { width: W } = Dimensions.get('window');
-const BOX_SIZE     = Math.min(Math.floor((W - 48 - 5 * 8) / 6), 52);
+const BOX_SIZE = Math.min(Math.floor((W - 48 - 5 * 8) / 6), 52);
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
