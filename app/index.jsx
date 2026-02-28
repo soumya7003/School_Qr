@@ -1,663 +1,458 @@
-import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+/**
+ * @file app/index.jsx
+ * @description Entry / Welcome screen — SchoolQR Guardian
+ *
+ * Responsibilities:
+ *  - Display animated splash/landing UI
+ *  - Route new users → /(auth)/login?mode=register
+ *  - Route existing users → /(auth)/login?mode=login
+ *
+ * Dependencies (install if missing):
+ *   npx expo install expo-linear-gradient react-native-svg
+ *                    react-native-reanimated react-native-safe-area-context
+ *
+ * babel.config.js must include:
+ *   plugins: ['react-native-reanimated/plugin']
+ */
+
+import { useEffect, useCallback } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
+  View,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from "react-native";
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Platform,
+} from 'react-native';
+import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Svg, Path, Circle } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  withRepeat,
+  withSequence,
+  Easing,
+  FadeInDown,
+  FadeIn,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// ─── Theme (matches Dashboard) ────────────────────────────────────────────────
+// ─── Design Tokens ─────────────────────────────────────────────────────────────
 
-const THEME = {
-  colors: {
-    bg: "#0D0F14",
-    surface: "#161921",
-    card: "#1E2230",
-    cardBorder: "#2A2F42",
-    accent: "#5B7FFF",
-    accentSoft: "#2A3A80",
-    accentGlow: "rgba(91, 127, 255, 0.18)",
-    mint: "#34D399",
-    mintSoft: "rgba(52, 211, 153, 0.12)",
-    light: "#E8ECF4",
-    muted: "#6B7280",
-    dimmed: "#3D4358",
-    white: "#FFFFFF",
-  },
-  font: {
-    display: Platform.select({
-      ios: "Georgia",
-      android: "serif",
-      default: "Georgia",
-    }),
-    body: Platform.select({
-      ios: "Helvetica Neue",
-      android: "sans-serif",
-      default: "sans-serif",
-    }),
-    mono: Platform.select({
-      ios: "Courier New",
-      android: "monospace",
-      default: "monospace",
-    }),
-  },
-  radius: { sm: 10, md: 16, lg: 24, pill: 50 },
+const COLORS = {
+  bg:              '#0D0D0F',
+  bgDeep:          '#120909',
+  red:             '#FF3B30',
+  redDark:         '#C8211A',
+  white:           '#FFFFFF',
+  textMuted:       'rgba(255,255,255,0.42)',
+  textDim:         'rgba(255,255,255,0.22)',
+  ringBorder:      'rgba(255,59,48,0.20)',
+  cardBorder:      'rgba(255,255,255,0.06)',
+  secondaryBg:     'rgba(255,255,255,0.07)',
+  secondaryBorder: 'rgba(255,255,255,0.10)',
+  green:           '#2ECC71',
 };
 
-// ─── Feature Pills ─────────────────────────────────────────────────────────────
+// ─── Icons ─────────────────────────────────────────────────────────────────────
 
-const FEATURES = [
-  { label: "Instant QR", icon: "⚡" },
-  { label: "Medical Info", icon: "🏥" },
-  { label: "Guardian Alert", icon: "🔔" },
-];
+const ShieldCheckIcon = ({ size = 68 }) => (
+  <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
+    <Path
+      d="M36 5L9 16v20c0 16.3 11.7 31.4 27 35.4C52.3 67.4 63 52.3 63 36V16L36 5z"
+      stroke={COLORS.red}
+      strokeWidth={2.2}
+      strokeLinejoin="round"
+      fill="none"
+    />
+    <Path
+      d="M23 36.5l9 9 17-17"
+      stroke={COLORS.red}
+      strokeWidth={2.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
-// ─── Animated Pulse Ring (reused from Dashboard) ───────────────────────────────
+const PersonIcon = () => (
+  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="7" r="4" stroke={COLORS.white} strokeWidth="2" />
+    <Path
+      d="M4 20c0-3.9 3.6-7 8-7s8 3.1 8 7"
+      stroke={COLORS.white}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </Svg>
+);
 
-function PulseRing({ size }) {
-  const pulse = useRef(new Animated.Value(1)).current;
-  const pulseOpacity = useRef(new Animated.Value(0.5)).current;
+// ─── PulseRing ─────────────────────────────────────────────────────────────────
+
+const PulseRing = ({ size, delay, baseOpacity }) => {
+  const scale   = useSharedValue(0.85);
+  const opacity = useSharedValue(baseOpacity);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(pulse, {
-            toValue: 1.08,
-            duration: 1800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulse, {
-            toValue: 1,
-            duration: 1800,
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.sequence([
-          Animated.timing(pulseOpacity, {
-            toValue: 0.1,
-            duration: 1800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseOpacity, {
-            toValue: 0.45,
-            duration: 1800,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]),
-    ).start();
+    const DURATION = 2200;
+    scale.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1.25, { duration: DURATION, easing: Easing.out(Easing.quad) }),
+          withTiming(0.85, { duration: DURATION, easing: Easing.in(Easing.quad) })
+        ),
+        -1,
+        false
+      )
+    );
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(0,           { duration: DURATION }),
+          withTiming(baseOpacity, { duration: DURATION })
+        ),
+        -1,
+        false
+      )
+    );
   }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
 
   return (
     <Animated.View
-      style={{
-        position: "absolute",
-        width: size + 26,
-        height: size + 26,
-        borderRadius: (size + 26) / 2,
-        borderWidth: 2,
-        borderColor: THEME.colors.accent,
-        opacity: pulseOpacity,
-        transform: [{ scale: pulse }],
-      }}
+      style={[
+        styles.ring,
+        { width: size, height: size, borderRadius: size / 2 },
+        animStyle,
+      ]}
     />
   );
-}
+};
 
-// ─── Blinking Status Dot ───────────────────────────────────────────────────────
+// ─── StatusDot ─────────────────────────────────────────────────────────────────
 
-function StatusBadge() {
-  const blink = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(blink, {
-          toValue: 0.2,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(blink, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, []);
-
-  return (
-    <View style={badge.wrap}>
-      <Animated.View style={[badge.dot, { opacity: blink }]} />
-      <Text style={badge.text}>Active</Text>
-    </View>
-  );
-}
-
-const badge = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: THEME.colors.mintSoft,
-    borderRadius: THEME.radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    alignSelf: "center",
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: THEME.colors.mint,
-  },
-  text: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: THEME.colors.mint,
-    letterSpacing: 0.8,
-    fontFamily: THEME.font.body,
-  },
-});
-
-// ─── Main Component ────────────────────────────────────────────────────────────
-
-export default function Welcome() {
-  const router = useRouter();
-  const { width, height } = useWindowDimensions();
-  const isTablet = width >= 768;
-  const hPad = isTablet ? width * 0.18 : 20;
-
-  const scale = (size) => (width / 375) * size;
-  const logoSize = scale(isTablet ? 110 : 88);
-
-  // Entrance animations
-  const logoFade = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.85)).current;
-  const headerFade = useRef(new Animated.Value(0)).current;
-  const headerSlide = useRef(new Animated.Value(-18)).current;
-  const heroFade = useRef(new Animated.Value(0)).current;
-  const heroSlide = useRef(new Animated.Value(16)).current;
-  const pillsFade = useRef(new Animated.Value(0)).current;
-  const btnFade = useRef(new Animated.Value(0)).current;
-  const btnSlide = useRef(new Animated.Value(20)).current;
-
-  // Button press scales
-  const primaryScale = useRef(new Animated.Value(1)).current;
-  const secondaryScale = useRef(new Animated.Value(1)).current;
+const StatusDot = () => {
+  const opacity = useSharedValue(1);
 
   useEffect(() => {
-    Animated.stagger(100, [
-      // Wordmark
-      Animated.parallel([
-        Animated.timing(headerFade, {
-          toValue: 1,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-        Animated.spring(headerSlide, {
-          toValue: 0,
-          tension: 70,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Logo
-      Animated.parallel([
-        Animated.timing(logoFade, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.spring(logoScale, {
-          toValue: 1,
-          tension: 65,
-          friction: 9,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Title + subtitle
-      Animated.parallel([
-        Animated.timing(heroFade, {
-          toValue: 1,
-          duration: 450,
-          useNativeDriver: true,
-        }),
-        Animated.spring(heroSlide, {
-          toValue: 0,
-          tension: 70,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Feature pills
-      Animated.timing(pillsFade, {
-        toValue: 1,
-        duration: 380,
-        useNativeDriver: true,
-      }),
-      // Buttons
-      Animated.parallel([
-        Animated.timing(btnFade, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(btnSlide, {
-          toValue: 0,
-          tension: 70,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.15, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1,    { duration: 700, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      false
+    );
   }, []);
 
-  const pressIn = (anim) =>
-    Animated.spring(anim, { toValue: 0.95, useNativeDriver: true }).start();
-  const pressOut = (anim) =>
-    Animated.spring(anim, {
-      toValue: 1,
-      tension: 200,
-      friction: 8,
-      useNativeDriver: true,
-    }).start();
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={[styles.statusDot, animStyle]} />;
+};
+
+// ─── WelcomeScreen ─────────────────────────────────────────────────────────────
+
+export default function WelcomeScreen() {
+  const insets = useSafeAreaInsets();
+
+  const handleGetStarted = useCallback(() => {
+    router.push({ pathname: '/(auth)/login', params: { mode: 'register' } });
+  }, []);
+
+  const handleSignIn = useCallback(() => {
+    router.push({ pathname: '/(auth)/login', params: { mode: 'login' } });
+  }, []);
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.colors.bg} />
+      <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* Decorative background blobs */}
-      <View
-        style={[
-          styles.blob,
-          {
-            width: width * 0.8,
-            height: width * 0.8,
-            borderRadius: width * 0.4,
-            top: -width * 0.22,
-            left: -width * 0.25,
-          },
-        ]}
-      />
-      <View
-        style={[
-          styles.blobSm,
-          {
-            width: width * 0.5,
-            height: width * 0.5,
-            borderRadius: width * 0.25,
-            bottom: height * 0.1,
-            right: -width * 0.18,
-          },
-        ]}
+      {/* Background gradient */}
+      <LinearGradient
+        colors={[COLORS.bg, COLORS.bgDeep, COLORS.bg]}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
       />
 
-      {/* Accent right edge stripe */}
-      <View style={styles.stripe} />
+      {/* Ambient red glow */}
+      <View style={styles.glowWrap} pointerEvents="none">
+        <View style={styles.glowOuter} />
+        <View style={styles.glowInner} />
+      </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingHorizontal: hPad }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Wordmark ── */}
-        <Animated.View
-          style={[
-            styles.wordmark,
-            { opacity: headerFade, transform: [{ translateY: headerSlide }] },
-          ]}
-        >
-          <View style={styles.wordmarkDot} />
-          <Text style={styles.wordmarkText}>SAFETY QR</Text>
-          <View style={{ flex: 1 }} />
-          <StatusBadge />
-        </Animated.View>
+      {/* ── Icon section ── */}
+      <View style={[styles.iconSection, { paddingTop: insets.top + 20 }]}>
+        <PulseRing size={220} delay={0}   baseOpacity={0.10} />
+        <PulseRing size={170} delay={500} baseOpacity={0.15} />
+        <PulseRing size={128} delay={250} baseOpacity={0.09} />
 
-        <View style={styles.divider} />
-
-        {/* ── Hero Logo ── */}
-        <Animated.View
-          style={[
-            styles.logoSection,
-            { opacity: logoFade, transform: [{ scale: logoScale }] },
-          ]}
-        >
-          <PulseRing size={logoSize} />
-          <View
-            style={[
-              styles.logoCard,
-              {
-                width: logoSize,
-                height: logoSize,
-                borderRadius: logoSize * 0.28,
-              },
-            ]}
+        <Animated.View entering={FadeIn.duration(700).delay(150)} style={styles.iconCard}>
+          <LinearGradient
+            colors={['#1E2133', '#151720']}
+            style={styles.iconCardGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
-            {/* Shield icon layers */}
-            <View style={styles.shieldWrap}>
-              <View style={styles.shieldTop} />
-              <View style={styles.shieldBottom} />
-              <Text
-                style={[
-                  styles.shieldGlyph,
-                  { fontSize: scale(isTablet ? 22 : 18) },
-                ]}
-              >
-                ✦
-              </Text>
-            </View>
-          </View>
+            <ShieldCheckIcon />
+          </LinearGradient>
         </Animated.View>
 
-        {/* ── Title & Subtitle ── */}
-        <Animated.View
-          style={[
-            styles.heroText,
-            { opacity: heroFade, transform: [{ translateY: heroSlide }] },
-          ]}
-        >
-          <Text style={[styles.title, { fontSize: scale(isTablet ? 36 : 30) }]}>
-            Your Digital{"\n"}Emergency ID
+        <StatusDot />
+      </View>
+
+      {/* ── Bottom section ── */}
+      <View style={[styles.bottomSection, { paddingBottom: Math.max(insets.bottom, 28) }]}>
+
+        {/* Title */}
+        <Animated.View entering={FadeInDown.duration(550).delay(350)}>
+          <Text style={styles.titleWrap} allowFontScaling={false}>
+            <Text style={styles.titleWhite}>School</Text>
+            <Text style={styles.titleRed}>QR{'\n'}</Text>
+            <Text style={styles.titleWhite}>Guardian</Text>
           </Text>
-          <Text
-            style={[styles.subtitle, { fontSize: scale(isTablet ? 17 : 14) }]}
+        </Animated.View>
+
+        {/* Subtitle */}
+        <Animated.Text
+          entering={FadeInDown.duration(550).delay(480)}
+          style={styles.subtitle}
+          allowFontScaling={false}
+        >
+          Your child's safety card,{'\n'}always in your pocket.
+        </Animated.Text>
+
+        {/* CTA buttons */}
+        <Animated.View
+          entering={FadeInDown.duration(550).delay(620)}
+          style={styles.buttonGroup}
+        >
+          {/* Primary — Get Started */}
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={handleGetStarted}
+            style={styles.primaryWrapper}
+            accessibilityRole="button"
+            accessibilityLabel="Get started — create a new account"
           >
-            One scan. All the info that matters.
-          </Text>
+            <LinearGradient
+              colors={[COLORS.red, COLORS.redDark]}
+              style={styles.primaryButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <PersonIcon />
+              <Text style={styles.primaryLabel}>  Get Started</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Secondary — Sign In */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={handleSignIn}
+            style={styles.secondaryButton}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to an existing account"
+          >
+            <Text style={styles.secondaryLabel}>I already have an account</Text>
+          </TouchableOpacity>
         </Animated.View>
 
-        {/* ── Feature Pills ── */}
-        <Animated.View style={[styles.pills, { opacity: pillsFade }]}>
-          {FEATURES.map(({ label, icon }, i) => (
-            <View key={label} style={styles.pill}>
-              <Text style={styles.pillIcon}>{icon}</Text>
-              <Text style={styles.pillText}>{label}</Text>
-            </View>
-          ))}
-        </Animated.View>
-
-        {/* Spacer */}
-        <View style={{ flex: 1, minHeight: 32 }} />
-
-        {/* ── Buttons ── */}
+        {/* Trust badge */}
         <Animated.View
-          style={[
-            styles.btnGroup,
-            { opacity: btnFade, transform: [{ translateY: btnSlide }] },
-          ]}
+          entering={FadeInDown.duration(550).delay(780)}
+          style={styles.trustBadge}
         >
-          <Animated.View style={{ transform: [{ scale: primaryScale }] }}>
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              activeOpacity={1}
-              onPressIn={() => pressIn(primaryScale)}
-              onPressOut={() => pressOut(primaryScale)}
-              onPress={() => router.push("/scan")}
-              accessibilityRole="button"
-              accessibilityLabel="Register"
-            >
-              <Text style={styles.primaryText}>Get Started</Text>
-              <View style={styles.arrowBadge}>
-                <Text style={styles.arrowText}>→</Text>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ scale: secondaryScale }] }}>
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              activeOpacity={1}
-              onPressIn={() => pressIn(secondaryScale)}
-              onPressOut={() => pressOut(secondaryScale)}
-              onPress={() => router.push("/auth")}
-              accessibilityRole="button"
-              accessibilityLabel="Log in"
-            >
-              <Text style={styles.secondaryText}>
-                Already have an account? Log in
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          <Text style={styles.legal}>
-            By continuing you agree to our Terms & Privacy Policy
+          <View style={styles.trustDot} />
+          <Text style={styles.trustText} allowFontScaling={false}>
+            Trusted by 2,400+ parents across India
           </Text>
         </Animated.View>
-      </ScrollView>
+
+      </View>
     </View>
   );
 }
 
-// ─── Stylesheet ────────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: THEME.colors.bg,
+    backgroundColor: COLORS.bg,
   },
 
-  blob: {
-    position: "absolute",
-    backgroundColor: THEME.colors.accent,
-    opacity: 0.05,
+  // Glow
+  glowWrap: {
+    position: 'absolute',
+    top: Dimensions.get('window').height * 0.04,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  blobSm: {
-    position: "absolute",
-    backgroundColor: THEME.colors.accent,
-    opacity: 0.04,
+  glowOuter: {
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: COLORS.red,
+    opacity: 0.055,
   },
-  stripe: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 3,
-    height: "100%",
-    backgroundColor: THEME.colors.accent,
-    opacity: 0.4,
-  },
-
-  scroll: {
-    flexGrow: 1,
-    paddingTop: 56,
-    paddingBottom: 44,
+  glowInner: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: COLORS.red,
+    opacity: 0.10,
   },
 
-  // Wordmark
-  wordmark: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 18,
+  // Icon section
+  iconSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  wordmarkDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: THEME.colors.accent,
+  ring: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: COLORS.ringBorder,
   },
-  wordmarkText: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 2.5,
-    color: THEME.colors.accent,
-    fontFamily: THEME.font.mono,
+  iconCard: {
+    width: 112,
+    height: 112,
+    borderRadius: 30,
+    overflow: 'hidden',
+    shadowColor: COLORS.red,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.38,
+    shadowRadius: 22,
+    elevation: 18,
   },
-
-  divider: {
-    height: 1,
-    backgroundColor: THEME.colors.cardBorder,
-    marginBottom: 44,
-    opacity: 0.5,
+  iconCardGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    borderRadius: 30,
   },
-
-  // Logo
-  logoSection: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 36,
-  },
-  logoCard: {
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1.5,
-    borderColor: THEME.colors.cardBorder,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shieldWrap: {
-    width: 52,
-    height: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  shieldTop: {
-    position: "absolute",
-    width: 40,
-    height: 40,
-    borderRadius: 9,
-    backgroundColor: THEME.colors.accent,
-    top: 0,
-    opacity: 0.9,
-  },
-  shieldBottom: {
-    position: "absolute",
-    bottom: 2,
-    width: 40,
-    height: 24,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    backgroundColor: THEME.colors.accent,
-    opacity: 0.9,
-  },
-  shieldGlyph: {
-    color: THEME.colors.white,
-    fontWeight: "800",
-    zIndex: 10,
-    marginTop: 2,
+  statusDot: {
+    position: 'absolute',
+    top: '26%',
+    right: '29%',
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: COLORS.red,
+    shadowColor: COLORS.red,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 5,
+    elevation: 4,
   },
 
-  // Hero text
-  heroText: {
-    alignItems: "center",
-    marginBottom: 28,
+  // Bottom section
+  bottomSection: {
+    paddingHorizontal: 26,
+    alignItems: 'center',
   },
-  title: {
-    fontWeight: "800",
-    color: THEME.colors.light,
-    letterSpacing: -0.8,
-    textAlign: "center",
-    fontFamily: THEME.font.display,
+  titleWrap: {
+    textAlign: 'center',
     marginBottom: 12,
-    lineHeight: undefined,
+    lineHeight: 46,
+  },
+  titleWhite: {
+    fontSize: 40,
+    fontWeight: Platform.select({ ios: '800', android: '700' }),
+    color: COLORS.white,
+    letterSpacing: -0.8,
+  },
+  titleRed: {
+    fontSize: 40,
+    fontWeight: Platform.select({ ios: '800', android: '700' }),
+    color: COLORS.red,
+    letterSpacing: -0.8,
   },
   subtitle: {
-    color: THEME.colors.muted,
-    textAlign: "center",
-    letterSpacing: 0.2,
-    fontFamily: THEME.font.body,
-  },
-
-  // Pills
-  pills: {
-    flexDirection: "row",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: THEME.colors.card,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: THEME.radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  pillIcon: {
-    fontSize: 12,
-  },
-  pillText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: THEME.colors.muted,
-    letterSpacing: 0.4,
-    fontFamily: THEME.font.body,
+    fontSize: 15.5,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 23,
+    marginBottom: 38,
+    letterSpacing: 0.15,
   },
 
   // Buttons
-  btnGroup: {
+  buttonGroup: {
+    width: '100%',
     gap: 12,
-    alignItems: "stretch",
+    marginBottom: 26,
   },
-  primaryBtn: {
-    backgroundColor: THEME.colors.accent,
-    borderRadius: THEME.radius.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    shadowColor: THEME.colors.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 8,
+  primaryWrapper: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: COLORS.red,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.50,
+    shadowRadius: 16,
+    elevation: 14,
   },
-  primaryText: {
-    color: THEME.colors.white,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    fontFamily: THEME.font.body,
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 17,
+    borderRadius: 16,
   },
-  arrowBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  arrowText: {
-    color: THEME.colors.white,
-    fontSize: 18,
-    fontWeight: "600",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryBtn: {
-    borderWidth: 1.5,
-    borderColor: THEME.colors.cardBorder,
-    borderRadius: THEME.radius.md,
-    paddingVertical: 16,
-    alignItems: "center",
-    backgroundColor: THEME.colors.card,
-  },
-  secondaryText: {
-    color: THEME.colors.muted,
-    fontSize: 14,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-    fontFamily: THEME.font.body,
-  },
-  legal: {
-    textAlign: "center",
-    color: THEME.colors.dimmed,
-    fontSize: 11,
+  primaryLabel: {
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '700',
     letterSpacing: 0.3,
-    fontFamily: THEME.font.body,
-    marginTop: 4,
+  },
+  secondaryButton: {
+    backgroundColor: COLORS.secondaryBg,
+    borderRadius: 16,
+    paddingVertical: 17,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.secondaryBorder,
+  },
+  secondaryLabel: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.15,
+  },
+
+  // Trust badge
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  trustDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.green,
+    shadowColor: COLORS.green,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  trustText: {
+    color: COLORS.textDim,
+    fontSize: 13,
+    letterSpacing: 0.15,
   },
 });
