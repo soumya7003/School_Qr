@@ -1,17 +1,6 @@
 /**
  * @file app/(auth)/login.jsx
  * @description Authentication / Link Card Screen — SchoolQR Guardian
- *
- * Responsibilities:
- *  - Allow user to manually enter or scan their child's QR card.
- *  - Collect mobile number for OTP verification.
- *  - Handle UI state for segmented controls and input focus.
- *
- * Dependencies (install if missing):
- *   npx expo install react-native-svg react-native-reanimated react-native-safe-area-context
- *
- * babel.config.js must include:
- *   plugins: ['react-native-reanimated/plugin']
  */
 
 import { router } from 'expo-router';
@@ -34,12 +23,12 @@ import { Circle, Path, Rect, Svg } from 'react-native-svg';
 // ─── Design Tokens ─────────────────────────────────────────────────────────────
 
 const COLORS = {
-  bg: '#0D0F14', // Very dark background matching the UI
-  surface: '#181B22', // Input and tab backgrounds
-  surfaceLight: '#252830', // Borders and dividers
-  primary: '#E94033', // Brand Red
-  primaryFaded: 'rgba(233, 64, 51, 0.12)', // For the scan area background
-  primaryBorder: 'rgba(233, 64, 51, 0.4)',  // For the scan area border
+  bg: '#0D0F14',
+  surface: '#181B22',
+  surfaceLight: '#252830',
+  primary: '#E94033',
+  primaryFaded: 'rgba(233, 64, 51, 0.12)',
+  primaryBorder: 'rgba(233, 64, 51, 0.4)',
   white: '#FFFFFF',
   textMuted: '#8A8F9A',
   textDim: '#5A5E67',
@@ -89,27 +78,45 @@ const PhoneIcon = ({ size = 20, color = COLORS.textMuted }) => (
   </Svg>
 );
 
+// ─── Reusable FormInput ────────────────────────────────────────────────────────
+
+function FormInput({ label, icon, focused, inputKey, onFocus, onBlur, ...props }) {
+  return (
+    <View style={styles.inputWrapper}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={[styles.inputContainer, focused === inputKey && styles.inputContainerFocused]}>
+        <View style={styles.inputIcon}>{icon(focused === inputKey)}</View>
+        <TextInput
+          style={styles.textInput}
+          placeholderTextColor={COLORS.textDim}
+          onFocus={() => onFocus(inputKey)}
+          onBlur={() => onBlur(null)}
+          keyboardAppearance="dark"
+          {...props}
+        />
+      </View>
+    </View>
+  );
+}
+
 // ─── LinkCardScreen ────────────────────────────────────────────────────────────
 
 export default function LinkCardScreen() {
   const insets = useSafeAreaInsets();
 
-  // State
   const [activeTab, setActiveTab] = useState('manual'); // 'manual' | 'scan'
-  const [cardNumber, setCardNumber] = useState('SQ-2024-004891');
+  const [cardNumber, setCardNumber] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
+  const [focusedInput, setFocusedInput] = useState(null);
 
-  // Focus State for styling
-  const [focusedInput, setFocusedInput] = useState('card'); // 'card' | 'mobile' | null
-
-  const handleBack = useCallback(() => {
-    router.back();
-  }, []);
+  const handleBack = useCallback(() => router.back(), []);
 
   const handleSendOtp = useCallback(() => {
-    // Navigate to OTP screen
+    if (!cardNumber.trim() || !mobileNumber.trim()) return; // basic guard
     router.push('/(auth)/otp');
-  }, []);
+  }, [cardNumber, mobileNumber]);
+
+  const isDisabled = !cardNumber.trim() || !mobileNumber.trim();
 
   return (
     <View style={styles.root}>
@@ -117,21 +124,22 @@ export default function LinkCardScreen() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardWrap}
+        style={styles.flex}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: Math.max(insets.top + 20, 40) }
+            { paddingTop: Math.max(insets.top + 20, 40) },
           ]}
         >
-          {/* ── Header ── */}
+          {/* ── Back ── */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
             <TouchableOpacity
-              activeOpacity={0.7}
               onPress={handleBack}
               style={styles.backButton}
+              activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Go back"
             >
@@ -140,10 +148,11 @@ export default function LinkCardScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* ── Titles ── */}
+          {/* ── Title ── */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+            {/* FIX: replaced &apos; with plain apostrophe */}
             <Text style={styles.title} allowFontScaling={false}>
-              Link your{'\n'}child&apos;s card
+              {`Link your\nchild's card`}
             </Text>
             <Text style={styles.subtitle} allowFontScaling={false}>
               Enter the card number on the back of the QR card, or scan it.
@@ -152,104 +161,75 @@ export default function LinkCardScreen() {
 
           {/* ── Segmented Control ── */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.tabContainer}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.tab, activeTab === 'manual' && styles.tabActive]}
-              onPress={() => setActiveTab('manual')}
-            >
-              <Text style={[styles.tabText, activeTab === 'manual' && styles.tabTextActive]}>
-                Manual Entry
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.tab, activeTab === 'scan' && styles.tabActive]}
-              onPress={() => setActiveTab('scan')}
-            >
-              <Text style={[styles.tabText, activeTab === 'scan' && styles.tabTextActive]}>
-                Scan QR
-              </Text>
-            </TouchableOpacity>
+            {['manual', 'scan'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                activeOpacity={0.8}
+                style={[styles.tab, activeTab === tab && styles.tabActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                  {tab === 'manual' ? 'Manual Entry' : 'Scan QR'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </Animated.View>
 
-          {/* ── Scan QR Area ── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-            <TouchableOpacity activeOpacity={0.7} style={styles.scanArea}>
-              <QrCodeBoxIcon />
-              <Text style={styles.scanText}>Tap to scan card QR code</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* ── Scan Tab Content ── */}
+          {activeTab === 'scan' && (
+            <Animated.View entering={FadeInDown.duration(300)}>
+              <TouchableOpacity activeOpacity={0.7} style={styles.scanArea}>
+                <QrCodeBoxIcon />
+                <Text style={styles.scanText}>Tap to scan card QR code</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
-          {/* ── Divider ── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.dividerContainer}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or enter manually</Text>
-            <View style={styles.dividerLine} />
-          </Animated.View>
-
-          {/* ── Form Inputs ── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.formContainer}>
-
-            {/* Card Number Input */}
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>CARD NUMBER</Text>
-              <View style={[
-                styles.inputContainer,
-                focusedInput === 'card' && styles.inputContainerFocused
-              ]}>
-                <View style={styles.inputIcon}>
-                  <CreditCardIcon color={focusedInput === 'card' ? COLORS.textMuted : COLORS.textDim} />
-                </View>
-                <TextInput
-                  style={styles.textInput}
-                  value={cardNumber}
-                  onChangeText={setCardNumber}
-                  placeholder="Enter card number"
-                  placeholderTextColor={COLORS.textDim}
-                  onFocus={() => setFocusedInput('card')}
-                  onBlur={() => setFocusedInput(null)}
-                  keyboardAppearance="dark"
-                  autoCapitalize="characters"
-                />
-              </View>
-            </View>
-
-            {/* Mobile Number Input */}
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>MOBILE NUMBER</Text>
-              <View style={[
-                styles.inputContainer,
-                focusedInput === 'mobile' && styles.inputContainerFocused
-              ]}>
-                <View style={styles.inputIcon}>
-                  <PhoneIcon color={focusedInput === 'mobile' ? COLORS.textMuted : COLORS.textDim} />
-                </View>
-                <TextInput
-                  style={styles.textInput}
-                  value={mobileNumber}
-                  onChangeText={setMobileNumber}
-                  placeholder="+91 enter mobile number"
-                  placeholderTextColor={COLORS.textDim}
-                  keyboardType="phone-pad"
-                  onFocus={() => setFocusedInput('mobile')}
-                  onBlur={() => setFocusedInput(null)}
-                  keyboardAppearance="dark"
-                />
-              </View>
-            </View>
-
-          </Animated.View>
+          {/* ── Manual Tab Content ── */}
+          {activeTab === 'manual' && (
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.formContainer}>
+              <FormInput
+                label="CARD NUMBER"
+                inputKey="card"
+                focused={focusedInput}
+                onFocus={setFocusedInput}
+                onBlur={setFocusedInput}
+                value={cardNumber}
+                onChangeText={setCardNumber}
+                placeholder="SQ-YYYY-XXXXXX"
+                autoCapitalize="characters"
+                icon={(active) => (
+                  <CreditCardIcon color={active ? COLORS.textMuted : COLORS.textDim} />
+                )}
+              />
+              <FormInput
+                label="MOBILE NUMBER"
+                inputKey="mobile"
+                focused={focusedInput}
+                onFocus={setFocusedInput}
+                onBlur={setFocusedInput}
+                value={mobileNumber}
+                onChangeText={setMobileNumber}
+                placeholder="+91 XXXXX XXXXX"
+                keyboardType="phone-pad"
+                icon={(active) => (
+                  <PhoneIcon color={active ? COLORS.textMuted : COLORS.textDim} />
+                )}
+              />
+            </Animated.View>
+          )}
         </ScrollView>
 
-        {/* ── Footer Button ── */}
+        {/* ── Footer CTA ── */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(700)}
+          entering={FadeInDown.duration(500).delay(500)}
           style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}
         >
           <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.primaryButton}
+            activeOpacity={isDisabled ? 1 : 0.8}
+            style={[styles.primaryButton, isDisabled && styles.primaryButtonDisabled]}
             onPress={handleSendOtp}
+            disabled={isDisabled}
             accessibilityRole="button"
           >
             <Text style={styles.primaryButtonText}>Send OTP →</Text>
@@ -263,24 +243,19 @@ export default function LinkCardScreen() {
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  keyboardWrap: {
-    flex: 1,
-  },
+  root: { flex: 1, backgroundColor: COLORS.bg },
+  flex: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
 
-  // Header
+  // Back
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
     alignSelf: 'flex-start',
+    marginBottom: 32,
   },
   backText: {
     color: COLORS.textMuted,
@@ -289,7 +264,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  // Typography
+  // Title
   title: {
     fontSize: 34,
     fontWeight: Platform.select({ ios: '800', android: '700' }),
@@ -306,7 +281,7 @@ const styles = StyleSheet.create({
     paddingRight: 20,
   },
 
-  // Segmented Control
+  // Tabs
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
@@ -328,16 +303,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  tabText: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: COLORS.white,
-  },
+  tabText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '600' },
+  tabTextActive: { color: COLORS.white },
 
-  // Scan Area
+  // Scan area
   scanArea: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -347,7 +316,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primaryBorder,
     borderStyle: 'dashed',
     borderRadius: 16,
-    paddingVertical: 24,
+    paddingVertical: 32,
     marginBottom: 28,
   },
   scanText: {
@@ -357,31 +326,9 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  // Divider
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.surfaceLight,
-  },
-  dividerText: {
-    color: COLORS.textDim,
-    fontSize: 13,
-    paddingHorizontal: 16,
-    fontWeight: '500',
-  },
-
-  // Forms
-  formContainer: {
-    gap: 20,
-  },
-  inputWrapper: {
-    width: '100%',
-  },
+  // Form
+  formContainer: { gap: 20 },
+  inputWrapper: { width: '100%' },
   inputLabel: {
     color: COLORS.textMuted,
     fontSize: 11,
@@ -404,9 +351,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.focusRing,
     backgroundColor: '#1C1F28',
   },
-  inputIcon: {
-    marginRight: 12,
-  },
+  inputIcon: { marginRight: 12 },
   textInput: {
     flex: 1,
     color: COLORS.white,
@@ -415,11 +360,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Footer Button
+  // Footer
   footer: {
     paddingHorizontal: 24,
     paddingTop: 16,
-    backgroundColor: COLORS.bg, // To prevent scroll underlap visibility issues
+    backgroundColor: COLORS.bg,
   },
   primaryButton: {
     backgroundColor: COLORS.primary,
@@ -433,10 +378,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
+  primaryButtonDisabled: {
+    opacity: 0.45,
+  },
   primaryButtonText: {
     color: COLORS.white,
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.3,
-  }
+  },
 });

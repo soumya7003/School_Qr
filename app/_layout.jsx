@@ -27,7 +27,7 @@ import { useEffect } from 'react';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-    const [fontsLoaded] = useFonts({
+    const [fontsLoaded, fontError] = useFonts({
         Sora_300Light,
         Sora_400Regular,
         Sora_500Medium,
@@ -41,10 +41,10 @@ export default function RootLayout() {
     });
 
     useEffect(() => {
-        if (fontsLoaded) SplashScreen.hideAsync();
-    }, [fontsLoaded]);
+        if (fontsLoaded || fontError) SplashScreen.hideAsync();
+    }, [fontsLoaded, fontError]);
 
-    if (!fontsLoaded) return null;
+    if (!fontsLoaded && !fontError) return null;
 
     return (
         <Providers>

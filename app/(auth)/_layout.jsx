@@ -1,17 +1,6 @@
-/**
- * @file app/(auth)/login.jsx
- * @description Auth screen — SchoolQR Guardian
- *
- * Handles two modes via search params:
- *   ?mode=register  →  "Link your child's card" (card + mobile)
- *   ?mode=login     →  "Welcome back" (mobile only)
- *
- * Dependencies (same as index.jsx):
- *   npx expo install expo-linear-gradient react-native-svg
- *                    react-native-reanimated react-native-safe-area-context
- *                    expo-camera
- */
+import { Stack } from 'expo-router';
 
+<<<<<<< HEAD
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -666,3 +655,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 });
+=======
+export default function AuthLayout() {
+    return (
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+    );
+}
+>>>>>>> 7c470c7de28093f0d421369b27e5a56c98e15ee1
