@@ -2,12 +2,19 @@
  * @file app/index.jsx
  * @description Entry / Welcome screen — SchoolQR Guardian
  *
- * Fixes:
- *  1. Added useEffect to handle auth-based redirect directly on this screen
- *  2. Shows nothing (null) while redirect is in progress to avoid flash
+ * Responsibilities:
+ *  - Display animated splash/landing UI
+ *  - Route new users → /(auth)/login?mode=register
+ *  - Route existing users → /(auth)/login?mode=login
+ *
+ * Dependencies (install if missing):
+ *   npx expo install expo-linear-gradient react-native-svg
+ *                    react-native-reanimated react-native-safe-area-context
+ *
+ * babel.config.js must include:
+ *   plugins: ['react-native-reanimated/plugin']
  */
 
-import { useAuthStore } from '@/src/features/auth/auth.store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useEffect } from 'react';
@@ -156,17 +163,6 @@ const StatusDot = () => {
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated } = useAuthStore();
-
-  // ✅ FIX: If already authenticated, skip welcome and go straight to home
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/(app)/home');
-    }
-  }, [isAuthenticated]);
-
-  // ✅ FIX: Don't render welcome UI while redirecting — prevents flash
-  if (isAuthenticated) return null;
 
   const handleGetStarted = useCallback(() => {
     router.push({ pathname: '/(auth)/login', params: { mode: 'register' } });
@@ -217,26 +213,30 @@ export default function WelcomeScreen() {
       {/* ── Bottom section ── */}
       <View style={[styles.bottomSection, { paddingBottom: Math.max(insets.bottom, 28) }]}>
 
+        {/* Title */}
         <Animated.View entering={FadeInDown.duration(550).delay(350)}>
           <Text style={styles.titleWrap} allowFontScaling={false}>
             <Text style={styles.titleWhite}>School</Text>
-            <Text style={styles.titleRed}>{`QR\n`}</Text>
+            <Text style={styles.titleRed}>QR{'\n'}</Text>
             <Text style={styles.titleWhite}>Guardian</Text>
           </Text>
         </Animated.View>
 
+        {/* Subtitle */}
         <Animated.Text
           entering={FadeInDown.duration(550).delay(480)}
           style={styles.subtitle}
           allowFontScaling={false}
         >
-          {`Your child's safety card,\nalways in your pocket.`}
+          {`Your child's safety card,\n always in your pocket.`}
         </Animated.Text>
 
+        {/* CTA buttons */}
         <Animated.View
           entering={FadeInDown.duration(550).delay(620)}
           style={styles.buttonGroup}
         >
+          {/* Primary — Get Started */}
           <TouchableOpacity
             activeOpacity={0.82}
             onPress={handleGetStarted}
@@ -255,6 +255,7 @@ export default function WelcomeScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* Secondary — Sign In */}
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={handleSignIn}
@@ -266,6 +267,7 @@ export default function WelcomeScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Trust badge */}
         <Animated.View
           entering={FadeInDown.duration(550).delay(780)}
           style={styles.trustBadge}
@@ -288,6 +290,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
+
+  // Glow
   glowWrap: {
     position: 'absolute',
     top: Dimensions.get('window').height * 0.04,
@@ -310,6 +314,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.red,
     opacity: 0.10,
   },
+
+  // Icon section
   iconSection: {
     flex: 1,
     alignItems: 'center',
@@ -353,6 +359,8 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 4,
   },
+
+  // Bottom section
   bottomSection: {
     paddingHorizontal: 26,
     alignItems: 'center',
@@ -382,6 +390,8 @@ const styles = StyleSheet.create({
     marginBottom: 38,
     letterSpacing: 0.15,
   },
+
+  // Buttons
   buttonGroup: {
     width: '100%',
     gap: 12,
@@ -423,6 +433,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.15,
   },
+
+  // Trust badge
   trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',

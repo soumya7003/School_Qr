@@ -1,16 +1,14 @@
 /**
  * @file app/(auth)/login.jsx
-<<<<<<< HEAD
- * @description Authentication / Link Card Screen — SchoolQR Guardian
-=======
  * @description Auth screen — SchoolQR Guardian
  *
  * Modes:
  *   ?mode=register  →  "Link your child's card" (card + mobile)
  *   ?mode=login     →  "Welcome back" (mobile only)
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
  */
 
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   Keyboard,
@@ -25,54 +23,38 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Svg, Path, Rect, Line } from 'react-native-svg';
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Line, Path, Rect, Svg } from 'react-native-svg';
 
 // ─── Tokens ────────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
-const COLORS = {
-  bg: '#0D0F14',
-  surface: '#181B22',
-  surfaceLight: '#252830',
-  primary: '#E94033',
-  primaryFaded: 'rgba(233, 64, 51, 0.12)',
-  primaryBorder: 'rgba(233, 64, 51, 0.4)',
-  white: '#FFFFFF',
-  textMuted: '#8A8F9A',
-  textDim: '#5A5E67',
-  focusRing: '#E94033',
-=======
 const C = {
-  bg:          '#0D0D0F',
-  bgDeep:      '#120909',
-  surface:     '#161619',
-  red:         '#FF3B30',
-  redDark:     '#C8211A',
-  redSubtle:   'rgba(255,59,48,0.10)',
-  redBorder:   'rgba(255,59,48,0.38)',
-  white:       '#FFFFFF',
-  muted:       'rgba(255,255,255,0.42)',
-  dim:         'rgba(255,255,255,0.22)',
-  border:      'rgba(255,255,255,0.08)',
+  bg: '#0D0D0F',
+  bgDeep: '#120909',
+  surface: '#161619',
+  red: '#FF3B30',
+  redDark: '#C8211A',
+  redSubtle: 'rgba(255,59,48,0.10)',
+  redBorder: 'rgba(255,59,48,0.38)',
+  white: '#FFFFFF',
+  muted: 'rgba(255,255,255,0.42)',
+  dim: 'rgba(255,255,255,0.22)',
+  border: 'rgba(255,255,255,0.08)',
   inputBorder: 'rgba(255,255,255,0.11)',
   focusBorder: 'rgba(255,59,48,0.60)',
-  inputBg:     'rgba(255,255,255,0.05)',
-  tabBg:       'rgba(255,255,255,0.06)',
+  inputBg: 'rgba(255,255,255,0.05)',
+  tabBg: 'rgba(255,255,255,0.06)',
   tabInactive: 'rgba(255,255,255,0.40)',
-  divider:     'rgba(255,255,255,0.09)',
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
+  divider: 'rgba(255,255,255,0.09)',
 };
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
@@ -294,24 +276,9 @@ export default function LoginScreen() {
   const { mode = 'register' } = useLocalSearchParams();
   const isRegister = mode === 'register';
 
-<<<<<<< HEAD
-  const [activeTab, setActiveTab] = useState('manual'); // 'manual' | 'scan'
-  const [cardNumber, setCardNumber] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [focusedInput, setFocusedInput] = useState(null);
-
-  const handleBack = useCallback(() => router.back(), []);
-
-  const handleSendOtp = useCallback(() => {
-    if (!cardNumber.trim() || !mobileNumber.trim()) return; // basic guard
-    router.push('/(auth)/otp');
-  }, [cardNumber, mobileNumber]);
-
-  const isDisabled = !cardNumber.trim() || !mobileNumber.trim();
-=======
-  const [tab, setTab]         = useState('Manual Entry');
-  const [card, setCard]       = useState('');
-  const [mobile, setMobile]   = useState('');
+  const [tab, setTab] = useState('Manual Entry');
+  const [card, setCard] = useState('');
+  const [mobile, setMobile] = useState('');
   const [loading, setLoading] = useState(false);
 
   const btnScale = useSharedValue(1);
@@ -331,7 +298,7 @@ export default function LoginScreen() {
     if (!canSubmit || loading) return;
     Keyboard.dismiss();
     btnScale.value = withSequence(
-      withTiming(0.96, { duration: 80,  easing: Easing.out(Easing.quad) }),
+      withTiming(0.96, { duration: 80, easing: Easing.out(Easing.quad) }),
       withTiming(1.00, { duration: 120, easing: Easing.out(Easing.back(2)) })
     );
     setLoading(true);
@@ -341,7 +308,6 @@ export default function LoginScreen() {
       router.push('/(auth)/otp');
     }, 1200);
   }, [canSubmit, loading]);
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
 
   return (
     <View style={s.root}>
@@ -358,115 +324,6 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-<<<<<<< HEAD
-        style={styles.flex}
-      >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: Math.max(insets.top + 20, 40) },
-          ]}
-        >
-          {/* ── Back ── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <ArrowLeftIcon />
-              <Text style={styles.backText}>Back</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* ── Title ── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-            {/* FIX: replaced &apos; with plain apostrophe */}
-            <Text style={styles.title} allowFontScaling={false}>
-              {`Link your\nchild's card`}
-            </Text>
-            <Text style={styles.subtitle} allowFontScaling={false}>
-              Enter the card number on the back of the QR card, or scan it.
-            </Text>
-          </Animated.View>
-
-          {/* ── Segmented Control ── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.tabContainer}>
-            {['manual', 'scan'].map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                activeOpacity={0.8}
-                style={[styles.tab, activeTab === tab && styles.tabActive]}
-                onPress={() => setActiveTab(tab)}
-              >
-                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                  {tab === 'manual' ? 'Manual Entry' : 'Scan QR'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </Animated.View>
-
-          {/* ── Scan Tab Content ── */}
-          {activeTab === 'scan' && (
-            <Animated.View entering={FadeInDown.duration(300)}>
-              <TouchableOpacity activeOpacity={0.7} style={styles.scanArea}>
-                <QrCodeBoxIcon />
-                <Text style={styles.scanText}>Tap to scan card QR code</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-
-          {/* ── Manual Tab Content ── */}
-          {activeTab === 'manual' && (
-            <Animated.View entering={FadeInDown.duration(300)} style={styles.formContainer}>
-              <FormInput
-                label="CARD NUMBER"
-                inputKey="card"
-                focused={focusedInput}
-                onFocus={setFocusedInput}
-                onBlur={setFocusedInput}
-                value={cardNumber}
-                onChangeText={setCardNumber}
-                placeholder="SQ-YYYY-XXXXXX"
-                autoCapitalize="characters"
-                icon={(active) => (
-                  <CreditCardIcon color={active ? COLORS.textMuted : COLORS.textDim} />
-                )}
-              />
-              <FormInput
-                label="MOBILE NUMBER"
-                inputKey="mobile"
-                focused={focusedInput}
-                onFocus={setFocusedInput}
-                onBlur={setFocusedInput}
-                value={mobileNumber}
-                onChangeText={setMobileNumber}
-                placeholder="+91 XXXXX XXXXX"
-                keyboardType="phone-pad"
-                icon={(active) => (
-                  <PhoneIcon color={active ? COLORS.textMuted : COLORS.textDim} />
-                )}
-              />
-            </Animated.View>
-          )}
-        </ScrollView>
-
-        {/* ── Footer CTA ── */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(500)}
-          style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}
-        >
-          <TouchableOpacity
-            activeOpacity={isDisabled ? 1 : 0.8}
-            style={[styles.primaryButton, isDisabled && styles.primaryButtonDisabled]}
-            onPress={handleSendOtp}
-            disabled={isDisabled}
-            accessibilityRole="button"
-=======
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
@@ -476,7 +333,6 @@ export default function LoginScreen() {
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
           >
             {/* Back */}
             <Animated.View entering={FadeIn.duration(400)}>
@@ -574,31 +430,6 @@ export default function LoginScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
-  flex: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-
-  // Back
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 32,
-  },
-  backText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-
-  // Title
-=======
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   glow: {
@@ -622,7 +453,6 @@ const s = StyleSheet.create({
   },
   backLabel: { color: C.white, fontSize: 15.5, fontWeight: '600' },
   header: { marginBottom: 26, gap: 10 },
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
   title: {
     fontSize: 34,
     fontWeight: Platform.select({ ios: '800', android: '700' }),
@@ -637,101 +467,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.1,
     maxWidth: 320,
   },
-<<<<<<< HEAD
-
-  // Tabs
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 5,
-    marginBottom: 24,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  tabActive: {
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  tabText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '600' },
-  tabTextActive: { color: COLORS.white },
-
-  // Scan area
-  scanArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primaryFaded,
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryBorder,
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    paddingVertical: 32,
-    marginBottom: 28,
-  },
-  scanText: {
-    color: COLORS.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 12,
-  },
-
-  // Form
-  formContainer: { gap: 20 },
-  inputWrapper: { width: '100%' },
-  inputLabel: {
-    color: COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.surface,
-    borderRadius: 14,
-    height: 60,
-    paddingHorizontal: 16,
-  },
-  inputContainerFocused: {
-    borderColor: COLORS.focusRing,
-    backgroundColor: '#1C1F28',
-  },
-  inputIcon: { marginRight: 12 },
-  textInput: {
-    flex: 1,
-    color: COLORS.white,
-    fontSize: 16,
-    height: '100%',
-    fontWeight: '500',
-  },
-
-  // Footer
-  footer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    backgroundColor: COLORS.bg,
-  },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: COLORS.primary,
-=======
   card: {
     backgroundColor: C.surface,
     borderRadius: 20,
@@ -740,23 +475,11 @@ const s = StyleSheet.create({
     borderColor: C.border,
     gap: 18,
     shadowColor: '#000',
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 20,
     elevation: 10,
   },
-<<<<<<< HEAD
-  primaryButtonDisabled: {
-    opacity: 0.45,
-  },
-  primaryButtonText: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-=======
   submitWrap: {
     borderRadius: 15,
     overflow: 'hidden',
@@ -786,5 +509,4 @@ const s = StyleSheet.create({
   },
   footerText: { color: C.muted, fontSize: 14 },
   footerLink: { color: C.red, fontSize: 14, fontWeight: '700' },
->>>>>>> 5ff99f8571a71399dc2eb0bf934dc195ceec2ac8
 });
