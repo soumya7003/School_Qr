@@ -286,7 +286,7 @@ export default function Home() {
             <View style={styles.card}>
               <View style={styles.sh}>
                 <Text style={styles.shTitle}>Emergency Contacts</Text>
-                <TouchableOpacity style={styles.iconBtn}>
+                <TouchableOpacity onPress={handleMoveUpdatePage} style={styles.iconBtn}>
                   <Text style={{ color: C.t2, fontSize: 16, lineHeight: 16 }}>+</Text>
                 </TouchableOpacity>
               </View>
