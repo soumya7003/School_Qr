@@ -5,27 +5,26 @@
 import Badge from '@/src/components/common/Badge';
 import Screen from '@/src/components/common/Screen';
 import QrCard from '@/src/components/qr/QrCard';
+import { ShareIcon } from '@/src/components/ui/ShareIcon';
 import { useProfileStore } from '@/src/features/profile/profile.store';
 import { colors, radius, spacing, typography } from '@/src/theme';
+import { useRouter } from 'expo-router';
 import { Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
-
-const ShareIcon = () => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-        <Path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
-            stroke={colors.textSecondary} strokeWidth={2}
-            strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
 
 export default function QrScreen() {
     const { student, emergencyProfile, token, toggleCardStatus } = useProfileStore();
     const isActive = token?.status === 'ACTIVE';
 
+    const router = useRouter()
+
     const handleShare = async () => {
         await Share.share({ message: `My child's SchoolQR card: ${token?.token_hash}` });
     };
+
+    const handleDeactiveCard = () => {
+        router.push("/otp")
+    }
 
     return (
         <Screen bg={colors.screenBg} scroll edges={['top', 'left', 'right']}>
@@ -58,7 +57,7 @@ export default function QrScreen() {
                     </View>
                     <TouchableOpacity
                         style={[styles.toggleBtn, isActive && styles.toggleBtnActive]}
-                        onPress={toggleCardStatus}
+                        onPress={handleDeactiveCard}
                         activeOpacity={0.8}
                     >
                         <Text style={[styles.toggleBtnText, isActive && styles.toggleBtnTextActive]}>
