@@ -34,15 +34,7 @@ const C = {
 };
 
 // ─── Fade-up animated wrapper ─────────────────────────────────────
-function FadeUp({
-  children,
-  delay = 0,
-  mounted,
-}: {
-  children: React.ReactNode;
-  delay?: number;
-  mounted: boolean;
-}) {
+function FadeUp({ children, delay = 0, mounted }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(18)).current;
 
