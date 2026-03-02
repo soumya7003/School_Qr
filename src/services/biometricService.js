@@ -1,59 +1,86 @@
 import { useBiometricStore } from "@/store/biometricStore";
+import * as LocalAuthentication from "expo-local-authentication";
 import { Platform } from "react-native";
 
-let LocalAuthentication = null;
+const isWeb = Platform.OS === "web";
 
-// load native module only on mobile
-if (Platform.OS !== "web") {
-  LocalAuthentication = require("expo-local-authentication");
-}
-
-// ── Check device capability ─────────────────────────
+/**
+ * ─────────────────────────────────────────────
+ * Check device biometric capability
+ * ─────────────────────────────────────────────
+ */
 export async function checkDeviceBiometrics() {
-  if (!LocalAuthentication) return false;
+  if (isWeb) return false;
 
-  const { setDeviceSupported, setBiometricType } = useBiometricStore.getState();
+  try {
+    const { setDeviceSupported, setBiometricType } =
+      useBiometricStore.getState();
 
-  const isHardwareAvailable = await LocalAuthentication.hasHardwareAsync();
-  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-  const isSupported = isHardwareAvailable && isEnrolled;
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    const isSupported = hasHardware && isEnrolled;
 
-  setDeviceSupported(isSupported);
+    setDeviceSupported(isSupported);
 
-  if (isSupported) {
-    const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+    if (isSupported) {
+      const types =
+        await LocalAuthentication.supportedAuthenticationTypesAsync();
 
-    const typeMap = {
-      [LocalAuthentication.AuthenticationType.FINGERPRINT]: "fingerprint",
-      [LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION]: "face",
-      [LocalAuthentication.AuthenticationType.IRIS]: "iris",
-    };
+      const { AuthenticationType } = LocalAuthentication;
 
-    const best = types.includes(2) ? 2 : types.includes(1) ? 1 : types[0];
-    setBiometricType(typeMap[best] ?? "fingerprint");
+      const typeMap = {
+        [AuthenticationType.FINGERPRINT]: "fingerprint",
+        [AuthenticationType.FACIAL_RECOGNITION]: "face",
+        [AuthenticationType.IRIS]: "iris",
+      };
+
+      const best = types.includes(AuthenticationType.FINGERPRINT)
+        ? AuthenticationType.FINGERPRINT
+        : types.includes(AuthenticationType.FACIAL_RECOGNITION)
+          ? AuthenticationType.FACIAL_RECOGNITION
+          : types[0];
+
+      setBiometricType(typeMap[best] || "fingerprint");
+    }
+
+    return isSupported;
+  } catch (error) {
+    console.warn("Biometric capability check failed:", error);
+    return false;
   }
-
-  return isSupported;
 }
 
-// ── Prompt biometric ─────────────────────────
+/**
+ * ─────────────────────────────────────────────
+ * Prompt biometric authentication
+ * ─────────────────────────────────────────────
+ */
 export async function promptBiometric({
   reason = "Verify your identity to continue",
   fallbackLabel = "Use Device PIN",
 } = {}) {
-  if (!LocalAuthentication) {
+  if (isWeb) {
     return { success: false, error: "not_available_on_web" };
   }
 
-  return await LocalAuthentication.authenticateAsync({
-    promptMessage: reason,
-    fallbackLabel,
-    disableDeviceFallback: false,
-    cancelLabel: "Cancel",
-  });
+  try {
+    return await LocalAuthentication.authenticateAsync({
+      promptMessage: reason,
+      fallbackLabel,
+      disableDeviceFallback: false,
+      cancelLabel: "Cancel",
+    });
+  } catch (error) {
+    console.warn("Biometric prompt failed:", error);
+    return { success: false, error: "auth_error" };
+  }
 }
 
-// ── Enable biometric ─────────────────────────
+/**
+ * ─────────────────────────────────────────────
+ * Enable biometric lock
+ * ─────────────────────────────────────────────
+ */
 export async function enableBiometric() {
   const supported = await checkDeviceBiometrics();
   if (!supported) return { ok: false, reason: "not_supported" };
@@ -62,19 +89,27 @@ export async function enableBiometric() {
     reason: "Confirm to enable biometric lock",
   });
 
-  if (!result.success) return { ok: false, reason: result.error };
+  if (!result.success) {
+    return { ok: false, reason: result.error || "auth_failed" };
+  }
 
   useBiometricStore.getState().setEnabled(true);
   return { ok: true };
 }
 
-// ── Disable biometric ─────────────────────────
+/**
+ * ─────────────────────────────────────────────
+ * Disable biometric lock
+ * ─────────────────────────────────────────────
+ */
 export async function disableBiometric() {
   const result = await promptBiometric({
     reason: "Confirm to disable biometric lock",
   });
 
-  if (!result.success) return { ok: false, reason: result.error };
+  if (!result.success) {
+    return { ok: false, reason: result.error || "auth_failed" };
+  }
 
   useBiometricStore.getState().setEnabled(false);
   return { ok: true };

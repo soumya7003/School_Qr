@@ -16,13 +16,13 @@ import {
     IconShield,
     IconWarning
 } from "@/components/icon/AllIcon";
-import { BiometricRow } from "@/components/settings/BiometricRow";
-import { CardStatusBlock } from "@/components/settings/CardStatusBlock";
-import { LanguageModal } from "@/components/settings/LanguageModal";
-import { PendingUpdatesBanner } from "@/components/settings/PendingUpdatesBanner";
+import BiometricRow from "@/components/settings/BiometricRow";
+import CardStatusBlock from "@/components/settings/CardStatusBlock";
+import LanguageModal from "@/components/settings/LanguageModal";
+import PendingUpdatesBanner from "@/components/settings/PendingUpdatesBanner";
 import { GroupLabel, SettingsRow } from '@/components/settings/Row';
-import { ScanHistoryPreview } from "@/components/settings/ScanHistoryPreview";
-import { ThemeSegment } from "@/components/settings/ThemeSegment";
+import ScanHistoryPreview from "@/components/settings/ScanHistoryPreview";
+import ThemeSegment from "@/components/settings/ThemeSegment";
 import { LANGUAGES } from '@/constants/constants';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
