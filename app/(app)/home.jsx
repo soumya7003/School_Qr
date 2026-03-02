@@ -1101,5 +1101,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flex: 1,
     lineHeight: 16,
-  },
+-  },
 });
