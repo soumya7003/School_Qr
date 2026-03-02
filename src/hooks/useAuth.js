@@ -1,3 +1,3 @@
-import { useAuthStore } from "@/src/features/auth/auth.store";
+import { useAuthStore } from "@/features/auth/auth.store";
 export const useAuth = () => useAuthStore();
 export default useAuth;

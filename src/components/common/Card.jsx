@@ -2,7 +2,7 @@
  * Card — Surface container with optional top accent strip
  */
 
-import { colors, radius, shadows, spacing } from '@/src/theme';
+import { colors, radius, shadows, spacing } from '@/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 

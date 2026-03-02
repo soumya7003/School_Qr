@@ -3,7 +3,7 @@
  * Simulates a logged-in parent with mock data.
  */
 
-import { mockParent } from "@/src/mock/mockData";
+import { mockParent } from "@/mock/mockData";
 import { create } from "zustand";
 
 export const useAuthStore = create((set) => ({

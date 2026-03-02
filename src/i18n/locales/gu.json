@@ -1,0 +1,43 @@
+{
+  "common": {
+    "save": "સાચવો",
+    "cancel": "રદ કરો",
+    "submit": "સબમિટ કરો",
+    "loading": "લોડ થઈ રહ્યું છે…",
+    "logout": "લોગ આઉટ",
+    "edit": "સંપાદિત કરો",
+    "delete": "કાઢી નાખો"
+  },
+  "settings": {
+    "title": "સેટિંગ્સ",
+    "subtitle": "તમારા બાળકનું ઇમર્જન્સી કાર્ડ મેનેજ કરો",
+    "language": "ભાષા",
+    "theme": "થીમ",
+    "logout": "લોગ આઉટ",
+    "changePhone": "ફોન નંબર બદલો",
+    "support": "મદદ અને સપોર્ટ"
+  },
+  "updates": {
+    "title": "{{name}} ની પ્રોફાઇલ",
+    "subtitle": "તમારા બાળકનું કાર્ડ અપડેટ રાખો",
+    "childTab": "બાળક",
+    "medicalTab": "મેડિકલ",
+    "contactsTab": "સંપર્કો",
+    "submit": "મંજૂરી માટે ફેરફારો મોકલો →",
+    "submitting": "મોકલી રહ્યા છે…",
+    "submitted": "મંજૂરી માટે મોકલાયું",
+    "bloodGroup": "બ્લડ ગ્રુપ",
+    "allergies": "એલર્જી",
+    "conditions": "મેડિકલ સ્થિતિ",
+    "medications": "હાલની દવાઓ",
+    "doctor": "ફેમિલી ડોક્ટર",
+    "notes": "ફર્સ્ટ રિસ્પોન્ડર્સ માટે નોંધો"
+  },
+  "emergency": {
+    "cardNumber": "કાર્ડ નંબર",
+    "status": "સ્થિતિ",
+    "validUntil": "માન્ય સુધી",
+    "activated": "સક્રિય",
+    "calledFirst": "સૌથી પહેલા કોલ કર્યો"
+  }
+}

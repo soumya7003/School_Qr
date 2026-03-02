@@ -1,0 +1,44 @@
+// src/i18n/locales/hi.json
+{
+  "common": {
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "submit": "जमा करें",
+    "loading": "लोड हो रहा है…",
+    "logout": "लॉग आउट",
+    "edit": "संपादित करें",
+    "delete": "हटाएं"
+  },
+  "settings": {
+    "title": "सेटिंग्स",
+    "subtitle": "अपने बच्चे का आपातकालीन कार्ड प्रबंधित करें",
+    "language": "भाषा",
+    "theme": "थीम",
+    "logout": "लॉग आउट",
+    "changePhone": "फ़ोन नंबर बदलें",
+    "support": "सहायता और समर्थन"
+  },
+  "updates": {
+    "title": "{{name}} की प्रोफ़ाइल",
+    "subtitle": "अपने बच्चे का कार्ड अद्यतन रखें",
+    "childTab": "बच्चा",
+    "medicalTab": "चिकित्सा",
+    "contactsTab": "संपर्क",
+    "submit": "अनुमोदन हेतु परिवर्तन भेजें →",
+    "submitting": "भेजा जा रहा है…",
+    "submitted": "अनुमोदन के लिए भेजा गया",
+    "bloodGroup": "रक्त समूह",
+    "allergies": "एलर्जी",
+    "conditions": "चिकित्सीय स्थितियाँ",
+    "medications": "वर्तमान दवाएं",
+    "doctor": "परिवार चिकित्सक",
+    "notes": "प्राथमिक सहायता कर्मियों के लिए नोट्स"
+  },
+  "emergency": {
+    "cardNumber": "कार्ड संख्या",
+    "status": "स्थिति",
+    "validUntil": "मान्य तिथि तक",
+    "activated": "सक्रिय",
+    "calledFirst": "सबसे पहले कॉल किया गया"
+  }
+}

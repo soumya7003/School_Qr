@@ -2,7 +2,7 @@
  * Button — Primary / Secondary / Ghost variants
  */
 
-import { colors, radius, shadows, spacing, typography } from '@/src/theme';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
     ActivityIndicator,

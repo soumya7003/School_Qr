@@ -2,7 +2,7 @@
  * Divider — horizontal line with optional center label
  */
 
-import { colors, spacing, typography } from '@/src/theme';
+import { colors, spacing, typography } from '@/theme';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function Divider({ label, style }) {
