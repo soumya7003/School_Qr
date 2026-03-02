@@ -1,22 +1,21 @@
 /**
- * Updates Screen — Redesigned for parents.
- * Clean, warm, trustworthy — parents update their child's card regularly.
+ * UpdatesScreen — Optimized
  *
- * Key UX improvements:
- *  - Larger touch targets, clearer labels
- *  - Input cards replace raw underline fields — feels safe and complete
- *  - Blood group picker is visually prominent (critical info)
- *  - Contacts tab shows call-order visually with colored priority rings
- *  - Sticky submit bar at bottom — always visible when dirty
- *  - Section icons so parents instantly know what each group is about
+ * Architecture:
+ *  - NO school approval queue — all changes save instantly to DB
+ *  - Single API call updates student + emergency profile together
+ *  - Contacts save independently in real time
+ *  - Clean 3-tab layout: Child · Medical · Contacts
+ *  - OTP removed from update flow entirely (session token is sufficient)
  */
 
 import Screen from '@/components/common/Screen';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { colors, radius, spacing, typography } from '@/theme';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -28,10 +27,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInRight, FadeInUp, Layout } from 'react-native-reanimated';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+// ─── Icons ─────────────────────────────────────────────────────────────────
 
 const Ic = {
   User: ({ c = colors.textTertiary, s = 18 }) => (
@@ -74,21 +72,9 @@ const Ic = {
       <Path d="M20 6L9 17l-5-5" stroke={c} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   ),
-  Clock: ({ c = colors.warning, s = 15 }) => (
+  Flash: ({ c = '#10B981', s = 14 }) => (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Circle cx={12} cy={12} r={10} stroke={c} strokeWidth={1.8} />
-      <Path d="M12 6v6l4 2" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  ),
-  X: ({ c = colors.primary, s = 14 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M18 6L6 18M6 6l12 12" stroke={c} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  ),
-  Lock: ({ c = colors.textTertiary, s = 36 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Rect x={3} y={11} width={18} height={11} rx={2} stroke={c} strokeWidth={1.6} />
-      <Path d="M7 11V7a5 5 0 0110 0v4" stroke={c} strokeWidth={1.6} strokeLinecap="round" />
+      <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   ),
   Camera: ({ c = colors.primary, s = 20 }) => (
@@ -104,100 +90,63 @@ const Ic = {
         stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   ),
-  Pill: ({ c = '#8b5cf6', s = 16 }) => (
+  X: ({ c = colors.primary, s = 14 }) => (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M10.5 20.5l10-10a5 5 0 00-7.07-7.07l-10 10a5 5 0 007.07 7.07z"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-      <Path d="M8.5 8.5l7 7" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M18 6L6 18M6 6l12 12" stroke={c} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   ),
-  Doctor: ({ c = '#0ea5e9', s = 16 }) => (
+  ChevronRight: ({ c = colors.textTertiary, s = 14 }) => (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 9a2 2 0 012-2h14a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-        stroke={c} strokeWidth={1.8} />
-      <Path d="M8 9V7a4 4 0 018 0v2M12 13v3m-1.5-1.5h3"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  ),
-  Note: ({ c = '#f59e0b', s = 16 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M9 18l6-6-6-6" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   ),
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const BLOOD_GROUPS = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−', 'Unknown'];
-
-// Priority ring colors: #1 red, #2 amber, #3 blue, #4 violet, #5 emerald
 const PRIORITY_COLORS = ['#E8342A', '#F59E0B', '#3B82F6', '#8B5CF6', '#10B981'];
 
 const TABS = [
-  { id: 'child', label: 'Child', emoji: '👤', Icon: ({ active }) => <Ic.User c={active ? colors.primary : colors.textTertiary} s={16} /> },
-  { id: 'emergency', label: 'Medical', emoji: '🏥', Icon: ({ active }) => <Ic.Heart c={active ? colors.primary : colors.textTertiary} s={16} /> },
-  { id: 'contacts', label: 'Contacts', emoji: '📞', Icon: ({ active }) => <Ic.Phone c={active ? colors.primary : colors.textTertiary} s={16} /> },
+  { id: 'child', label: 'Child', icon: '👤' },
+  { id: 'medical', label: 'Medical', icon: '🏥' },
+  { id: 'contacts', label: 'Contacts', icon: '📞' },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Animated Save Toast ────────────────────────────────────────────────────
 
-function fmtDate(iso) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+function SaveToast({ visible }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
 
-// ─── Request Banner ───────────────────────────────────────────────────────────
-
-function RequestBanner({ requests = [] }) {
-  const pending = requests.filter(r => r.status === 'PENDING');
-  const rejected = requests.filter(r => r.status === 'REJECTED');
-  if (!pending.length && !rejected.length) return null;
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(opacity, { toValue: 1, useNativeDriver: true }),
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 10, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
 
   return (
-    <Animated.View entering={FadeInDown.delay(60).duration(350)} style={styles.bannerStack}>
-      {pending.length > 0 && (
-        <View style={styles.pendingBanner}>
-          <View style={styles.bannerIconWrap}>
-            <Ic.Clock c={colors.warning} s={15} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bannerTitle}>
-              {pending.length} update{pending.length > 1 ? 's' : ''} awaiting school approval
-            </Text>
-            {pending[0].created_at && (
-              <Text style={styles.bannerSub}>Submitted {fmtDate(pending[0].created_at)} · takes 1–2 school days</Text>
-            )}
-          </View>
-        </View>
-      )}
-      {rejected.map((r, i) => (
-        <View key={r.id ?? i} style={styles.rejectedBanner}>
-          <View style={[styles.bannerIconWrap, { backgroundColor: `${colors.primary}15` }]}>
-            <Ic.X c={colors.primary} s={14} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.rejectedTitle}>School rejected your update</Text>
-            {r.reject_reason && (
-              <Text style={styles.rejectedReason}>
-                {`"${r.reject_reason}"`}
-              </Text>
-            )}
-          </View>
-        </View>
-      ))}
+    <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }] }]}>
+      <View style={styles.toastDot} />
+      <Text style={styles.toastText}>Saved to your child's card</Text>
     </Animated.View>
   );
 }
 
-// ─── Tab Bar ──────────────────────────────────────────────────────────────────
+// ─── Tab Bar ────────────────────────────────────────────────────────────────
 
-function TabBar({ tabs, active, onChange, dirtyTabs }) {
+function TabBar({ active, onChange, dirtyTabs }) {
   return (
     <View style={styles.tabBar}>
-      {tabs.map(tab => {
+      {TABS.map(tab => {
         const isActive = active === tab.id;
         const isDirty = dirtyTabs.includes(tab.id);
         return (
@@ -205,11 +154,13 @@ function TabBar({ tabs, active, onChange, dirtyTabs }) {
             key={tab.id}
             style={[styles.tabItem, isActive && styles.tabItemActive]}
             onPress={() => onChange(tab.id)}
-            activeOpacity={0.75}
+            activeOpacity={0.7}
           >
-            <tab.Icon active={isActive} />
-            <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{tab.label}</Text>
-            {isDirty && !isActive && <View style={styles.tabDot} />}
+            <Text style={styles.tabIcon}>{tab.icon}</Text>
+            <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+            {isDirty && !isActive && <View style={styles.tabDirtyDot} />}
           </TouchableOpacity>
         );
       })}
@@ -217,77 +168,84 @@ function TabBar({ tabs, active, onChange, dirtyTabs }) {
   );
 }
 
-// ─── InputCard — replaces raw underline field ─────────────────────────────────
-// Feels like filling out a proper form, not a settings tweak
+// ─── Field ──────────────────────────────────────────────────────────────────
 
-function InputCard({ label, value, onChangeText, placeholder, multiline, keyboardType, locked, hint, icon }) {
+function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint }) {
   const [focused, setFocused] = useState(false);
+  const borderAnim = useRef(new Animated.Value(0)).current;
+
+  const handleFocus = () => {
+    setFocused(true);
+    Animated.timing(borderAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+  };
+  const handleBlur = () => {
+    setFocused(false);
+    Animated.timing(borderAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+  };
+
+  const borderColor = borderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.border, colors.primary],
+  });
+
   return (
-    <View style={[styles.inputCard, focused && styles.inputCardFocused, locked && styles.inputCardLocked]}>
-      <View style={styles.inputCardHeader}>
-        <View style={styles.inputCardLabelRow}>
-          {icon && <View style={styles.inputCardIcon}>{icon}</View>}
-          <Text style={styles.inputCardLabel}>{label}</Text>
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Animated.View style={[styles.fieldBox, { borderColor }]}>
+        <TextInput
+          style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textTertiary}
+          multiline={multiline}
+          numberOfLines={multiline ? 3 : 1}
+          keyboardType={keyboardType ?? 'default'}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+        />
+      </Animated.View>
+      {hint && (
+        <Text style={styles.fieldHint}>{hint}</Text>
+      )}
+    </View>
+  );
+}
+
+// ─── Row (two fields side by side) ─────────────────────────────────────────
+
+function FieldRow({ children }) {
+  return <View style={styles.fieldRow}>{children}</View>;
+}
+
+// ─── Section ────────────────────────────────────────────────────────────────
+
+function Section({ emoji, title, subtitle, children }) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <View style={styles.sectionEmojiWrap}>
+          <Text style={styles.sectionEmoji}>{emoji}</Text>
         </View>
-        {locked && (
-          <View style={styles.lockedBadge}>
-            <Ic.Lock c={colors.textTertiary} s={10} />
-            <Text style={styles.lockedBadgeText}>School managed</Text>
-          </View>
-        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          {subtitle && <Text style={styles.sectionSub}>{subtitle}</Text>}
+        </View>
       </View>
-      <TextInput
-        style={[styles.inputCardField, multiline && styles.inputCardFieldMulti]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder ?? `Enter ${label.toLowerCase()}…`}
-        placeholderTextColor={colors.textTertiary}
-        multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-        editable={!locked}
-        selectionColor={colors.primary}
-        cursorColor={colors.primary}
-        keyboardType={keyboardType ?? 'default'}
-        textAlignVertical={multiline ? 'top' : 'center'}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-      />
-      {hint && !focused && <Text style={styles.inputCardHint}>{hint}</Text>}
+      <View style={styles.sectionBody}>{children}</View>
     </View>
   );
 }
 
-// ─── Row pair (two InputCards side by side) ───────────────────────────────────
+// ─── Blood Group Picker ─────────────────────────────────────────────────────
 
-function InputRow({ children }) {
-  return <View style={styles.inputRow}>{children}</View>;
-}
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-
-function SectionHead({ emoji, title, subtitle }) {
-  return (
-    <View style={styles.sectionHead}>
-      <Text style={styles.sectionHeadEmoji}>{emoji}</Text>
-      <View>
-        <Text style={styles.sectionHeadTitle}>{title}</Text>
-        {subtitle && <Text style={styles.sectionHeadSub}>{subtitle}</Text>}
-      </View>
-    </View>
-  );
-}
-
-// ─── Blood Group Picker ───────────────────────────────────────────────────────
-
-function BloodGroupPicker({ value, onChange }) {
+function BloodPicker({ value, onChange }) {
   return (
     <View style={styles.bloodWrap}>
-      <View style={styles.bloodLabelRow}>
-        <Ic.Drop c="#ef4444" s={15} />
-        <Text style={styles.bloodLabel}>Blood Group</Text>
-        <Text style={styles.bloodSub}>— tap to select</Text>
-      </View>
-      <View style={styles.bloodGrid}>
+      <View style={styles.bloodRow}>
         {BLOOD_GROUPS.map(bg => {
           const sel = value === bg;
           return (
@@ -297,115 +255,105 @@ function BloodGroupPicker({ value, onChange }) {
               onPress={() => onChange(bg)}
               activeOpacity={0.7}
             >
-              {sel && (
-                <View style={styles.bloodCheckDot}>
-                  <Ic.Check c={colors.white} s={8} />
-                </View>
-              )}
               <Text style={[styles.bloodChipText, sel && styles.bloodChipTextSel]}>{bg}</Text>
+              {sel && <View style={styles.bloodDot} />}
             </TouchableOpacity>
           );
         })}
       </View>
       {!value && (
-        <Text style={styles.bloodRequired}>⚠ Required — critical for emergency care</Text>
+        <Text style={styles.bloodWarning}>⚠ Select blood group — critical for emergencies</Text>
       )}
     </View>
   );
 }
 
-// ─── Photo Row ────────────────────────────────────────────────────────────────
+// ─── Photo Row ──────────────────────────────────────────────────────────────
 
 function PhotoRow({ photoUrl, onPress }) {
   return (
     <TouchableOpacity style={styles.photoRow} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.photoAvatar}>
-        <Ic.User c={colors.textTertiary} s={28} />
-        <View style={styles.photoEditBadge}>
-          <Ic.Camera c={colors.white} s={10} />
+        <Ic.User c={colors.textTertiary} s={26} />
+        <View style={styles.photoBadge}>
+          <Ic.Camera c={colors.white} s={9} />
         </View>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.photoLabel}>{photoUrl ? 'Change Photo' : 'Add Child Photo'}</Text>
+        <Text style={styles.photoLabel}>{photoUrl ? 'Change Photo' : 'Add Photo'}</Text>
         <Text style={styles.photoSub}>
-          {photoUrl
-            ? 'Tap to update from gallery'
-            : 'Helps emergency responders identify your child instantly'}
+          {photoUrl ? 'Tap to update' : 'Helps responders identify your child instantly'}
         </Text>
       </View>
-      <View style={styles.photoCta}>
-        <Text style={styles.photoCtaText}>Tap</Text>
-      </View>
+      <Ic.ChevronRight c={colors.textTertiary} s={16} />
     </TouchableOpacity>
   );
 }
 
-// ─── Contact Card ─────────────────────────────────────────────────────────────
+// ─── Contact Card ───────────────────────────────────────────────────────────
 
 function ContactCard({ contact, onEdit, onDelete, index }) {
   const pc = PRIORITY_COLORS[(contact.priority - 1) % PRIORITY_COLORS.length];
-  const isFirst = contact.priority === 1;
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      delay: index * 60,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 8,
+    }).start();
+  }, []);
 
   return (
-    <Animated.View
-      entering={FadeInRight.delay(index * 70).duration(350)}
-      layout={Layout.springify()}
-      style={[styles.contactCard, isFirst && styles.contactCardFirst, !contact.is_active && styles.contactCardInactive]}
-    >
-      {/* Priority ring */}
-      <View style={[styles.contactRing, { borderColor: pc, backgroundColor: `${pc}12` }]}>
-        <Text style={[styles.contactRingText, { color: pc }]}>{contact.priority}</Text>
+    <Animated.View style={[styles.contactCard, { transform: [{ scale: scaleAnim }] }]}>
+      <View style={[styles.contactPriority, { backgroundColor: `${pc}18`, borderColor: `${pc}40` }]}>
+        <Text style={[styles.contactPriorityText, { color: pc }]}>{contact.priority}</Text>
       </View>
-
-      {/* Info */}
       <View style={{ flex: 1 }}>
-        <View style={styles.contactTopRow}>
+        <View style={styles.contactTop}>
           <Text style={styles.contactName}>{contact.name}</Text>
-          {isFirst && (
-            <View style={styles.firstBadge}>
-              <Text style={styles.firstBadgeText}>Called first</Text>
-            </View>
-          )}
-          {!contact.is_active && (
-            <View style={styles.inactiveBadge}>
-              <Text style={styles.inactiveBadgeText}>Inactive</Text>
+          {contact.priority === 1 && (
+            <View style={[styles.contactBadge, { backgroundColor: `${pc}15`, borderColor: `${pc}30` }]}>
+              <Text style={[styles.contactBadgeText, { color: pc }]}>First call</Text>
             </View>
           )}
         </View>
-        <Text style={styles.contactDetail}>
-          {contact.relationship ?? 'Guardian'}  ·  {contact.phone}
+        <Text style={styles.contactMeta}>
+          {contact.relationship ?? 'Guardian'} · {contact.phone}
         </Text>
       </View>
-
-      {/* Actions */}
       <View style={styles.contactActions}>
         <TouchableOpacity style={styles.contactBtn} onPress={() => onEdit(contact)} activeOpacity={0.7}>
-          <Ic.Edit c={colors.textSecondary} s={14} />
+          <Ic.Edit c={colors.textSecondary} s={13} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.contactBtn, styles.contactBtnDanger]} onPress={() => onDelete(contact)} activeOpacity={0.7}>
-          <Ic.Trash c={colors.primary} s={14} />
+        <TouchableOpacity style={[styles.contactBtn, styles.contactBtnRed]} onPress={() => onDelete(contact)} activeOpacity={0.7}>
+          <Ic.Trash c={colors.primary} s={13} />
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
 
-// ─── Contact Modal ────────────────────────────────────────────────────────────
+// ─── Contact Modal ──────────────────────────────────────────────────────────
 
 function ContactModal({ visible, contact, onSave, onClose }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [relationship, setRelationship] = useState('');
 
-  const handleOpen = () => {
-    setName(contact?.name ?? '');
-    setPhone(contact?.phone ?? '');
-    setRelationship(contact?.relationship ?? '');
-  };
+  useEffect(() => {
+    if (visible) {
+      setName(contact?.name ?? '');
+      setPhone(contact?.phone ?? '');
+      setRelationship(contact?.relationship ?? '');
+    }
+  }, [visible, contact]);
 
   const handleSave = () => {
     if (!name.trim() || !phone.trim()) {
-      Alert.alert('Missing Info', 'Name and phone number are required.');
+      Alert.alert('Missing Info', 'Name and phone are required.');
       return;
     }
     onSave({ name: name.trim(), phone: phone.trim(), relationship: relationship.trim() });
@@ -413,37 +361,23 @@ function ContactModal({ visible, contact, onSave, onClose }) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onShow={handleOpen}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Pressable style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-
-            {/* Modal header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderIcon}>
-                <Ic.Phone c={colors.primary} s={20} />
-              </View>
-              <View>
-                <Text style={styles.modalTitle}>
-                  {contact?.id ? 'Edit Contact' : 'Add Emergency Contact'}
-                </Text>
-                <Text style={styles.modalSub}>
-                  Called immediately when the card is scanned
-                </Text>
-              </View>
+          <Pressable style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>
+              {contact?.id ? 'Edit Contact' : 'Add Contact'}
+            </Text>
+            <Text style={styles.sheetSub}>Called immediately when QR is scanned</Text>
+            <View style={styles.sheetFields}>
+              <Field label="Full Name" value={name} onChangeText={setName} placeholder="e.g. Priya Sharma" />
+              <Field label="Phone Number" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" />
+              <Field label="Relationship" value={relationship} onChangeText={setRelationship} placeholder="Mother / Father / Uncle…" />
             </View>
-
-            {/* Fields */}
-            <View style={styles.modalFields}>
-              <InputCard label="Full Name" value={name} onChangeText={setName} placeholder="e.g. Priya Sharma" />
-              <InputCard label="Phone Number" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" />
-              <InputCard label="Relationship" value={relationship} onChangeText={setRelationship} placeholder="Mother / Father / Uncle…" />
-            </View>
-
-            <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSave} activeOpacity={0.85}>
-              <Ic.Check c={colors.white} s={16} />
-              <Text style={styles.modalSaveBtnText}>
+            <TouchableOpacity style={styles.sheetSaveBtn} onPress={handleSave} activeOpacity={0.85}>
+              <Ic.Check c={colors.white} s={15} />
+              <Text style={styles.sheetSaveBtnText}>
                 {contact?.id ? 'Save Changes' : 'Add Contact'}
               </Text>
             </TouchableOpacity>
@@ -454,76 +388,60 @@ function ContactModal({ visible, contact, onSave, onClose }) {
   );
 }
 
-// ─── Info Note ────────────────────────────────────────────────────────────────
+// ─── Save Button ────────────────────────────────────────────────────────────
 
-function InfoNote({ children, type = 'info' }) {
-  const cfg = {
-    info: { bg: colors.infoBg, border: 'rgba(59,130,246,0.2)', text: colors.info },
-    warning: { bg: colors.warningBg, border: 'rgba(245,158,11,0.2)', text: colors.warning },
-    success: { bg: colors.successBg, border: 'rgba(16,185,129,0.2)', text: colors.success },
-  }[type];
+function SaveButton({ dirty, saving, onPress }) {
+  if (!dirty && !saving) return null;
   return (
-    <View style={[styles.infoNote, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-      <Text style={[styles.infoNoteText, { color: cfg.text }]}>{children}</Text>
+    <View style={styles.saveBar}>
+      <TouchableOpacity
+        style={[styles.saveBtn, saving && styles.saveBtnBusy]}
+        onPress={onPress}
+        activeOpacity={0.85}
+        disabled={saving}
+      >
+        <Text style={styles.saveBtnText}>
+          {saving ? 'Saving…' : 'Save Changes'}
+        </Text>
+        {!saving && <Ic.Flash c={colors.white} s={14} />}
+      </TouchableOpacity>
     </View>
   );
 }
 
-// ─── Sticky Submit Bar ────────────────────────────────────────────────────────
+// ─── Note ───────────────────────────────────────────────────────────────────
 
-function SubmitBar({ hasChanges, submitting, submitted, onSubmit }) {
-  if (!hasChanges && !submitting && !submitted) return null;
+function Note({ children }) {
   return (
-    <Animated.View entering={FadeInUp.duration(300)} style={styles.submitBar}>
-      <TouchableOpacity
-        style={[
-          styles.submitBtn,
-          submitted && styles.submitBtnDone,
-          submitting && styles.submitBtnBusy,
-        ]}
-        onPress={onSubmit}
-        activeOpacity={0.85}
-        disabled={submitting || submitted}
-      >
-        {submitted ? (
-          <>
-            <Ic.Check c={colors.success} s={16} />
-            <Text style={[styles.submitBtnText, { color: colors.success }]}>Sent for Approval</Text>
-          </>
-        ) : (
-          <Text style={styles.submitBtnText}>
-            {submitting ? 'Submitting…' : 'Submit Changes for Approval →'}
-          </Text>
-        )}
-      </TouchableOpacity>
-      {!submitted && (
-        <Text style={styles.submitNote}>School reviews within 1–2 school days</Text>
-      )}
-    </Animated.View>
+    <View style={styles.note}>
+      <Text style={styles.noteText}>{children}</Text>
+    </View>
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function UpdatesScreen() {
   const {
-    student, emergencyProfile,
-    contacts: rawContacts, updateRequests, schoolSettings,
-    submitUpdateRequest, addContact, updateContact, deleteContact,
+    student,
+    emergencyProfile,
+    contacts: rawContacts,
+    updateStudentProfile,  // PATCH /student/:id — saves directly, no queue
+    updateContact,
+    addContact,
+    deleteContact,
   } = useProfileStore();
 
-  const canEdit = schoolSettings?.allow_parent_edit !== false;
-
-  // Tab
+  // ── Tab state
   const [activeTab, setActiveTab] = useState('child');
 
-  // Child Info
+  // ── Child fields
   const [firstName, setFirstName] = useState(student?.first_name ?? '');
   const [lastName, setLastName] = useState(student?.last_name ?? '');
   const [cls, setCls] = useState(student?.class ?? '');
   const [section, setSection] = useState(student?.section ?? '');
 
-  // Medical
+  // ── Medical fields
   const [bloodGroup, setBloodGroup] = useState(emergencyProfile?.blood_group ?? '');
   const [allergies, setAllergies] = useState(emergencyProfile?.allergies ?? '');
   const [conditions, setConditions] = useState(emergencyProfile?.conditions ?? '');
@@ -532,32 +450,81 @@ export default function UpdatesScreen() {
   const [doctorPhone, setDoctorPhone] = useState(emergencyProfile?.doctor_phone ?? '');
   const [notes, setNotes] = useState(emergencyProfile?.notes ?? '');
 
-  // Contacts
+  // ── Contacts
   const [contacts, setContacts] = useState(rawContacts ?? []);
-  const [contactModal, setContactModal] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
 
-  // Submit
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  // ── Save states
+  const [saving, setSaving] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
 
-  // Dirty tracking
-  const childDirty = firstName !== (student?.first_name ?? '') || lastName !== (student?.last_name ?? '') || cls !== (student?.class ?? '') || section !== (student?.section ?? '');
-  const medDirty = bloodGroup !== (emergencyProfile?.blood_group ?? '') || allergies !== (emergencyProfile?.allergies ?? '') || conditions !== (emergencyProfile?.conditions ?? '') || medications !== (emergencyProfile?.medications ?? '') || doctorName !== (emergencyProfile?.doctor_name ?? '') || doctorPhone !== (emergencyProfile?.doctor_phone ?? '') || notes !== (emergencyProfile?.notes ?? '');
-  const dirtyTabs = [...(childDirty ? ['child'] : []), ...(medDirty ? ['emergency'] : [])];
-  const hasChanges = childDirty || medDirty;
+  // ── Dirty tracking
+  const childDirty =
+    firstName !== (student?.first_name ?? '') ||
+    lastName !== (student?.last_name ?? '') ||
+    cls !== (student?.class ?? '') ||
+    section !== (student?.section ?? '');
 
-  // Handlers
+  const medDirty =
+    bloodGroup !== (emergencyProfile?.blood_group ?? '') ||
+    allergies !== (emergencyProfile?.allergies ?? '') ||
+    conditions !== (emergencyProfile?.conditions ?? '') ||
+    medications !== (emergencyProfile?.medications ?? '') ||
+    doctorName !== (emergencyProfile?.doctor_name ?? '') ||
+    doctorPhone !== (emergencyProfile?.doctor_phone ?? '') ||
+    notes !== (emergencyProfile?.notes ?? '');
+
+  const currentTabDirty = activeTab === 'child' ? childDirty : activeTab === 'medical' ? medDirty : false;
+  const dirtyTabs = [...(childDirty ? ['child'] : []), ...(medDirty ? ['medical'] : [])];
+
+  // ── Show toast helper
+  const showToast = () => {
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 2500);
+  };
+
+  // ── Save child + medical together (single API call)
+  const handleSave = async () => {
+    if (!currentTabDirty) return;
+    setSaving(true);
+    try {
+      if (activeTab === 'child') {
+        await updateStudentProfile?.({
+          student: { first_name: firstName, last_name: lastName, class: cls, section },
+        });
+      } else if (activeTab === 'medical') {
+        await updateStudentProfile?.({
+          emergency: { blood_group: bloodGroup, allergies, conditions, medications, doctor_name: doctorName, doctor_phone: doctorPhone, notes },
+        });
+      }
+      showToast();
+    } catch (e) {
+      Alert.alert('Error', 'Could not save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Contact handlers
   const handleSaveContact = (data) => {
     if (editingContact?.id) {
-      const updated = contacts.map(c => c.id === editingContact.id ? { ...c, ...data } : c);
+      const updated = contacts.map(c =>
+        c.id === editingContact.id ? { ...c, ...data } : c
+      );
       setContacts(updated);
       updateContact?.({ ...editingContact, ...data });
     } else {
-      const newC = { id: `temp_${Date.now()}`, ...data, priority: contacts.length + 1, is_active: true };
-      setContacts([...contacts, newC]);
-      addContact?.(newC);
+      const newContact = {
+        id: `temp_${Date.now()}`,
+        ...data,
+        priority: contacts.length + 1,
+        is_active: true,
+      };
+      setContacts(prev => [...prev, newContact]);
+      addContact?.(newContact);
     }
+    showToast();
   };
 
   const handleDeleteContact = (contact) => {
@@ -565,195 +532,158 @@ export default function UpdatesScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove', style: 'destructive', onPress: () => {
-          const updated = contacts.filter(c => c.id !== contact.id).map((c, i) => ({ ...c, priority: i + 1 }));
+          const updated = contacts
+            .filter(c => c.id !== contact.id)
+            .map((c, i) => ({ ...c, priority: i + 1 }));
           setContacts(updated);
           deleteContact?.(contact.id);
+          showToast();
         },
       },
     ]);
   };
 
-  const handleSubmit = async () => {
-    if (!hasChanges) return;
-    setSubmitting(true);
-    const changes = {};
-    if (childDirty) changes.student = { first_name: firstName, last_name: lastName, class: cls, section };
-    if (medDirty) changes.emergency = { blood_group: bloodGroup, allergies, conditions, medications, doctor_name: doctorName, doctor_phone: doctorPhone, notes };
-    await submitUpdateRequest?.(changes);
-    setSubmitting(false);
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 4000);
-  };
-
-  // Lock screen
-  if (!canEdit) {
-    return (
-      <Screen bg={colors.screenBg} edges={['top', 'left', 'right']}>
-        <View style={styles.lockScreen}>
-          <View style={styles.lockIconWrap}>
-            <Ic.Lock c={colors.textTertiary} s={36} />
-          </View>
-          <Text style={styles.lockTitle}>Editing Disabled</Text>
-          <Text style={styles.lockSub}>Your school has locked profile editing. Contact your school administrator to make changes.</Text>
-        </View>
-      </Screen>
-    );
-  }
+  const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
 
   return (
     <Screen bg={colors.screenBg} edges={['top', 'left', 'right']}>
       <ContactModal
-        visible={contactModal}
+        visible={modalVisible}
         contact={editingContact}
         onSave={handleSaveContact}
-        onClose={() => setContactModal(false)}
+        onClose={() => setModalVisible(false)}
       />
 
-      {/* ── HEADER ── */}
-      <Animated.View entering={FadeInDown.delay(0).duration(350)} style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.pageTitle}>
-            {student?.first_name ? `${student.first_name}'s Profile` : 'Update Profile'}
+      {/* ── HEADER */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>
+            {student?.first_name ? `${student.first_name}'s Card` : 'Update Card'}
           </Text>
-          <Text style={styles.pageSubtitle}>Keep your child's card up to date</Text>
+          <Text style={styles.headerSub}>Changes save instantly · no approvals needed</Text>
         </View>
-        <View style={styles.approvalBadge}>
-          <Ic.Clock c={colors.warning} s={12} />
-          <Text style={styles.approvalBadgeText}>Needs Approval</Text>
-        </View>
-      </Animated.View>
+        <SaveToast visible={toastVisible} />
+      </View>
 
-      {/* ── BANNERS ── */}
-      {(updateRequests?.length ?? 0) > 0 && (
-        <View style={styles.bannerArea}>
-          <RequestBanner requests={updateRequests} />
-        </View>
-      )}
+      {/* ── TABS */}
+      <TabBar active={activeTab} onChange={setActiveTab} dirtyTabs={dirtyTabs} />
 
-      {/* ── TABS ── */}
-      <Animated.View entering={FadeInDown.delay(80).duration(350)}>
-        <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} dirtyTabs={dirtyTabs} />
-      </Animated.View>
-
-      {/* ── CONTENT ── */}
+      {/* ── CONTENT */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
 
-        {/* ═══ TAB: CHILD INFO ═══ */}
+        {/* ══ CHILD TAB ══ */}
         {activeTab === 'child' && (
-          <Animated.View entering={FadeInDown.delay(40).duration(350)} style={styles.tabContent}>
+          <View style={styles.tabContent}>
 
-            <SectionHead emoji="📷" title="Profile Photo" subtitle="Helps first responders identify your child quickly" />
-            <PhotoRow
-              photoUrl={student?.photo_url}
-              onPress={() => { /* wire expo-image-picker */ }}
-            />
+            <Section emoji="📷" title="Profile Photo" subtitle="Helps emergency responders identify your child">
+              <PhotoRow
+                photoUrl={student?.photo_url}
+                onPress={() => { /* wire expo-image-picker */ }}
+              />
+            </Section>
 
-            <SectionHead emoji="👤" title="Full Name" subtitle="Changes require school verification" />
-            <InputRow>
-              <View style={{ flex: 1 }}>
-                <InputCard label="First Name" value={firstName} onChangeText={setFirstName} placeholder="e.g. Aanya" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <InputCard label="Last Name" value={lastName} onChangeText={setLastName} placeholder="e.g. Sharma" />
-              </View>
-            </InputRow>
+            <Section emoji="👤" title="Name">
+              <FieldRow>
+                <View style={{ flex: 1 }}>
+                  <Field label="First Name" value={firstName} onChangeText={setFirstName} placeholder="Aanya" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Last Name" value={lastName} onChangeText={setLastName} placeholder="Sharma" />
+                </View>
+              </FieldRow>
+            </Section>
 
-            <SectionHead emoji="🏫" title="Class & Section" />
-            <InputRow>
-              <View style={{ flex: 1 }}>
-                <InputCard label="Class" value={cls} onChangeText={setCls} placeholder="e.g. 6" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <InputCard label="Section" value={section} onChangeText={setSection} placeholder="e.g. A" />
-              </View>
-            </InputRow>
+            <Section emoji="🏫" title="Class & Section">
+              <FieldRow>
+                <View style={{ flex: 1 }}>
+                  <Field label="Class" value={cls} onChangeText={setCls} placeholder="e.g. 6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Section" value={section} onChangeText={setSection} placeholder="e.g. A" />
+                </View>
+              </FieldRow>
+            </Section>
 
-            <InfoNote type="warning">
-              📋  Name and class changes are sent to your school for verification. Usually approved within 1–2 school days.
-            </InfoNote>
-
-          </Animated.View>
+          </View>
         )}
 
-        {/* ═══ TAB: MEDICAL ═══ */}
-        {activeTab === 'emergency' && (
-          <Animated.View entering={FadeInDown.delay(40).duration(350)} style={styles.tabContent}>
+        {/* ══ MEDICAL TAB ══ */}
+        {activeTab === 'medical' && (
+          <View style={styles.tabContent}>
 
-            {/* Blood Group — most critical, shown first with prominent picker */}
-            <SectionHead emoji="🩸" title="Blood Group" subtitle="Critical — shared with emergency staff immediately" />
-            <BloodGroupPicker value={bloodGroup} onChange={setBloodGroup} />
+            <Section emoji="🩸" title="Blood Group" subtitle="Shown immediately when card is scanned">
+              <BloodPicker value={bloodGroup} onChange={setBloodGroup} />
+            </Section>
 
-            {/* Allergies */}
-            <SectionHead emoji="⚠️" title="Allergies" subtitle="Food, medication, environment — be specific" />
-            <InputCard
-              label="Known Allergies"
-              value={allergies}
-              onChangeText={setAllergies}
-              placeholder="e.g. Peanuts, Penicillin, Dust mites, Latex…"
-              multiline
-              hint="Separate multiple allergies with commas"
-            />
+            <Section emoji="⚠️" title="Allergies" subtitle="Food, medication, environmental">
+              <Field
+                label="Known Allergies"
+                value={allergies}
+                onChangeText={setAllergies}
+                placeholder="e.g. Peanuts, Penicillin, Dust…"
+                multiline
+                hint="Separate with commas"
+              />
+            </Section>
 
-            {/* Medical Conditions */}
-            <SectionHead emoji="🫁" title="Medical Conditions" />
-            <InputCard
-              label="Conditions"
-              value={conditions}
-              onChangeText={setConditions}
-              placeholder="e.g. Asthma, Type 1 Diabetes, Epilepsy…"
-              multiline
-            />
+            <Section emoji="🫁" title="Medical Conditions">
+              <Field
+                label="Conditions"
+                value={conditions}
+                onChangeText={setConditions}
+                placeholder="e.g. Asthma, Diabetes, Epilepsy…"
+                multiline
+              />
+            </Section>
 
-            {/* Medications */}
-            <SectionHead emoji="💊" title="Current Medications" />
-            <InputCard
-              label="Medications"
-              value={medications}
-              onChangeText={setMedications}
-              placeholder="e.g. Salbutamol inhaler (Blue) for asthma, Metformin 500mg after meals…"
-              multiline
-              hint="Include dosage and when taken if possible"
-            />
+            <Section emoji="💊" title="Medications" subtitle="Include dosage if possible">
+              <Field
+                label="Current Medications"
+                value={medications}
+                onChangeText={setMedications}
+                placeholder="e.g. Salbutamol inhaler, Metformin 500mg…"
+                multiline
+              />
+            </Section>
 
-            {/* Doctor */}
-            <SectionHead emoji="👨‍⚕️" title="Family Doctor" subtitle="First point of contact in a medical emergency" />
-            <InputRow>
-              <View style={{ flex: 1 }}>
-                <InputCard label="Doctor's Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Full Name" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <InputCard label="Doctor's Phone" value={doctorPhone} onChangeText={setDoctorPhone} placeholder="+91 …" keyboardType="phone-pad" />
-              </View>
-            </InputRow>
+            <Section emoji="👨‍⚕️" title="Family Doctor">
+              <FieldRow>
+                <View style={{ flex: 1 }}>
+                  <Field label="Doctor's Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Full Name" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Phone" value={doctorPhone} onChangeText={setDoctorPhone} placeholder="+91 …" keyboardType="phone-pad" />
+                </View>
+              </FieldRow>
+            </Section>
 
-            {/* Notes */}
-            <SectionHead emoji="📝" title="Notes for First Responders" subtitle="Anything critical they must know immediately" />
-            <InputCard
-              label="Special Instructions"
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="e.g. Always carries blue inhaler in school bag. Has medical bracelet on left wrist. Do NOT give any nut-based products."
-              multiline
-              hint="The more specific, the better — this is shown on the emergency card"
-            />
+            <Section emoji="📝" title="Notes for Responders" subtitle="Shown on card when scanned">
+              <Field
+                label="Special Instructions"
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="e.g. Carries inhaler in bag. Do NOT give nuts."
+                multiline
+              />
+            </Section>
 
-          </Animated.View>
+          </View>
         )}
 
-        {/* ═══ TAB: CONTACTS ═══ */}
+        {/* ══ CONTACTS TAB ══ */}
         {activeTab === 'contacts' && (
-          <Animated.View entering={FadeInDown.delay(40).duration(350)} style={styles.tabContent}>
+          <View style={styles.tabContent}>
 
-            {/* Call order explanation */}
+            {/* Call order info */}
             <View style={styles.callOrderCard}>
-              <Text style={styles.callOrderTitle}>📞 How emergency calls work</Text>
-              <View style={styles.callOrderSteps}>
-                {(['#1 called first — answer immediately', '#2 called if #1 doesn\'t answer', '#3 and beyond as backup']).map((step, i) => (
-                  <View key={i} style={styles.callOrderStep}>
+              <Text style={styles.callOrderTitle}>How emergency calls work</Text>
+              <View style={styles.callOrderList}>
+                {['#1 called immediately when card is scanned', '#2 called if #1 doesn\'t answer', '#3 and beyond as backup'].map((step, i) => (
+                  <View key={i} style={styles.callOrderItem}>
                     <View style={[styles.callOrderDot, { backgroundColor: PRIORITY_COLORS[i] }]} />
                     <Text style={styles.callOrderText}>{step}</Text>
                   </View>
@@ -762,18 +692,20 @@ export default function UpdatesScreen() {
             </View>
 
             {/* Contact list */}
-            {contacts.length === 0 ? (
-              <View style={styles.emptyContacts}>
+            {sortedContacts.length === 0 ? (
+              <View style={styles.emptyWrap}>
                 <Text style={styles.emptyEmoji}>📵</Text>
-                <Text style={styles.emptyTitle}>No contacts added yet</Text>
-                <Text style={styles.emptySub}>Add at least one emergency contact. They'll be called the moment your child's card is scanned.</Text>
+                <Text style={styles.emptyTitle}>No contacts yet</Text>
+                <Text style={styles.emptySub}>Add at least one contact — they'll be called the moment the card is scanned.</Text>
               </View>
             ) : (
               <View style={styles.contactList}>
-                {[...contacts].sort((a, b) => a.priority - b.priority).map((c, i) => (
+                {sortedContacts.map((c, i) => (
                   <ContactCard
-                    key={c.id} contact={c} index={i}
-                    onEdit={(contact) => { setEditingContact(contact); setContactModal(true); }}
+                    key={c.id}
+                    contact={c}
+                    index={i}
+                    onEdit={(contact) => { setEditingContact(contact); setModalVisible(true); }}
                     onDelete={handleDeleteContact}
                   />
                 ))}
@@ -783,357 +715,411 @@ export default function UpdatesScreen() {
             {contacts.length < 5 && (
               <TouchableOpacity
                 style={styles.addContactBtn}
-                onPress={() => { setEditingContact(null); setContactModal(true); }}
+                onPress={() => { setEditingContact(null); setModalVisible(true); }}
                 activeOpacity={0.75}
               >
-                <View style={styles.addContactIconWrap}>
+                <View style={styles.addContactIcon}>
                   <Ic.Plus c={colors.white} s={18} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View>
                   <Text style={styles.addContactLabel}>Add Emergency Contact</Text>
-                  <Text style={styles.addContactSub}>{contacts.length}/5 contacts added</Text>
+                  <Text style={styles.addContactSub}>{contacts.length}/5 contacts</Text>
                 </View>
               </TouchableOpacity>
             )}
 
-            <InfoNote type="success">
-              ✅  Contact changes go live immediately — no school approval needed.
-            </InfoNote>
+            <Note>⚡ Contact changes are live instantly on your child's card.</Note>
 
-          </Animated.View>
+          </View>
         )}
 
-        {/* Bottom padding for sticky bar */}
-        <View style={{ height: hasChanges ? 90 : 20 }} />
+        <View style={{ height: currentTabDirty ? 80 : 24 }} />
       </ScrollView>
 
-      {/* ── STICKY SUBMIT BAR — floats above scroll ── */}
+      {/* ── SAVE BAR (only child + medical tabs) */}
       {activeTab !== 'contacts' && (
-        <SubmitBar
-          hasChanges={hasChanges}
-          submitting={submitting}
-          submitted={submitted}
-          onSubmit={handleSubmit}
+        <SaveButton
+          dirty={currentTabDirty}
+          saving={saving}
+          onPress={handleSave}
         />
       )}
     </Screen>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
 
-  // ── Header ────────────────────────────────────────────────────────
+  // Header
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.screenH,
-    paddingTop: spacing[6],
-    paddingBottom: spacing[2],
+    paddingTop: spacing[5],
+    paddingBottom: spacing[3],
   },
-  headerLeft: { flex: 1, gap: 2 },
-  pageTitle: { ...typography.h2, color: colors.textPrimary },
-  pageSubtitle: { ...typography.bodySm, color: colors.textTertiary },
-  approvalBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.warningBg,
-    borderRadius: radius.chipFull, borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.3)',
-    paddingHorizontal: spacing[2.5], paddingVertical: spacing[1.5],
-    marginTop: 4,
-  },
-  approvalBadgeText: { ...typography.labelXs, color: colors.warning, fontWeight: '700' },
+  headerTitle: { ...typography.h2, color: colors.textPrimary },
+  headerSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 2 },
 
-  // ── Banners ───────────────────────────────────────────────────────
-  bannerArea: { paddingHorizontal: spacing.screenH, paddingBottom: spacing[2] },
-  bannerStack: { gap: spacing[2] },
-  bannerIconWrap: {
-    width: 30, height: 30, borderRadius: radius.md,
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  // Toast
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderRadius: radius.chipFull,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
   },
-  pendingBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: colors.warningBg, borderRadius: radius.cardSm,
-    borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', padding: spacing[3],
+  toastDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
   },
-  bannerTitle: { ...typography.labelSm, color: colors.warning, fontWeight: '700' },
-  bannerSub: { ...typography.labelXs, color: colors.warning, opacity: 0.8, marginTop: 2 },
-  rejectedBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: colors.primaryBg, borderRadius: radius.cardSm,
-    borderWidth: 1, borderColor: 'rgba(232,52,42,0.25)', padding: spacing[3],
-  },
-  rejectedTitle: { ...typography.labelSm, color: colors.primary, fontWeight: '700' },
-  rejectedReason: { ...typography.labelXs, color: colors.primary, opacity: 0.8, marginTop: 2, fontStyle: 'italic' },
+  toastText: { ...typography.labelXs, color: '#10B981', fontWeight: '700' },
 
-  // ── Tab bar ───────────────────────────────────────────────────────
+  // Tab bar
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: spacing.screenH,
-    paddingVertical: spacing[2],
     gap: spacing[2],
+    paddingBottom: spacing[3],
   },
   tabItem: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: spacing[1.5],
-    paddingVertical: spacing[2.5], borderRadius: radius.md,
-    backgroundColor: colors.surface, borderWidth: 1,
-    borderColor: colors.border, position: 'relative',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[1.5],
+    paddingVertical: spacing[2.5],
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    position: 'relative',
   },
   tabItemActive: {
     backgroundColor: colors.primaryBg,
-    borderColor: 'rgba(232,52,42,0.35)',
+    borderColor: `${colors.primary}50`,
   },
+  tabIcon: { fontSize: 13 },
   tabLabel: { ...typography.labelSm, color: colors.textTertiary, fontWeight: '600' },
   tabLabelActive: { color: colors.primary },
-  tabDot: {
-    position: 'absolute', top: 6, right: 6,
-    width: 7, height: 7, borderRadius: 4,
+  tabDirtyDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.warning,
-    borderWidth: 1.5, borderColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
   },
 
-  // ── Scroll ────────────────────────────────────────────────────────
-  scroll: { paddingHorizontal: spacing.screenH, paddingBottom: spacing[4] },
-  tabContent: { gap: spacing[3] },
+  // Scroll
+  scroll: { paddingHorizontal: spacing.screenH },
+  tabContent: { gap: spacing[4] },
 
-  // ── Section Head ──────────────────────────────────────────────────
-  sectionHead: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: spacing[2], marginTop: spacing[2],
-  },
-  sectionHeadEmoji: { fontSize: 18, lineHeight: 24 },
-  sectionHeadTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  sectionHeadSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 1 },
-
-  // ── Input Card ────────────────────────────────────────────────────
-  inputCard: {
+  // Section
+  section: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardSm,
-    borderWidth: 1.5, borderColor: colors.border,
-    padding: spacing[4], gap: spacing[2],
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    overflow: 'hidden',
   },
-  inputCardFocused: { borderColor: colors.primary },
-  inputCardLocked: { backgroundColor: colors.surface3, borderColor: colors.border, opacity: 0.7 },
-  inputCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  inputCardLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5] },
-  inputCardIcon: { opacity: 0.7 },
-  inputCardLabel: { ...typography.overline, color: colors.textTertiary, fontSize: 10, letterSpacing: 0.8 },
-  lockedBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: colors.surface3, borderRadius: radius.chipFull,
-    paddingHorizontal: spacing[1.5], paddingVertical: 2,
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3.5],
+    paddingBottom: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  lockedBadgeText: { ...typography.labelXs, color: colors.textTertiary, fontSize: 9 },
-  inputCardField: {
-    ...typography.bodyMd, color: colors.textPrimary,
-    paddingVertical: 0, height: 34,
+  sectionEmojiWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inputCardFieldMulti: { height: 80, textAlignVertical: 'top', paddingTop: 2 },
-  inputCardHint: { ...typography.labelXs, color: colors.textTertiary, fontStyle: 'italic' },
+  sectionEmoji: { fontSize: 16 },
+  sectionTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
+  sectionSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 1 },
+  sectionBody: { padding: spacing[4], gap: spacing[3] },
 
-  // ── Input Row (side by side) ──────────────────────────────────────
-  inputRow: { flexDirection: 'row', gap: spacing[2] },
+  // Field
+  field: { gap: spacing[1.5] },
+  fieldLabel: { ...typography.labelXs, color: colors.textTertiary, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', fontSize: 10 },
+  fieldBox: {
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.screenBg,
+  },
+  fieldInput: {
+    ...typography.bodyMd,
+    color: colors.textPrimary,
+    height: 42,
+    paddingVertical: 0,
+  },
+  fieldInputMulti: {
+    height: 80,
+    paddingTop: spacing[2.5],
+    paddingBottom: spacing[2],
+    textAlignVertical: 'top',
+  },
+  fieldHint: { ...typography.labelXs, color: colors.textTertiary, fontStyle: 'italic' },
+  fieldRow: { flexDirection: 'row', gap: spacing[2] },
 
-  // ── Photo ─────────────────────────────────────────────────────────
-  photoRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: colors.surface, borderRadius: radius.cardSm,
-    borderWidth: 1.5, borderColor: colors.border, padding: spacing[4],
-  },
-  photoAvatar: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: colors.surface3, borderWidth: 1.5,
-    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
-    position: 'relative',
-  },
-  photoEditBadge: {
-    position: 'absolute', bottom: -2, right: -2,
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: colors.primary, borderWidth: 2,
-    borderColor: colors.surface, alignItems: 'center', justifyContent: 'center',
-  },
-  photoLabel: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  photoSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 3, lineHeight: 16 },
-  photoCta: {
-    backgroundColor: colors.primaryBg, borderRadius: radius.md,
-    borderWidth: 1, borderColor: 'rgba(232,52,42,0.25)',
-    paddingHorizontal: spacing[2.5], paddingVertical: spacing[1.5],
-  },
-  photoCtaText: { ...typography.labelXs, color: colors.primary, fontWeight: '700' },
-
-  // ── Blood Group Picker ────────────────────────────────────────────
-  bloodWrap: {
-    backgroundColor: colors.surface, borderRadius: radius.cardSm,
-    borderWidth: 1.5, borderColor: colors.border, padding: spacing[4], gap: spacing[3],
-  },
-  bloodLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5] },
-  bloodLabel: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  bloodSub: { ...typography.labelXs, color: colors.textTertiary },
-  bloodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  // Blood picker
+  bloodWrap: { gap: spacing[2.5] },
+  bloodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   bloodChip: {
-    paddingHorizontal: spacing[4], paddingVertical: spacing[2.5],
-    borderRadius: radius.md, backgroundColor: colors.surface3,
-    borderWidth: 1.5, borderColor: colors.border,
-    minWidth: 62, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: spacing[3.5],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.screenBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 56,
     position: 'relative',
   },
   bloodChipSel: {
-    backgroundColor: 'rgba(232,52,42,0.08)',
-    borderColor: colors.primary, borderWidth: 2,
-  },
-  bloodCheckDot: {
-    position: 'absolute', top: -5, right: -5,
-    width: 16, height: 16, borderRadius: 8,
-    backgroundColor: colors.primary, borderWidth: 2,
-    borderColor: colors.surface, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(232,52,42,0.07)',
+    borderColor: colors.primary,
+    borderWidth: 2,
   },
   bloodChipText: { ...typography.labelMd, color: colors.textSecondary, fontWeight: '700' },
   bloodChipTextSel: { color: colors.primary },
-  bloodRequired: { ...typography.labelXs, color: colors.warning, fontWeight: '600' },
-
-  // ── Info Note ─────────────────────────────────────────────────────
-  infoNote: {
-    borderRadius: radius.cardSm, borderWidth: 1,
-    padding: spacing[3.5],
+  bloodDot: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
-  infoNoteText: { ...typography.bodySm, lineHeight: 18 },
+  bloodWarning: { ...typography.labelXs, color: colors.warning, fontWeight: '600' },
 
-  // ── Call order card ───────────────────────────────────────────────
-  callOrderCard: {
-    backgroundColor: colors.surface, borderRadius: radius.cardSm,
-    borderWidth: 1, borderColor: colors.border, padding: spacing[4], gap: spacing[3],
+  // Photo row
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
   },
-  callOrderTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  callOrderSteps: { gap: spacing[2] },
-  callOrderStep: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] },
-  callOrderDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  callOrderText: { ...typography.bodyMd, color: colors.textSecondary },
+  photoAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.surface3,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  photoBadge: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoLabel: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
+  photoSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 2, lineHeight: 16 },
 
-  // ── Contact list ──────────────────────────────────────────────────
+  // Contact card
   contactList: { gap: spacing[2] },
   contactCard: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: colors.surface, borderRadius: radius.cardSm,
-    borderWidth: 1.5, borderColor: colors.border, padding: spacing[3.5],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardSm,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    padding: spacing[3.5],
   },
-  contactCardFirst: { borderColor: `${PRIORITY_COLORS[0]}40` },
-  contactCardInactive: { opacity: 0.45 },
-  contactRing: {
-    width: 40, height: 40, borderRadius: 20,
-    borderWidth: 2.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  contactPriority: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  contactRingText: { ...typography.h4, fontWeight: '900' },
-  contactTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap' },
+  contactPriorityText: { ...typography.labelLg, fontWeight: '900' },
+  contactTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap' },
   contactName: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  firstBadge: {
-    backgroundColor: `${PRIORITY_COLORS[0]}15`,
-    borderRadius: radius.chipFull, borderWidth: 1,
-    borderColor: `${PRIORITY_COLORS[0]}30`,
-    paddingHorizontal: spacing[1.5], paddingVertical: 2,
+  contactBadge: {
+    borderRadius: radius.chipFull,
+    borderWidth: 1,
+    paddingHorizontal: spacing[1.5],
+    paddingVertical: 2,
   },
-  firstBadgeText: { ...typography.labelXs, color: PRIORITY_COLORS[0], fontWeight: '700', fontSize: 9 },
-  inactiveBadge: {
-    backgroundColor: colors.surface3, borderRadius: radius.chipFull,
-    paddingHorizontal: spacing[1.5], paddingVertical: 2,
-  },
-  inactiveBadgeText: { ...typography.labelXs, color: colors.textTertiary, fontSize: 9 },
-  contactDetail: { ...typography.labelXs, color: colors.textTertiary, marginTop: 3 },
+  contactBadgeText: { ...typography.labelXs, fontWeight: '700', fontSize: 9 },
+  contactMeta: { ...typography.labelXs, color: colors.textTertiary, marginTop: 3 },
   contactActions: { flexDirection: 'row', gap: spacing[1.5] },
   contactBtn: {
-    width: 34, height: 34, borderRadius: radius.md,
-    backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  contactBtnDanger: { backgroundColor: colors.primaryBg },
+  contactBtnRed: { backgroundColor: colors.primaryBg },
 
-  // ── Add contact button ────────────────────────────────────────────
-  addContactBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing[3],
-    backgroundColor: colors.surface, borderRadius: radius.cardSm,
-    borderWidth: 2, borderStyle: 'dashed',
-    borderColor: 'rgba(232,52,42,0.35)', padding: spacing[4],
+  // Call order card
+  callOrderCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardSm,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    padding: spacing[4],
+    gap: spacing[3],
   },
-  addContactIconWrap: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+  callOrderTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
+  callOrderList: { gap: spacing[2] },
+  callOrderItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] },
+  callOrderDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  callOrderText: { ...typography.bodyMd, color: colors.textSecondary },
+
+  // Add contact button
+  addContactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.cardSm,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: `${colors.primary}40`,
+    backgroundColor: colors.surface,
+  },
+  addContactIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addContactLabel: { ...typography.labelLg, color: colors.primary, fontWeight: '700' },
   addContactSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 2 },
 
-  // ── Empty contacts ────────────────────────────────────────────────
-  emptyContacts: {
-    backgroundColor: colors.surface, borderRadius: radius.cardSm,
-    borderWidth: 1, borderColor: colors.border,
-    padding: spacing[8], alignItems: 'center', gap: spacing[2],
+  // Empty contacts
+  emptyWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing[8],
+    alignItems: 'center',
+    gap: spacing[2],
   },
-  emptyEmoji: { fontSize: 40 },
+  emptyEmoji: { fontSize: 36 },
   emptyTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
   emptySub: { ...typography.bodySm, color: colors.textTertiary, textAlign: 'center', lineHeight: 18 },
 
-  // ── Sticky submit bar ─────────────────────────────────────────────
-  submitBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1, borderTopColor: colors.border,
-    paddingHorizontal: spacing.screenH,
-    paddingTop: spacing[3], paddingBottom: spacing[5],
-    gap: spacing[1.5],
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06, shadowRadius: 12, elevation: 10,
+  // Note
+  note: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.25)',
+    padding: spacing[3.5],
   },
-  submitBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: spacing[2],
-    backgroundColor: colors.primary, borderRadius: radius.btn,
+  noteText: { ...typography.bodySm, color: '#059669', lineHeight: 18 },
+
+  // Save bar
+  saveBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.screenH,
+    paddingTop: spacing[3],
+    paddingBottom: spacing[6],
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.primary,
+    borderRadius: radius.btn,
     paddingVertical: spacing[4],
   },
-  submitBtnDone: {
-    backgroundColor: colors.successBg,
-    borderWidth: 1.5, borderColor: colors.success,
-  },
-  submitBtnBusy: { opacity: 0.65 },
-  submitBtnText: { ...typography.btnMd, color: colors.white, fontWeight: '700' },
-  submitNote: { ...typography.labelXs, color: colors.textTertiary, textAlign: 'center' },
+  saveBtnBusy: { opacity: 0.6 },
+  saveBtnText: { ...typography.btnMd, color: colors.white, fontWeight: '700' },
 
-  // ── Contact modal ─────────────────────────────────────────────────
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  modalSheet: {
+  // Contact modal / sheet
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.cardLg, borderTopRightRadius: radius.cardLg,
-    padding: spacing[5], paddingBottom: spacing[8], gap: spacing[4],
+    borderTopLeftRadius: radius.cardLg,
+    borderTopRightRadius: radius.cardLg,
+    padding: spacing[5],
+    paddingBottom: spacing[8],
+    gap: spacing[3],
   },
-  modalHandle: {
-    width: 36, height: 4, backgroundColor: colors.border,
-    borderRadius: 2, alignSelf: 'center', marginBottom: spacing[1],
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing[1],
   },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  modalHeaderIcon: {
-    width: 44, height: 44, borderRadius: radius.md,
-    backgroundColor: colors.primaryBg, borderWidth: 1,
-    borderColor: 'rgba(232,52,42,0.2)', alignItems: 'center', justifyContent: 'center',
+  sheetTitle: { ...typography.h4, color: colors.textPrimary },
+  sheetSub: { ...typography.bodySm, color: colors.textTertiary },
+  sheetFields: { gap: spacing[2] },
+  sheetSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.primary,
+    borderRadius: radius.btn,
+    paddingVertical: spacing[4],
+    marginTop: spacing[1],
   },
-  modalTitle: { ...typography.h4, color: colors.textPrimary },
-  modalSub: { ...typography.bodySm, color: colors.textTertiary, marginTop: 2 },
-  modalFields: { gap: spacing[2] },
-  modalSaveBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2],
-    backgroundColor: colors.primary, borderRadius: radius.btn, paddingVertical: spacing[4],
-  },
-  modalSaveBtnText: { ...typography.btnMd, color: colors.white, fontWeight: '700' },
-
-  // ── Lock screen ───────────────────────────────────────────────────
-  lockScreen: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: spacing[8], gap: spacing[4],
-  },
-  lockIconWrap: {
-    width: 80, height: 80, backgroundColor: colors.surface3,
-    borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  lockTitle: { ...typography.h3, color: colors.textPrimary, textAlign: 'center' },
-  lockSub: { ...typography.bodyMd, color: colors.textTertiary, textAlign: 'center', lineHeight: 22 },
+  sheetSaveBtnText: { ...typography.btnMd, color: colors.white, fontWeight: '700' },
 });
