@@ -1,300 +1,333 @@
-/**
- * OTP Screen — 6-digit OTP entry with countdown timer.
- * Matches Flow 01 (OTP Verify) from the UI/UX spec.
- */
-
-import Button from '@/src/components/common/Button';
-import Screen from '@/src/components/common/Screen';
-import { useAuthStore } from '@/src/features/auth/auth.store';
-import { colors, radius, shadows, spacing, typography } from '@/src/theme';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  KeyboardAvoidingView, Platform,
-  StyleSheet,
-  Text, TextInput, TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
+  StatusBar,
+  SafeAreaView,
+  TextInput,
+  Keyboard,
+  Platform,
 } from 'react-native';
-import Animated, {
-  FadeInDown, FadeInUp,
-  useAnimatedStyle,
-  useSharedValue
-} from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
-const BackIcon = () => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 12H5M12 5l-7 7 7 7"
-      stroke={colors.textSecondary} strokeWidth={2}
-      strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const PhoneIcon = () => (
-  <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
-    <Path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.69 16 19.79 19.79 0 011.61 7.36 2 2 0 013.6 5.18h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 12a16 16 0 006.06 6.06l.97-.97a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7a2 2 0 011.72 2.03z"
-      stroke={colors.primary} strokeWidth={1.5}
-      strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-// ── OTP Box ───────────────────────────────────────────────────────────────────
-
-function OtpBox({ value, active, filled }) {
-  const shake = useSharedValue(0);
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shake.value }],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.otpBox,
-        filled && styles.otpBoxFilled,
-        active && styles.otpBoxActive,
-        animStyle,
-      ]}
-    >
-      <Text style={styles.otpDigit}>{value ?? ''}</Text>
-    </Animated.View>
-  );
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
+const { width } = Dimensions.get('window');
 const OTP_LENGTH = 6;
-const RESEND_COOLDOWN = 60;
+const RESEND_SECONDS = 102; // 01:42
 
 export default function OtpScreen() {
   const router = useRouter();
-  const { mockLogin } = useAuthStore();
+  const params = useLocalSearchParams();
+  const phone = params?.phone ?? '+91 98765 43210';
 
-  const [otp, setOtp] = useState('');
-  const [timer, setTimer] = useState(RESEND_COOLDOWN);
+  // OTP state
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [verified, setVerified] = useState(false);
+  const [error, setError] = useState('');
+  const [timer, setTimer] = useState(RESEND_SECONDS);
   const [canResend, setCanResend] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const inputRef = useRef(null);
+  const hiddenInputRef = useRef(null);
 
-  // Countdown timer
+  // Animation refs
+  const iconScale = useRef(new Animated.Value(0)).current;
+  const iconOpacity = useRef(new Animated.Value(0)).current;
+  const titleY = useRef(new Animated.Value(30)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const boxesY = useRef(new Animated.Value(30)).current;
+  const boxesOpacity = useRef(new Animated.Value(0)).current;
+  const timerOpacity = useRef(new Animated.Value(0)).current;
+  const btnY = useRef(new Animated.Value(30)).current;
+  const btnOpacity = useRef(new Animated.Value(0)).current;
+  const resendOpacity = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0.4)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const boxAnims = useRef(
+    Array(OTP_LENGTH).fill(null).map(() => new Animated.Value(1))
+  ).current;
+  const btnPressAnim = useRef(new Animated.Value(1)).current;
+
+  // ── Entrance Animations ──
+  useEffect(() => {
+    // Glow pulse loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, { toValue: 0.9, duration: 2000, useNativeDriver: true }),
+        Animated.timing(glowPulse, { toValue: 0.4, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Float loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: -8, duration: 2200, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 2200, useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Staggered entrance
+    Animated.sequence([
+      Animated.parallel([
+        Animated.spring(iconScale, { toValue: 1, tension: 55, friction: 7, useNativeDriver: true }),
+        Animated.timing(iconOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(titleOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(titleY, { toValue: 0, tension: 60, friction: 12, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(boxesOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.spring(boxesY, { toValue: 0, tension: 60, friction: 12, useNativeDriver: true }),
+      ]),
+      Animated.timing(timerOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.parallel([
+        Animated.timing(btnOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.spring(btnY, { toValue: 0, tension: 60, friction: 12, useNativeDriver: true }),
+      ]),
+      Animated.timing(resendOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  // ── Countdown Timer ──
   useEffect(() => {
     if (timer <= 0) { setCanResend(true); return; }
-    const id = setTimeout(() => setTimer((t) => t - 1), 1000);
-    return () => clearTimeout(id);
+    const id = setInterval(() => setTimer(t => t - 1), 1000);
+    return () => clearInterval(id);
   }, [timer]);
 
-  const formatTimer = (s) => {
+  const formatTime = (s) => {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
     const sec = (s % 60).toString().padStart(2, '0');
     return `${m}:${sec}`;
   };
 
-  const handleChange = (val) => {
-    if (val.length <= OTP_LENGTH) setOtp(val);
+  // ── Box pop animation on digit entry ──
+  const animateBox = useCallback((index) => {
+    Animated.sequence([
+      Animated.timing(boxAnims[index], { toValue: 1.18, duration: 80, useNativeDriver: true }),
+      Animated.spring(boxAnims[index], { toValue: 1, tension: 80, friction: 5, useNativeDriver: true }),
+    ]).start();
+  }, [boxAnims]);
+
+  // ── Shake on error ──
+  const shake = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  }, [shakeAnim]);
+
+  // ── Handle OTP input via hidden TextInput ──
+  const handleChangeText = (text) => {
+    setError('');
+    const digits = text.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH).split('');
+    const newOtp = Array(OTP_LENGTH).fill('');
+    digits.forEach((d, i) => { newOtp[i] = d; });
+    setOtp(newOtp);
+    setActiveIndex(Math.min(digits.length, OTP_LENGTH - 1));
+    // Animate last filled box
+    if (digits.length > 0) animateBox(digits.length - 1);
   };
 
+  const focusInput = () => hiddenInputRef.current?.focus();
+
+  // ── Verify ──
   const handleVerify = () => {
-    if (otp.length < OTP_LENGTH) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      mockLogin();
-      router.replace('/(app)/home');
-    }, 1200);
+    const code = otp.join('');
+    if (code.length < OTP_LENGTH) {
+      setError('Please enter all 6 digits');
+      shake();
+      return;
+    }
+    Animated.sequence([
+      Animated.timing(btnPressAnim, { toValue: 0.96, duration: 80, useNativeDriver: true }),
+      Animated.spring(btnPressAnim, { toValue: 1, tension: 80, friction: 5, useNativeDriver: true }),
+    ]).start();
+    Keyboard.dismiss();
+    setVerified(true);
+    setTimeout(() => router.replace('/(app)/home'), 900);
   };
 
   const handleResend = () => {
     if (!canResend) return;
-    setOtp('');
-    setTimer(RESEND_COOLDOWN);
+    setTimer(RESEND_SECONDS);
     setCanResend(false);
+    setOtp(Array(OTP_LENGTH).fill(''));
+    setActiveIndex(0);
+    setError('');
+    hiddenInputRef.current?.clear();
+    focusInput();
   };
 
+  const filledCount = otp.filter(Boolean).length;
+  const isComplete = filledCount === OTP_LENGTH;
+
   return (
-    <Screen bg={colors.screenBg}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.container}>
-          {/* Back */}
-          <Animated.View entering={FadeInDown.delay(50).duration(400)}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backBtn}
-              activeOpacity={0.7}
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0B" />
+      <LinearGradient colors={['#0A0A0B', '#0F0F13', '#0A0A0B']} style={StyleSheet.absoluteFill} />
+
+      {/* Ambient top glow */}
+      <Animated.View style={[styles.ambientGlow, { opacity: glowPulse }]} />
+
+      <SafeAreaView style={styles.safe}>
+
+        {/* Hidden input to capture keyboard */}
+        <TextInput
+          ref={hiddenInputRef}
+          style={styles.hiddenInput}
+          keyboardType="number-pad"
+          maxLength={OTP_LENGTH}
+          onChangeText={handleChangeText}
+          value={otp.join('')}
+          autoFocus
+          caretHidden
+        />
+
+        {/* Back button */}
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={18} color="#A0A0B0" />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+
+        <View style={styles.inner}>
+
+          {/* ── Phone Icon ── */}
+          <Animated.View
+            style={[
+              styles.iconSection,
+              { transform: [{ scale: iconScale }, { translateY: floatAnim }], opacity: iconOpacity },
+            ]}
+          >
+            <Animated.View style={[styles.iconGlow, { opacity: glowPulse }]} />
+            <LinearGradient
+              colors={['#1E1E26', '#151519']}
+              style={styles.iconBox}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              <BackIcon />
-              <Text style={styles.backText}>Back</Text>
-            </TouchableOpacity>
+              <Ionicons name="call" size={36} color="#E8312A" />
+            </LinearGradient>
           </Animated.View>
 
-          {/* Icon */}
-          <Animated.View entering={FadeInDown.delay(150).duration(500)} style={styles.iconWrap}>
-            <View style={styles.iconBox}>
-              <PhoneIcon />
-            </View>
-          </Animated.View>
-
-          {/* Title */}
-          <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.textBlock}>
+          {/* ── Title & Subtitle ── */}
+          <Animated.View
+            style={[styles.titleSection, { transform: [{ translateY: titleY }], opacity: titleOpacity }]}
+          >
             <Text style={styles.title}>Enter OTP</Text>
-            <Text style={styles.subtitle}>
-              We sent a 6-digit code to{'\n'}
-              <Text style={styles.phone}>+91 98765 43210</Text>
+            <Text style={styles.subtitle}>We sent a 6-digit code to</Text>
+            <Text style={styles.phone}>{phone}</Text>
+          </Animated.View>
+
+          {/* ── OTP Boxes ── */}
+          <Animated.View
+            style={[
+              styles.otpSection,
+              { transform: [{ translateY: boxesY }, { translateX: shakeAnim }], opacity: boxesOpacity },
+            ]}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={focusInput} style={styles.otpRow}>
+              {Array(OTP_LENGTH).fill(null).map((_, i) => {
+                const isFilled = !!otp[i];
+                const isActive = i === filledCount && !isComplete;
+                return (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.otpBox,
+                      isFilled && styles.otpBoxFilled,
+                      isActive && styles.otpBoxActive,
+                      error && styles.otpBoxError,
+                      { transform: [{ scale: boxAnims[i] }] },
+                    ]}
+                  >
+                    {isFilled ? (
+                      <Text style={styles.otpDigit}>{otp[i]}</Text>
+                    ) : (
+                      isActive && <View style={styles.cursor} />
+                    )}
+                  </Animated.View>
+                );
+              })}
+            </TouchableOpacity>
+
+            {/* Error */}
+            {!!error && (
+              <Text style={styles.errorText}>{error}</Text>
+            )}
+          </Animated.View>
+
+          {/* ── Timer ── */}
+          <Animated.View style={[styles.timerRow, { opacity: timerOpacity }]}>
+            <View style={[styles.timerDot, canResend && styles.timerDotGreen]} />
+            <Text style={styles.timerText}>
+              {canResend ? 'You can resend now' : `Resend code in ${formatTime(timer)}`}
             </Text>
           </Animated.View>
 
-          {/* OTP boxes — tap to focus hidden input */}
-          <Animated.View entering={FadeInUp.delay(250).duration(500)}>
+          {/* ── Verify Button ── */}
+          <Animated.View
+            style={[
+              styles.btnWrap,
+              { transform: [{ translateY: btnY }, { scale: btnPressAnim }], opacity: btnOpacity },
+            ]}
+          >
             <TouchableOpacity
-              onPress={() => inputRef.current?.focus()}
-              activeOpacity={1}
-              style={styles.boxRow}
-            >
-              {Array.from({ length: OTP_LENGTH }).map((_, i) => (
-                <OtpBox
-                  key={i}
-                  value={otp[i]}
-                  filled={i < otp.length}
-                  active={i === otp.length && i < OTP_LENGTH}
-                />
-              ))}
-            </TouchableOpacity>
-
-            {/* Hidden real input */}
-            <TextInput
-              ref={inputRef}
-              value={otp}
-              onChangeText={handleChange}
-              keyboardType="number-pad"
-              maxLength={OTP_LENGTH}
-              style={styles.hiddenInput}
-              caretHidden
-              autoFocus
-            />
-          </Animated.View>
-
-          {/* Timer */}
-          <Animated.View entering={FadeInUp.delay(300).duration(500)} style={styles.timerWrap}>
-            <View style={styles.timerBadge}>
-              <View style={[styles.timerDot, canResend && styles.timerDotGreen]} />
-              <Text style={styles.timerText}>
-                {canResend ? 'Ready to resend' : `Resend code in ${formatTimer(timer)}`}
-              </Text>
-            </View>
-          </Animated.View>
-
-          {/* Verify button */}
-          <Animated.View entering={FadeInUp.delay(350).duration(500)}>
-            <Button
-              label="Verify & Continue →"
+              style={styles.btnPrimary}
               onPress={handleVerify}
-              loading={loading}
-              disabled={otp.length < OTP_LENGTH}
-            />
+              activeOpacity={0.88}
+            >
+              <LinearGradient
+                colors={isComplete ? ['#EF3D35', '#C8241D'] : ['#3A2020', '#2E1A1A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.btnGradient}
+              >
+                {verified ? (
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                ) : (
+                  <Text style={[styles.btnText, !isComplete && styles.btnTextDim]}>
+                    Verify & Continue →
+                  </Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
           </Animated.View>
 
-          {/* Resend */}
-          <Animated.View entering={FadeInUp.delay(400).duration(500)} style={styles.resendRow}>
-            <Text style={styles.resendText}>Didn't receive? </Text>
-            <TouchableOpacity onPress={handleResend} disabled={!canResend}>
-              <Text style={[styles.resendLink, !canResend && styles.resendDisabled]}>
+          {/* ── Resend ── */}
+          <Animated.View style={[styles.resendRow, { opacity: resendOpacity }]}>
+            <Text style={styles.resendStatic}>Didn't receive? </Text>
+            <TouchableOpacity onPress={handleResend} disabled={!canResend} activeOpacity={0.7}>
+              <Text style={[styles.resendLink, !canResend && styles.resendLinkDim]}>
                 Resend OTP
               </Text>
             </TouchableOpacity>
           </Animated.View>
+
         </View>
-      </KeyboardAvoidingView>
-    </Screen>
+      </SafeAreaView>
+    </View>
   );
 }
 
+const BOX_SIZE = (width - 56 - 5 * 10) / 6;
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    paddingHorizontal: spacing.screenH,
-    paddingTop: spacing[8],
-    gap: spacing[6],
+    backgroundColor: '#0A0A0B',
   },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    ...typography.labelLg,
-    color: colors.textSecondary,
-  },
-
-  // ── Icon ──────────────────────────────────────
-  iconWrap: {
-    alignItems: 'center',
-  },
-  iconBox: {
-    width: 80,
-    height: 80,
-    backgroundColor: colors.surface,
-    borderRadius: radius['5xl'],
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.md,
-  },
-
-  // ── Text ──────────────────────────────────────
-  textBlock: {
-    gap: spacing[2],
-  },
-  title: {
-    ...typography.h1,
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    ...typography.bodyMd,
-    color: colors.textSecondary,
-    lineHeight: 22,
-  },
-  phone: {
-    ...typography.labelLg,
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-
-  // ── OTP boxes ─────────────────────────────────
-  boxRow: {
-    flexDirection: 'row',
-    gap: spacing[2.5],
-    justifyContent: 'center',
-  },
-  otpBox: {
-    width: 48,
-    height: 56,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  otpBoxFilled: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryBgSoft,
-  },
-  otpBoxActive: {
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  otpDigit: {
-    ...typography.h2,
-    color: colors.textPrimary,
+  safe: {
+    flex: 1,
   },
   hiddenInput: {
     position: 'absolute',
@@ -302,52 +335,218 @@ const styles = StyleSheet.create({
     width: 1,
     height: 1,
   },
-
-  // ── Timer ─────────────────────────────────────
-  timerWrap: {
-    alignItems: 'center',
+  ambientGlow: {
+    position: 'absolute',
+    top: -60,
+    alignSelf: 'center',
+    width: width,
+    height: 300,
+    borderRadius: width / 2,
+    backgroundColor: 'transparent',
+    shadowColor: '#E8312A',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 100,
   },
-  timerBadge: {
+
+  // Back
+  backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    backgroundColor: colors.surface,
+    gap: 6,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 4,
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    color: '#A0A0B0',
+    fontSize: 15,
+    fontWeight: '400',
+  },
+
+  inner: {
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 28,
+  },
+
+  // Icon
+  iconSection: {
+    alignItems: 'flex-start',
+    position: 'relative',
+  },
+  iconGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'transparent',
+    shadowColor: '#E8312A',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 40,
+  },
+  iconBox: {
+    width: 76,
+    height: 76,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.chipFull,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
+    borderColor: 'rgba(232,49,42,0.18)',
+  },
+
+  // Title
+  titleSection: {
+    gap: 4,
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#F2F2F5',
+    letterSpacing: -1,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#6B6B7A',
+    fontWeight: '300',
+  },
+  phone: {
+    fontSize: 16,
+    color: '#F2F2F5',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  // OTP
+  otpSection: {
+    gap: 12,
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  otpBox: {
+    width: BOX_SIZE,
+    height: BOX_SIZE + 6,
+    borderRadius: 12,
+    backgroundColor: '#18181E',
+    borderWidth: 1.5,
+    borderColor: '#2A2A35',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpBoxFilled: {
+    borderColor: '#E8312A',
+    backgroundColor: 'rgba(232,49,42,0.07)',
+  },
+  otpBoxActive: {
+    borderColor: 'rgba(232,49,42,0.5)',
+    backgroundColor: '#1A1820',
+  },
+  otpBoxError: {
+    borderColor: '#FF6B6B',
+  },
+  otpDigit: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#F2F2F5',
+    letterSpacing: 0,
+  },
+  cursor: {
+    width: 2,
+    height: 22,
+    backgroundColor: '#E8312A',
+    borderRadius: 1,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 13,
+    fontWeight: '400',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  // Timer
+  timerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 100,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   timerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.warning,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#E8312A',
   },
   timerDotGreen: {
-    backgroundColor: colors.success,
+    backgroundColor: '#22C55E',
   },
   timerText: {
-    ...typography.labelMd,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: '#8888A0',
+    fontWeight: '400',
   },
 
-  // ── Resend ────────────────────────────────────
+  // Button
+  btnWrap: {
+    shadowColor: '#E8312A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 14,
+  },
+  btnPrimary: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  btnGradient: {
+    paddingVertical: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+  },
+  btnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  btnTextDim: {
+    color: 'rgba(255,255,255,0.35)',
+  },
+
+  // Resend
   resendRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  resendText: {
-    ...typography.bodyMd,
-    color: colors.textSecondary,
+  resendStatic: {
+    fontSize: 14,
+    color: '#6B6B7A',
+    fontWeight: '300',
   },
   resendLink: {
-    ...typography.labelLg,
-    color: colors.primary,
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#E8312A',
+    fontWeight: '700',
   },
-  resendDisabled: {
-    color: colors.textTertiary,
+  resendLinkDim: {
+    color: 'rgba(232,49,42,0.4)',
   },
 });
