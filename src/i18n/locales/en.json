@@ -1,0 +1,44 @@
+// src/i18n/locales/en.json
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "loading": "Loading…",
+    "logout": "Log Out",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage your child's emergency card",
+    "language": "Language",
+    "theme": "Theme",
+    "logout": "Log Out",
+    "changePhone": "Change Phone Number",
+    "support": "Help & Support"
+  },
+  "updates": {
+    "title": "{{name}}'s Profile",
+    "subtitle": "Keep your child's card up to date",
+    "childTab": "Child",
+    "medicalTab": "Medical",
+    "contactsTab": "Contacts",
+    "submit": "Submit Changes for Approval →",
+    "submitting": "Submitting…",
+    "submitted": "Sent for Approval",
+    "bloodGroup": "Blood Group",
+    "allergies": "Allergies",
+    "conditions": "Medical Conditions",
+    "medications": "Current Medications",
+    "doctor": "Family Doctor",
+    "notes": "Notes for First Responders"
+  },
+  "emergency": {
+    "cardNumber": "Card No.",
+    "status": "Status",
+    "validUntil": "Valid Until",
+    "activated": "Activated",
+    "calledFirst": "Called first"
+  }
+}
