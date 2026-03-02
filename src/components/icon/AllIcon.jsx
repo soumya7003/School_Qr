@@ -1,6 +1,8 @@
+import { COLORS } from "@/constants/constants";
 import { colors } from '@/theme';
+import { useEffect } from 'react';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-
 
 // ! ChevronRight
 export const ChevronRight = () => (
@@ -140,3 +142,98 @@ export const BackIcon = () => (
             strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
 );
+
+export const ShieldCheckIcon = ({ size = 68 }) => (
+    <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
+        <Path
+            d="M36 5L9 16v20c0 16.3 11.7 31.4 27 35.4C52.3 67.4 63 52.3 63 36V16L36 5z"
+            stroke={COLORS.red}
+            strokeWidth={2.2}
+            strokeLinejoin="round"
+            fill="none"
+        />
+        <Path
+            d="M23 36.5l9 9 17-17"
+            stroke={COLORS.red}
+            strokeWidth={2.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
+export const PersonIcon = () => (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+        <Circle cx="12" cy="7" r="4" stroke={COLORS.white} strokeWidth="2" />
+        <Path
+            d="M4 20c0-3.9 3.6-7 8-7s8 3.1 8 7"
+            stroke={COLORS.white}
+            strokeWidth="2"
+            strokeLinecap="round"
+        />
+    </Svg>
+);
+
+export const PulseRing = ({ size, delay, baseOpacity }) => {
+    const scale = useSharedValue(0.85);
+    const opacity = useSharedValue(baseOpacity);
+
+    useEffect(() => {
+        const DURATION = 2200;
+        scale.value = withDelay(
+            delay,
+            withRepeat(
+                withSequence(
+                    withTiming(1.25, { duration: DURATION, easing: Easing.out(Easing.quad) }),
+                    withTiming(0.85, { duration: DURATION, easing: Easing.in(Easing.quad) })
+                ),
+                -1,
+                false
+            )
+        );
+        opacity.value = withDelay(
+            delay,
+            withRepeat(
+                withSequence(
+                    withTiming(0, { duration: DURATION }),
+                    withTiming(baseOpacity, { duration: DURATION })
+                ),
+                -1,
+                false
+            )
+        );
+    }, []);
+
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+        opacity: opacity.value,
+    }));
+
+    return (
+        <Animated.View
+            style={[
+                styles.ring,
+                { width: size, height: size, borderRadius: size / 2 },
+                animStyle,
+            ]}
+        />
+    );
+};
+
+export const StatusDot = () => {
+    const opacity = useSharedValue(1);
+
+    useEffect(() => {
+        opacity.value = withRepeat(
+            withSequence(
+                withTiming(0.15, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+                withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) })
+            ),
+            -1,
+            false
+        );
+    }, []);
+
+    const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+    return <Animated.View style={[styles.statusDot, animStyle]} />;
+};

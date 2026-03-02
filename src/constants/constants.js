@@ -28,3 +28,19 @@ export const THEME_OPTIONS = [
   { value: "dark", label: "Dark" },
   { value: "system", label: "System" },
 ];
+
+// ! index.js file color section
+export const COLORS = {
+  bg: "#0D0D0F",
+  bgDeep: "#120909",
+  red: "#FF3B30",
+  redDark: "#C8211A",
+  white: "#FFFFFF",
+  textMuted: "rgba(255,255,255,0.42)",
+  textDim: "rgba(255,255,255,0.22)",
+  ringBorder: "rgba(255,59,48,0.20)",
+  cardBorder: "rgba(255,255,255,0.06)",
+  secondaryBg: "rgba(255,255,255,0.07)",
+  secondaryBorder: "rgba(255,255,255,0.10)",
+  green: "#2ECC71",
+};
