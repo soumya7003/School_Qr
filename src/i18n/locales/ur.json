@@ -1,0 +1,43 @@
+{
+  "common": {
+    "save": "محفوظ کریں",
+    "cancel": "منسوخ کریں",
+    "submit": "جمع کریں",
+    "loading": "لوڈ ہو رہا ہے…",
+    "logout": "لاگ آؤٹ",
+    "edit": "ترمیم کریں",
+    "delete": "حذف کریں"
+  },
+  "settings": {
+    "title": "سیٹنگز",
+    "subtitle": "اپنے بچے کا ایمرجنسی کارڈ منظم کریں",
+    "language": "زبان",
+    "theme": "تھیم",
+    "logout": "لاگ آؤٹ",
+    "changePhone": "فون نمبر تبدیل کریں",
+    "support": "مدد اور سپورٹ"
+  },
+  "updates": {
+    "title": "{{name}} کا پروفائل",
+    "subtitle": "اپنے بچے کا کارڈ اپ ڈیٹ رکھیں",
+    "childTab": "بچہ",
+    "medicalTab": "طبی",
+    "contactsTab": "رابطے",
+    "submit": "منظوری کے لیے تبدیلیاں بھیجیں →",
+    "submitting": "بھیجا جا رہا ہے…",
+    "submitted": "منظوری کے لیے بھیج دیا گیا",
+    "bloodGroup": "بلڈ گروپ",
+    "allergies": "الرجی",
+    "conditions": "طبی حالت",
+    "medications": "موجودہ ادویات",
+    "doctor": "خاندانی ڈاکٹر",
+    "notes": "پہلے امدادی کارکنوں کے لیے نوٹس"
+  },
+  "emergency": {
+    "cardNumber": "کارڈ نمبر",
+    "status": "حیثیت",
+    "validUntil": "درست تا تاریخ",
+    "activated": "فعال",
+    "calledFirst": "سب سے پہلے کال کیا گیا"
+  }
+}

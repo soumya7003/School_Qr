@@ -1,0 +1,43 @@
+{
+  "common": {
+    "save": "সংৰক্ষণ কৰক",
+    "cancel": "বাতিল কৰক",
+    "submit": "দাখিল কৰক",
+    "loading": "লোড হৈ আছে…",
+    "logout": "লগ আউট",
+    "edit": "সম্পাদনা কৰক",
+    "delete": "মচি পেলাওক"
+  },
+  "settings": {
+    "title": "ছেটিংছ",
+    "subtitle": "আপোনাৰ শিশুৰ আপতকালীন কাৰ্ড পৰিচালনা কৰক",
+    "language": "ভাষা",
+    "theme": "থিম",
+    "logout": "লগ আউট",
+    "changePhone": "ফোন নম্বৰ সলনি কৰক",
+    "support": "সহায়তা আৰু সমৰ্থন"
+  },
+  "updates": {
+    "title": "{{name}} ৰ প্ৰ'ফাইল",
+    "subtitle": "আপোনাৰ শিশুৰ কাৰ্ড আপডেট ৰাখক",
+    "childTab": "শিশু",
+    "medicalTab": "চিকিৎসা",
+    "contactsTab": "যোগাযোগ",
+    "submit": "অনুমোদনৰ বাবে পৰিবর্তন পঠিয়াওক →",
+    "submitting": "পঠিয়াই আছে…",
+    "submitted": "অনুমোদনৰ বাবে পঠিয়োৱা হৈছে",
+    "bloodGroup": "ৰক্ত গোট",
+    "allergies": "এলাৰ্জী",
+    "conditions": "চিকিৎসা অৱস্থা",
+    "medications": "বৰ্তমান ঔষধ",
+    "doctor": "পৰিয়ালৰ ডাক্টৰ",
+    "notes": "প্ৰথম সঁহাৰি দাতাৰ বাবে টোকা"
+  },
+  "emergency": {
+    "cardNumber": "কাৰ্ড নং.",
+    "status": "অৱস্থা",
+    "validUntil": "বৈধতাৰ শেষ তাৰিখ",
+    "activated": "সক্ৰিয়",
+    "calledFirst": "প্ৰথমে কল কৰা হৈছিল"
+  }
+}

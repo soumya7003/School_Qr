@@ -1,0 +1,43 @@
+{
+  "common": {
+    "save": "जतन करा",
+    "cancel": "रद्द करा",
+    "submit": "सबमिट करा",
+    "loading": "लोड होत आहे…",
+    "logout": "लॉग आउट",
+    "edit": "संपादित करा",
+    "delete": "हटवा"
+  },
+  "settings": {
+    "title": "सेटिंग्ज",
+    "subtitle": "आपल्या मुलाचे आपत्कालीन कार्ड व्यवस्थापित करा",
+    "language": "भाषा",
+    "theme": "थीम",
+    "logout": "लॉग आउट",
+    "changePhone": "फोन नंबर बदला",
+    "support": "मदत आणि समर्थन"
+  },
+  "updates": {
+    "title": "{{name}} ची प्रोफाइल",
+    "subtitle": "आपल्या मुलाचे कार्ड अद्ययावत ठेवा",
+    "childTab": "मूल",
+    "medicalTab": "वैद्यकीय",
+    "contactsTab": "संपर्क",
+    "submit": "मंजुरीसाठी बदल पाठवा →",
+    "submitting": "पाठवत आहे…",
+    "submitted": "मंजुरीसाठी पाठवले",
+    "bloodGroup": "रक्त गट",
+    "allergies": "अॅलर्जी",
+    "conditions": "वैद्यकीय स्थिती",
+    "medications": "सद्य औषधे",
+    "doctor": "कौटुंबिक डॉक्टर",
+    "notes": "प्राथमिक प्रतिसाद देणाऱ्यांसाठी नोंदी"
+  },
+  "emergency": {
+    "cardNumber": "कार्ड क्र.",
+    "status": "स्थिती",
+    "validUntil": "वैधता पर्यंत",
+    "activated": "सक्रिय",
+    "calledFirst": "सर्वप्रथम कॉल केले"
+  }
+}
