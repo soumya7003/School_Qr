@@ -4,9 +4,9 @@
  * Also controls EmergencyProfile.is_visible (master on/off)
  */
 
-import Screen from '@/src/components/common/Screen';
-import { useProfileStore } from '@/src/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import Screen from '@/components/common/Screen';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';

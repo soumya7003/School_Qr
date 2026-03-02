@@ -18,10 +18,10 @@
  *   - Emergency profile completeness nudge
  */
 
-import Screen from '@/src/components/common/Screen';
-import { useAuthStore } from '@/src/features/auth/auth.store';
-import { useProfileStore } from '@/src/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import Screen from '@/components/common/Screen';
+import { useAuthStore } from '@/features/auth/auth.store';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import {
@@ -92,14 +92,6 @@ const IconChevron = ({ color = colors.textTertiary }) => (
   </Svg>
 );
 
-const IconDrop = ({ color = colors.primary }) => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-      stroke={color} strokeWidth={1.8} />
-    <Path d="M12 6v6l4 2" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-  </Svg>
-);
-
 const IconLocation = ({ color = colors.textTertiary }) => (
   <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
     <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"
@@ -118,7 +110,7 @@ function PulseDot({ color = colors.success }) {
         Animated.timing(anim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [anim]);
   return <Animated.View style={[styles.pulseDot, { backgroundColor: color, opacity: anim }]} />;
 }
 

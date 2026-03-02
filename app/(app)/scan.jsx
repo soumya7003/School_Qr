@@ -4,7 +4,7 @@
  * Install: expo install expo-camera
  */
 
-import { colors, radius, spacing, typography } from '@/src/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -33,13 +33,6 @@ function ScanFrame() {
         </Svg>
     );
 }
-
-const XIcon = () => (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-        <Path d="M18 6L6 18M6 6l12 12"
-            stroke={colors.white} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-);
 
 const TorchIcon = ({ on }) => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">

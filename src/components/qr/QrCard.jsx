@@ -4,8 +4,8 @@
  * Used on the QR screen (full screen) and as a preview elsewhere.
  */
 
-import Badge from '@/src/components/common/Badge';
-import { colors, radius, shadows, spacing, typography } from '@/src/theme';
+import Badge from '@/components/common/Badge';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';

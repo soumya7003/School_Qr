@@ -1,4 +1,4 @@
-import { initI18n } from '@/src/i18n';
+import { initI18n } from '@/i18n';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';

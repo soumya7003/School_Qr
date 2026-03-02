@@ -5,7 +5,7 @@
  *  2. Added segments.length guard to prevent redirect before router is ready
  */
 
-import { useAuthStore } from '@/src/features/auth/auth.store';
+import { useAuthStore } from '@/features/auth/auth.store';
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 

@@ -1,8 +1,17 @@
-import { useBiometricStore } from "@/src/store/biometricStore";
-import * as LocalAuthentication from "expo-local-authentication";
+import { useBiometricStore } from "@/store/biometricStore";
+import { Platform } from "react-native";
 
-// check what the device supports
+let LocalAuthentication = null;
+
+// load native module only on mobile
+if (Platform.OS !== "web") {
+  LocalAuthentication = require("expo-local-authentication");
+}
+
+// ── Check device capability ─────────────────────────
 export async function checkDeviceBiometrics() {
+  if (!LocalAuthentication) return false;
+
   const { setDeviceSupported, setBiometricType } = useBiometricStore.getState();
 
   const isHardwareAvailable = await LocalAuthentication.hasHardwareAsync();
@@ -13,14 +22,13 @@ export async function checkDeviceBiometrics() {
 
   if (isSupported) {
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    //   types is array of numbers
+
     const typeMap = {
       [LocalAuthentication.AuthenticationType.FINGERPRINT]: "fingerprint",
       [LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION]: "face",
       [LocalAuthentication.AuthenticationType.IRIS]: "iris",
     };
 
-    // Pick the strongest available
     const best = types.includes(2) ? 2 : types.includes(1) ? 1 : types[0];
     setBiometricType(typeMap[best] ?? "fingerprint");
   }
@@ -28,42 +36,44 @@ export async function checkDeviceBiometrics() {
   return isSupported;
 }
 
-// ── Prompt the biometric / device lock dialog ─────────────────────────────
+// ── Prompt biometric ─────────────────────────
 export async function promptBiometric({
   reason = "Verify your identity to continue",
   fallbackLabel = "Use Device PIN",
 } = {}) {
-  const result = await LocalAuthentication.authenticateAsync({
+  if (!LocalAuthentication) {
+    return { success: false, error: "not_available_on_web" };
+  }
+
+  return await LocalAuthentication.authenticateAsync({
     promptMessage: reason,
-    fallbackLabel: fallbackLabel,
-    disableDeviceFallback: false, // allows PIN/pattern if biometric fails
+    fallbackLabel,
+    disableDeviceFallback: false,
     cancelLabel: "Cancel",
   });
-
-  return result; // { success: boolean, error?: string, warning?: string }
 }
 
-// ── Enable biometric for this user (call after login) ────────────────────
+// ── Enable biometric ─────────────────────────
 export async function enableBiometric() {
   const supported = await checkDeviceBiometrics();
   if (!supported) return { ok: false, reason: "not_supported" };
 
-  // Do one auth to confirm before enabling
   const result = await promptBiometric({
     reason: "Confirm to enable biometric lock",
   });
+
   if (!result.success) return { ok: false, reason: result.error };
 
   useBiometricStore.getState().setEnabled(true);
   return { ok: true };
 }
 
-// ── Disable biometric (call from settings) ────────────────────────────────
+// ── Disable biometric ─────────────────────────
 export async function disableBiometric() {
-  // Auth once before disabling — so someone can't just turn it off
   const result = await promptBiometric({
     reason: "Confirm to disable biometric lock",
   });
+
   if (!result.success) return { ok: false, reason: result.error };
 
   useBiometricStore.getState().setEnabled(false);

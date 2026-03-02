@@ -11,9 +11,9 @@
  *  - Section icons so parents instantly know what each group is about
  */
 
-import Screen from '@/src/components/common/Screen';
-import { useProfileStore } from '@/src/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import Screen from '@/components/common/Screen';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useState } from 'react';
 import {
   Alert,
@@ -180,7 +180,11 @@ function RequestBanner({ requests = [] }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.rejectedTitle}>School rejected your update</Text>
-            {r.reject_reason && <Text style={styles.rejectedReason}>"{r.reject_reason}"</Text>}
+            {r.reject_reason && (
+              <Text style={styles.rejectedReason}>
+                {`"${r.reject_reason}"`}
+              </Text>
+            )}
           </View>
         </View>
       ))}

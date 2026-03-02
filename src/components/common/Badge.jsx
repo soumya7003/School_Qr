@@ -5,7 +5,7 @@
  * Also handles: PENDING (UI-only state during setup flow)
  */
 
-import { colors, radius, spacing, typography } from '@/src/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 import { StyleSheet, Text, View } from 'react-native';
 
 // Maps TokenStatus → { label, color, bg }

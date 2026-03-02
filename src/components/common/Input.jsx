@@ -2,7 +2,7 @@
  * Input — Text input with label, left icon, error state
  */
 
-import { colors, radius, spacing, typography } from '@/src/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useState } from 'react';
 import {
     StyleSheet,

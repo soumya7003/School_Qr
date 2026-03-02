@@ -15,11 +15,11 @@
  *   EXPIRED  → Request Replacement (school contact)
  */
 
-import Screen from '@/src/components/common/Screen';
-import QrCard from '@/src/components/qr/QrCard';
-import { ShareIcon } from '@/src/components/ui/ShareIcon';
-import { useProfileStore } from '@/src/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import Screen from '@/components/common/Screen';
+import QrCard from '@/components/qr/QrCard';
+import { ShareIcon } from '@/components/ui/ShareIcon';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {

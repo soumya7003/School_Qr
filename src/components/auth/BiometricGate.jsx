@@ -1,8 +1,8 @@
 // src/components/auth/BiometricGate.jsx
-import { useAuthStore } from '@/src/features/auth/auth.store';
-import { checkDeviceBiometrics, promptBiometric } from '@/src/services/biometricService';
-import { useBiometricStore } from '@/src/store/biometricStore';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import { useAuthStore } from '@/features/auth/auth.store';
+import { checkDeviceBiometrics, promptBiometric } from '@/services/biometricService';
+import { useBiometricStore } from '@/store/biometricStore';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';

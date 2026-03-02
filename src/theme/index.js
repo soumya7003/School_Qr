@@ -1,26 +1,10 @@
-/**
- * School QR — Theme Index
- *
- * Single import for all theme tokens.
- * Usage:
- *   import { theme } from '@/theme'
- *   import { colors } from '@/theme'  // or named
- */
+// Theme Index
 
-// ── Combined theme object ─────────────────────────────────────────────────────
 import colors from "./colors";
 import radius from "./radius";
 import shadows from "./shadows";
 import spacing from "./spacing";
-import typography from "./typography";
-
-export { default as colors } from "./colors";
-export { default as radius } from "./radius";
-export { default as shadows } from "./shadows";
-export { default as spacing } from "./spacing";
-export { default as typography } from "./typography";
-
-export {
+import typography, {
   fontFamilies,
   fontSizes,
   fontWeights,
@@ -28,6 +12,21 @@ export {
   lineHeights,
 } from "./typography";
 
+// named exports
+export {
+  colors,
+  fontFamilies,
+  fontSizes,
+  fontWeights,
+  letterSpacings,
+  lineHeights,
+  radius,
+  shadows,
+  spacing,
+  typography,
+};
+
+// combined theme object
 export const theme = {
   colors,
   typography,

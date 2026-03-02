@@ -2,7 +2,7 @@
  * Scan Store — UI state only, no API calls.
  */
 
-import { mockScanLogs } from "@/src/mock/mockData";
+import { mockScanLogs } from "@/mock/mockData";
 import { create } from "zustand";
 
 export const useScanStore = create((set, get) => ({

@@ -7,9 +7,9 @@
  *   ScanResult enum: SUCCESS | INVALID | REVOKED | EXPIRED | INACTIVE | RATE_LIMITED | ERROR
  */
 
-import Screen from '@/src/components/common/Screen';
-import { useProfileStore } from '@/src/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import Screen from '@/components/common/Screen';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -59,13 +59,6 @@ const CheckCircleIcon = () => (
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
         <Circle cx={12} cy={12} r={10} stroke={colors.success} strokeWidth={1.8} />
         <Path d="M9 12l2 2 4-4" stroke={colors.success} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const DeviceIcon = () => (
-    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-        <Path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
-            stroke={colors.textTertiary} strokeWidth={1.8} strokeLinecap="round" />
     </Svg>
 );
 

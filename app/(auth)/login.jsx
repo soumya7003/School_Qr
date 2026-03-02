@@ -307,7 +307,7 @@ export default function LoginScreen() {
       setLoading(false);
       router.push('/(auth)/otp');
     }, 1200);
-  }, [canSubmit, loading]);
+  }, [canSubmit, loading, btnScale]);
 
   return (
     <View style={s.root}>

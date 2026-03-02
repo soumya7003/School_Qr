@@ -2,8 +2,8 @@
  * App Layout — Tab navigator with custom TabBar.
  */
 
-import BiometricGate from '@/src/components/auth/BiometricGate';
-import TabBar from '@/src/components/navigation/TabBar';
+import BiometricGate from '@/components/auth/BiometricGate.jsx';
+import TabBar from '@/components/navigation/TabBar';
 import { Tabs } from 'expo-router';
 
 export default function AppLayout() {

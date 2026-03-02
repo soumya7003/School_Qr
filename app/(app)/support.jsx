@@ -3,8 +3,8 @@
  * Self-contained: no store dependencies, no external API calls
  */
 
-import Screen from '@/src/components/common/Screen';
-import { colors, radius, spacing, typography } from '@/src/theme';
+import Screen from '@/components/common/Screen';
+import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {

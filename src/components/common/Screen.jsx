@@ -2,7 +2,7 @@
  * Screen — Safe area wrapper for all screens
  */
 
-import { colors } from '@/src/theme';
+import { colors } from '@/theme';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

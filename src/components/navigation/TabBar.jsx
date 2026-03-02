@@ -5,7 +5,7 @@
  * The centre SCAN tab has an elevated red button that floats above the bar.
  */
 
-import { colors, radius, shadows, spacing, typography } from '@/src/theme';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     useAnimatedStyle,

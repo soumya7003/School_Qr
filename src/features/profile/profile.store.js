@@ -9,7 +9,7 @@ import {
   mockStudent,
   mockSubscription,
   mockToken,
-} from "@/src/mock/mockData";
+} from "@/mock/mockData";
 import { create } from "zustand";
 
 export const useProfileStore = create((set, get) => ({

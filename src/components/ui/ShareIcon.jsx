@@ -1,4 +1,4 @@
-import { colors } from '@/src/theme';
+import { colors } from '@/theme';
 import Svg, { Path } from 'react-native-svg';
 
 export const ShareIcon = () => (
