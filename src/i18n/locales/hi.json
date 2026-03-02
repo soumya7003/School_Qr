@@ -1,0 +1,44 @@
+// src/i18n/locales/hi.json
+{
+  "common": {
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "submit": "जमा करें",
+    "loading": "लोड हो रहा है…",
+    "logout": "लॉग आउट",
+    "edit": "संपादित करें",
+    "delete": "हटाएं"
+  },
+  "settings": {
+    "title": "सेटिंग्स",
+    "subtitle": "अपने बच्चे का इमरजेंसी कार्ड प्रबंधित करें",
+    "language": "भाषा",
+    "theme": "थीम",
+    "logout": "लॉग आउट",
+    "changePhone": "फोन नंबर बदलें",
+    "support": "सहायता और समर्थन"
+  },
+  "updates": {
+    "title": "{{name}} की प्रोफ़ाइल",
+    "subtitle": "अपने बच्चे का कार्ड अपडेट रखें",
+    "childTab": "बच्चे की जानकारी",
+    "medicalTab": "मेडिकल",
+    "contactsTab": "संपर्क",
+    "submit": "अनुमोदन के लिए बदलाव भेजें →",
+    "submitting": "भेजा जा रहा है…",
+    "submitted": "अनुमोदन के लिए भेजा गया",
+    "bloodGroup": "ब्लड ग्रुप",
+    "allergies": "एलर्जी",
+    "conditions": "मेडिकल स्थितियां",
+    "medications": "वर्तमान दवाएं",
+    "doctor": "पारिवारिक डॉक्टर",
+    "notes": "प्राथमिक उत्तरदाताओं के लिए नोट्स"
+  },
+  "emergency": {
+    "cardNumber": "कार्ड नं.",
+    "status": "स्थिति",
+    "validUntil": "तक वैध",
+    "activated": "सक्रिय किया",
+    "calledFirst": "पहले कॉल करें"
+  }
+}

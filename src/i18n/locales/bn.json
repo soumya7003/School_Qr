@@ -1,0 +1,44 @@
+// src/i18n/locales/bn.json  ← Bengali
+{
+  "common": {
+    "save": "সংরক্ষণ করুন",
+    "cancel": "বাতিল করুন",
+    "submit": "জমা দিন",
+    "loading": "লোড হচ্ছে…",
+    "logout": "লগ আউট",
+    "edit": "সম্পাদনা করুন",
+    "delete": "মুছুন"
+  },
+  "settings": {
+    "title": "সেটিংস",
+    "subtitle": "আপনার সন্তানের ইমার্জেন্সি কার্ড পরিচালনা করুন",
+    "language": "ভাষা",
+    "theme": "থিম",
+    "logout": "লগ আউট",
+    "changePhone": "ফোন নম্বর পরিবর্তন করুন",
+    "support": "সাহায্য ও সহায়তা"
+  },
+  "updates": {
+    "title": "{{name}}-এর প্রোফাইল",
+    "subtitle": "আপনার সন্তানের কার্ড আপডেট রাখুন",
+    "childTab": "শিশু",
+    "medicalTab": "চিকিৎসা",
+    "contactsTab": "যোগাযোগ",
+    "submit": "অনুমোদনের জন্য পরিবর্তন জমা দিন →",
+    "submitting": "জমা দেওয়া হচ্ছে…",
+    "submitted": "অনুমোদনের জন্য পাঠানো হয়েছে",
+    "bloodGroup": "রক্তের গ্রুপ",
+    "allergies": "অ্যালার্জি",
+    "conditions": "চিকিৎসা অবস্থা",
+    "medications": "বর্তমান ওষুধ",
+    "doctor": "পারিবারিক ডাক্তার",
+    "notes": "প্রথম সাড়াদানকারীদের জন্য নোট"
+  },
+  "emergency": {
+    "cardNumber": "কার্ড নং.",
+    "status": "অবস্থা",
+    "validUntil": "পর্যন্ত বৈধ",
+    "activated": "সক্রিয় করা হয়েছে",
+    "calledFirst": "প্রথমে কল করুন"
+  }
+}
