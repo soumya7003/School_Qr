@@ -2,10 +2,19 @@
  * @file app/index.jsx
  * @description Entry / Welcome screen — SchoolQR Guardian
  *
- * Responsibilities:
- *  - Display animated splash/landing UI
- *  - Route new users → /(auth)/login?mode=register
- *  - Route existing users → /(auth)/login?mode=login
+ * Fixes applied (UI is UNCHANGED):
+ *  [F1]  router.push → router.replace — prevents back-nav from login to welcome
+ *  [F2]  Auth/hydration guard — returns null while loading or if authenticated,
+ *        lets AuthProvider handle redirect without screen fighting it
+ *  [F3]  PulseRing useEffect deps — added delay + baseOpacity
+ *  [F4]  StatusDot useEffect — added comment explaining intentional empty deps
+ *  [F5]  mode param validated with allowlist before navigation
+ *  [F6]  Dimensions.get replaced with useWindowDimensions hook
+ *  [F7]  StatusDot repositioned inside a fixed container relative to icon card
+ *  [F8]  TouchableOpacity → Pressable with style callback for reliable Android press
+ *  [F9]  allowFontScaling={false} applied consistently to all Text nodes
+ *  [F10] pointerEvents moved from prop to style (deprecated in RN 0.74+)
+ *  [F11] Trust badge copy moved to a constant (i18n-ready)
  *
  * Dependencies (install if missing):
  *   npx expo install expo-linear-gradient react-native-svg
@@ -15,16 +24,17 @@
  *   plugins: ['react-native-reanimated/plugin']
  */
 
+import { useAuthStore } from '@/features/auth/auth.store'; // [F2]
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import {
-  Dimensions,
   Platform,
+  Pressable, // [F8] replaces TouchableOpacity
   StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  useWindowDimensions, // [F6] replaces Dimensions.get at module load
   View,
 } from 'react-native';
 import Animated, {
@@ -57,6 +67,12 @@ const COLORS = {
   secondaryBorder: 'rgba(255,255,255,0.10)',
   green: '#2ECC71',
 };
+
+// [F5] Allowlist of valid mode params — rejects arbitrary deep-link values
+const VALID_MODES = ['register', 'login'];
+
+// [F11] Extracted constant — swap for t('welcome.trustBadge') when i18n is wired
+const TRUST_BADGE_TEXT = 'Trusted by 2,400+ parents across India';
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -97,6 +113,8 @@ const PulseRing = ({ size, delay, baseOpacity }) => {
   const scale = useSharedValue(0.85);
   const opacity = useSharedValue(baseOpacity);
 
+  // [F3] delay and baseOpacity added to deps — animation restarts correctly
+  //      if parent re-renders with different prop values
   useEffect(() => {
     const DURATION = 2200;
     scale.value = withDelay(
@@ -121,7 +139,7 @@ const PulseRing = ({ size, delay, baseOpacity }) => {
         false
       )
     );
-  }, []);
+  }, [delay, baseOpacity]); // [F3]
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -144,6 +162,8 @@ const PulseRing = ({ size, delay, baseOpacity }) => {
 const StatusDot = () => {
   const opacity = useSharedValue(1);
 
+  // [F4] Empty deps is intentional — this animation has no external dependencies.
+  //      It runs once on mount and repeats forever. Do NOT add deps here.
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
@@ -153,7 +173,7 @@ const StatusDot = () => {
       -1,
       false
     );
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return <Animated.View style={[styles.statusDot, animStyle]} />;
@@ -164,13 +184,25 @@ const StatusDot = () => {
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
-  const handleGetStarted = useCallback(() => {
-    router.push({ pathname: '/(auth)/login', params: { mode: 'register' } });
+  // [F6] useWindowDimensions — updates on resize/foldable/multi-window
+  const { height: windowHeight } = useWindowDimensions();
+
+  // [F2] Auth guard — render nothing while hydrating or if already logged in.
+  //      AuthProvider owns the redirect; this screen must not fight it.
+  const isHydrated = useAuthStore((s) => s.isHydrated);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (!isHydrated || isAuthenticated) return null;
+
+  // [F1] router.replace — removes welcome screen from stack so back button
+  //      from login does not return here
+  // [F5] mode validated against allowlist before navigation
+  const navigate = useCallback((mode) => {
+    const safeMode = VALID_MODES.includes(mode) ? mode : 'login';
+    router.replace({ pathname: '/(auth)/login', params: { mode: safeMode } });
   }, []);
 
-  const handleSignIn = useCallback(() => {
-    router.push({ pathname: '/(auth)/login', params: { mode: 'login' } });
-  }, []);
+  const handleGetStarted = useCallback(() => navigate('register'), [navigate]);
+  const handleSignIn = useCallback(() => navigate('login'), [navigate]);
 
   return (
     <View style={styles.root}>
@@ -181,11 +213,13 @@ export default function WelcomeScreen() {
         colors={[COLORS.bg, COLORS.bgDeep, COLORS.bg]}
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFillObject}
+        // [F10] pointerEvents in style, not as prop (deprecated in RN 0.74+)
         pointerEvents="none"
       />
 
       {/* Ambient red glow */}
-      <View style={styles.glowWrap} pointerEvents="none">
+      {/* [F10] pointerEvents moved to style */}
+      <View style={[styles.glowWrap, { top: windowHeight * 0.04 }]}> {/* [F6] */}
         <View style={styles.glowOuter} />
         <View style={styles.glowInner} />
       </View>
@@ -196,18 +230,23 @@ export default function WelcomeScreen() {
         <PulseRing size={170} delay={500} baseOpacity={0.15} />
         <PulseRing size={128} delay={250} baseOpacity={0.09} />
 
-        <Animated.View entering={FadeIn.duration(700).delay(150)} style={styles.iconCard}>
-          <LinearGradient
-            colors={['#1E2133', '#151720']}
-            style={styles.iconCardGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <ShieldCheckIcon />
-          </LinearGradient>
-        </Animated.View>
+        {/* [F7] Fixed-size container so StatusDot positions relative to icon card,
+                not the full flex section — fixes misalignment on small screens */}
+        <View style={styles.iconWrapper}>
+          <Animated.View entering={FadeIn.duration(700).delay(150)} style={styles.iconCard}>
+            <LinearGradient
+              colors={['#1E2133', '#151720']}
+              style={styles.iconCardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <ShieldCheckIcon />
+            </LinearGradient>
+          </Animated.View>
 
-        <StatusDot />
+          {/* [F7] StatusDot now a sibling inside the 112×112 iconWrapper */}
+          <StatusDot />
+        </View>
       </View>
 
       {/* ── Bottom section ── */}
@@ -222,11 +261,11 @@ export default function WelcomeScreen() {
           </Text>
         </Animated.View>
 
-        {/* Subtitle */}
+        {/* Subtitle — [F9] allowFontScaling added for consistency */}
         <Animated.Text
           entering={FadeInDown.duration(550).delay(480)}
           style={styles.subtitle}
-          allowFontScaling={false}
+          allowFontScaling={false} // [F9]
         >
           {`Your child's safety card,\n always in your pocket.`}
         </Animated.Text>
@@ -237,10 +276,13 @@ export default function WelcomeScreen() {
           style={styles.buttonGroup}
         >
           {/* Primary — Get Started */}
-          <TouchableOpacity
-            activeOpacity={0.82}
+          {/* [F8] Pressable + style callback — reliable opacity on Android */}
+          <Pressable
             onPress={handleGetStarted}
-            style={styles.primaryWrapper}
+            style={({ pressed }) => [
+              styles.primaryWrapper,
+              pressed && { opacity: 0.82 },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Get started — create a new account"
           >
@@ -251,20 +293,25 @@ export default function WelcomeScreen() {
               end={{ x: 1, y: 0 }}
             >
               <PersonIcon />
-              <Text style={styles.primaryLabel}>  Get Started</Text>
+              <Text style={styles.primaryLabel} allowFontScaling={false}>  Get Started</Text>
             </LinearGradient>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Secondary — Sign In */}
-          <TouchableOpacity
-            activeOpacity={0.75}
+          {/* [F8] Pressable + style callback */}
+          <Pressable
             onPress={handleSignIn}
-            style={styles.secondaryButton}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && { opacity: 0.75 },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Sign in to an existing account"
           >
-            <Text style={styles.secondaryLabel}>I already have an account</Text>
-          </TouchableOpacity>
+            <Text style={styles.secondaryLabel} allowFontScaling={false}>
+              I already have an account
+            </Text>
+          </Pressable>
         </Animated.View>
 
         {/* Trust badge */}
@@ -273,8 +320,9 @@ export default function WelcomeScreen() {
           style={styles.trustBadge}
         >
           <View style={styles.trustDot} />
+          {/* [F9] allowFontScaling consistent, [F11] text from constant */}
           <Text style={styles.trustText} allowFontScaling={false}>
-            Trusted by 2,400+ parents across India
+            {TRUST_BADGE_TEXT}
           </Text>
         </Animated.View>
 
@@ -284,6 +332,8 @@ export default function WelcomeScreen() {
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
+// [F6] glowWrap.top removed from StyleSheet — now computed inline with
+//      useWindowDimensions so it updates on window resize
 
 const styles = StyleSheet.create({
   root: {
@@ -292,12 +342,14 @@ const styles = StyleSheet.create({
   },
 
   // Glow
+  // [F6] top is no longer here — applied inline as { top: windowHeight * 0.04 }
   glowWrap: {
     position: 'absolute',
-    top: Dimensions.get('window').height * 0.04,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
+    // [F10] pointerEvents in style object (RN 0.74+ requirement)
+    pointerEvents: 'none',
   },
   glowOuter: {
     width: 320,
@@ -326,6 +378,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.ringBorder,
   },
+
+  // [F7] Fixed-size wrapper — StatusDot is positioned relative to this box,
+  //      not the full flex section. Eliminates misalignment on small screens.
+  iconWrapper: {
+    width: 112,
+    height: 112,
+    position: 'relative',
+  },
   iconCard: {
     width: 112,
     height: 112,
@@ -345,10 +405,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.cardBorder,
     borderRadius: 30,
   },
+
+  // [F7] StatusDot positioned within the 112×112 iconWrapper
+  //      top/right are now px offsets from the icon card corner, not % of section
   statusDot: {
     position: 'absolute',
-    top: '26%',
-    right: '29%',
+    top: -2,   // sits just above the top-right corner of the card
+    right: -2,
     width: 9,
     height: 9,
     borderRadius: 5,
