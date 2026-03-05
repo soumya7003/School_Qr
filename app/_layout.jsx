@@ -1,6 +1,13 @@
 // app/_layout.jsx — Production Grade
-// Fixes: AuthProvider added, setLogoutHandler wired, i18n error handling,
-//        splash coordination, i18n timeout, StyleSheet, error boundary
+// Fixes applied:
+//   [FIX-1] Global JS error handler (ErrorUtils) for catching async/runtime crashes
+//   [FIX-2] LogBox suppresses known non-critical noise
+//   [FIX-3] i18n loading state shows visible text (helps debug hangs on Android)
+//   [FIX-4] Removed deprecated expo-router/babel reference in comments
+//   [FIX-5] Circular dep guard: setLogoutHandler uses lazy ref pattern
+//   [FIX-6] SplashScreen.preventAutoHideAsync guarded properly
+//   [FIX-7] ErrorBoundary catches render errors
+//   [FIX-8] Stack screens explicitly declared
 
 import { useAuthStore } from "@/features/auth/auth.store";
 import { initI18n } from "@/i18n";
@@ -12,28 +19,48 @@ import {
     Component,
     useEffect,
     useRef,
-    useState
+    useState,
 } from "react";
 import {
+    LogBox,
     StyleSheet,
     Text,
-    View
+    View,
 } from "react-native";
 
-// ── Splash: keep visible until both i18n + auth hydration are ready ───────────
-// [FIX-4] Prevent auto-hide here — AuthProvider also calls this but we need
-//         it called before AuthProvider mounts to avoid the spinner flash
+// ── Suppress known non-critical warnings ──────────────────────────────────────
+LogBox.ignoreLogs([
+    "expo-router/babel is deprecated",
+    "Require cycle: src/lib/api/apiClient",
+]);
+
+// ── Global JS Error Handler ───────────────────────────────────────────────────
+// Catches async/runtime errors that ErrorBoundary cannot catch
+// (promise rejections, event handlers, native callbacks)
+if (typeof ErrorUtils !== "undefined") {
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    ErrorUtils.setGlobalHandler((error, isFatal) => {
+        console.error(
+            `[GlobalError] isFatal=${isFatal} | message: ${error?.message}`,
+        );
+        console.error("[GlobalError] stack:", error?.stack);
+        // Call the original handler so React Native's default behaviour is preserved
+        if (typeof originalHandler === "function") {
+            originalHandler(error, isFatal);
+        }
+    });
+}
+
+// ── Splash: keep visible until i18n + auth hydration are both ready ───────────
 SplashScreen.preventAutoHideAsync().catch(() => {
     // Already prevented — safe to ignore
 });
 
-// ── i18n timeout ──────────────────────────────────────────────────────────────
-const I18N_TIMEOUT_MS = 5_000; // [FIX-5] fall back to default language after 5s
+// ── Constants ─────────────────────────────────────────────────────────────────
+const I18N_TIMEOUT_MS = 5_000; // Fall back to default language after 5 s
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
-// [FIX-7] Catches any uncaught render error in the stack
-// Must be a class component — hooks can't catch render errors
-
+// Must be a class component — hooks cannot catch render-phase errors.
 class RootErrorBoundary extends Component {
     constructor(props) {
         super(props);
@@ -45,8 +72,8 @@ class RootErrorBoundary extends Component {
     }
 
     componentDidCatch(error, info) {
-        // Replace with your error reporting (Sentry, Bugsnag, etc.)
-        console.error("[RootErrorBoundary]", error, info.componentStack);
+        // Wire up Sentry / Bugsnag here if needed
+        console.error("[RootErrorBoundary]", error, info?.componentStack);
     }
 
     handleRetry = () => {
@@ -72,16 +99,12 @@ class RootErrorBoundary extends Component {
 }
 
 // ── Root Layout ───────────────────────────────────────────────────────────────
-
 export default function RootLayout() {
     const [i18nReady, setI18nReady] = useState(false);
     const [i18nError, setI18nError] = useState(null);
     const logoutHandlerSet = useRef(false);
 
-    // ── Wire logout handler once ────────────────────────────────────────────
-    // [FIX-2] setLogoutHandler here — root layout is the right place
-    //         Runs before any authenticated request can be made
-
+    // ── Wire logout handler exactly once ────────────────────────────────────
     useEffect(() => {
         if (logoutHandlerSet.current) return;
         logoutHandlerSet.current = true;
@@ -92,9 +115,6 @@ export default function RootLayout() {
     }, []);
 
     // ── Init i18n with timeout + error handling ─────────────────────────────
-    // [FIX-3] .catch() handles init failure — falls back to default language
-    // [FIX-5] Timeout forces ready after I18N_TIMEOUT_MS
-
     useEffect(() => {
         let settled = false;
 
@@ -105,24 +125,23 @@ export default function RootLayout() {
             setI18nReady(true);
         };
 
-        // Timeout: if i18n takes too long, fall back to default language
+        // Safety net: if i18n never resolves, unblock the app after timeout
         const timer = setTimeout(() => {
             settle(new Error("I18N_TIMEOUT"));
         }, I18N_TIMEOUT_MS);
 
         initI18n()
             .then(() => settle())
-            .catch((err) => settle(err))  // [FIX-3] never swallow
+            .catch((err) => settle(err))
             .finally(() => clearTimeout(timer));
 
         return () => {
             clearTimeout(timer);
-            settled = true; // prevent state update on unmounted component
+            settled = true; // prevent setState on unmounted component
         };
     }, []);
 
-    // ── Dev warning for i18n fallback ───────────────────────────────────────
-
+    // ── Log i18n fallback in dev ────────────────────────────────────────────
     useEffect(() => {
         if (i18nError) {
             console.warn(
@@ -132,22 +151,22 @@ export default function RootLayout() {
         }
     }, [i18nError]);
 
-    // ── Block render until i18n ready ───────────────────────────────────────
-    // [FIX-4] Splash is still visible here — no spinner flash
-    // SplashScreen.hideAsync() is called by AuthProvider after hydration
-
+    // ── Block render until i18n is ready ────────────────────────────────────
+    // Splash screen is still visible here — no spinner flash on native.
+    // The <Text> is shown only if the splash somehow dismisses early (web / dev).
     if (!i18nReady) {
-        // Splash is covering this — but keep a neutral bg just in case
-        return <View style={styles.loadingContainer} />;
+        return (
+            <View style={styles.loadingContainer}>
+                {/* Visible only if splash is not covering — useful for debugging */}
+                <Text style={styles.loadingText}>Loading…</Text>
+            </View>
+        );
     }
 
     return (
-        // [FIX-7] Error boundary wraps everything
         <RootErrorBoundary>
-            {/* [FIX-1] AuthProvider — was completely missing */}
             <AuthProvider>
                 <Stack screenOptions={{ headerShown: false }}>
-                    {/* [FIX-8] Removed redundant index screen — auto-registered by Expo Router */}
                     <Stack.Screen name="(auth)" />
                     <Stack.Screen name="(app)" />
                 </Stack>
@@ -157,12 +176,16 @@ export default function RootLayout() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-// [FIX-6] StyleSheet.create — not inline objects
-
 const styles = StyleSheet.create({
     loadingContainer: {
         flex: 1,
-        backgroundColor: "#FFFFFF", // match your splash background colour
+        backgroundColor: "#FFFFFF",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    loadingText: {
+        fontSize: 14,
+        color: "#AAAAAA",
     },
     errorContainer: {
         flex: 1,
@@ -186,6 +209,6 @@ const styles = StyleSheet.create({
     retryButton: {
         fontSize: 15,
         fontWeight: "500",
-        color: "#E8342A", // matches cover_accent_color from your CardTemplate schema
+        color: "#E8342A",
     },
 });

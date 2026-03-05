@@ -35,6 +35,7 @@ import { Path, Svg } from "react-native-svg";
 
 import { authApi } from "@/features/auth/auth.api";
 import { useAuthStore } from "@/features/auth/auth.store";
+import { registrationApi } from "@/features/profile/profile.api";
 
 // ── Constants ───────────────────────────────────
 const OTP_LENGTH = 6;
@@ -169,11 +170,23 @@ export default function OtpScreen() {
   const rawPhone = (params.phone || "").replace(/[^\d+\s-]/g, "").trim();
   const mode = params.mode === "login" ? "login" : "register";
 
+  // Registration-only params — nonce links OTP verify to the card + phone from init
+  // nonce is a 64-char hex string, never stored to disk, used once then discarded
+  const nonce = typeof params.nonce === "string" ? params.nonce.trim() : null;
+  const maskedPhone = typeof params.maskedPhone === "string" ? params.maskedPhone : null;
+  // cardNumber needed for resend in register mode — re-calls initRegistration to get new nonce
+  const cardNumber = typeof params.cardNumber === "string" ? params.cardNumber.trim() : null;
+
   useEffect(() => {
     if (!rawPhone || !PHONE_REGEX.test(rawPhone)) {
       router.replace("/(auth)/login");
     }
-  }, [rawPhone]);
+    // Guard: if register mode but no nonce, someone navigated here directly
+    // Redirect to register screen so they go through init again
+    if (mode === "register" && !nonce) {
+      router.replace({ pathname: "/(auth)/login", params: { mode: "register" } });
+    }
+  }, [rawPhone, mode, nonce]);
 
   // ── Dynamic box size ──
   const boxSize = useMemo(
@@ -188,6 +201,10 @@ export default function OtpScreen() {
   const [verified, setVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRefs = useRef([]);
+
+  // activeNonce: starts from router params, gets replaced on each resend
+  // Never stored to disk — lives only in component state for this session
+  const [activeNonce, setActiveNonce] = useState(nonce);
 
   // ── Resend timer state (single source of truth) ──
   const [resendDeadline, setResendDeadline] = useState(
@@ -290,18 +307,51 @@ export default function OtpScreen() {
 
     try {
       const code = otp.join("");
-      const response = await authApi.verifyOtp({ phone: rawPhone, otp: code });
 
-      await loginSuccess(response.user, response.accessToken, response.refreshToken);
-      setVerified(true);
-      // AuthProvider handles navigation
+      if (mode === "register") {
+        // ── Registration verify ───────────────────────────────────────────
+        // POST /parent/auth/register/verify { nonce, otp }
+        // nonce was passed from login.jsx via router params — never stored to disk
+        // Backend: validates nonce + OTP → creates student shell → ISSUED token → returns JWT
+        const response = await registrationApi.verifyRegistration({ nonce: activeNonce, otp: code });
+
+        // jwt from registration is a signed JWT with sub=parent_id, type="parent"
+        // loginSuccess decodes exp, stores tokens in SecureStore, sets isAuthenticated=true
+        // Note: registration returns a single jwt (not accessToken/refreshToken pair)
+        // We use it as the access token; refresh will be issued on first /auth/refresh call
+        await loginSuccess(
+          { id: response.data.student_id, phone: rawPhone },
+          response.data.jwt,
+          response.data.jwt, // temporary: use same token until first refresh
+        );
+
+        setVerified(true);
+
+        // Small delay for verified animation to show before navigation
+        setTimeout(() => {
+          router.replace("/(app)/updates");
+        }, 800);
+
+      } else {
+        // ── Login verify ──────────────────────────────────────────────────
+        // POST /auth/verify-otp { phone, otp }
+        const response = await authApi.verifyOtp({ phone: rawPhone, otp: code });
+
+        await loginSuccess(
+          { id: response.parent.id, phone: rawPhone },
+          response.accessToken,
+          response.refreshToken,
+        );
+        setVerified(true);
+        // AuthProvider handles navigation for login flow
+      }
     } catch {
       setError(true);
       triggerShake();
     } finally {
       setIsSubmitting(false);
     }
-  }, [otp, isFilled, verified, isSubmitting, rawPhone, loginSuccess, triggerShake]);
+  }, [otp, isFilled, verified, isSubmitting, rawPhone, mode, activeNonce, loginSuccess, triggerShake]);
 
   // ── Resend (single handler for all triggers) ──
   const handleResend = useCallback(async () => {
@@ -314,13 +364,24 @@ export default function OtpScreen() {
     setActive(0);
 
     try {
-      await authApi.resendOtp({ phone: rawPhone });
+      if (mode === "register" && cardNumber) {
+        // Re-call initRegistration to get a fresh nonce + new OTP
+        // Old nonce becomes invalid on backend once new one is issued
+        const response = await registrationApi.initRegistration({
+          card_number: cardNumber,
+          phone: rawPhone,
+        });
+        // Update activeNonce — old one is now stale
+        setActiveNonce(response.data.nonce);
+      } else {
+        await authApi.resendOtp({ phone: rawPhone });
+      }
     } catch {
-      // silent — timer already reset
+      // Silent — timer already reset, user can try again
     }
 
     setTimeout(() => inputRefs.current[0]?.focus(), 100);
-  }, [canResend, rawPhone]);
+  }, [canResend, rawPhone, mode, cardNumber]);
 
   // ── Button press ──
   const onPressIn = () => {

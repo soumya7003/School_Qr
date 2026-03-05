@@ -1,9 +1,7 @@
 // auth.api.js — Production Grade
-// Fixes applied:
-//   [F4]  refreshToken uses attemptTokenRefresh from tokenRefresh.js
-//   [F9]  requestOtp / resendOtp validate cardNumber, not phone
-//         (parent enters card number → backend resolves phone)
-//   [F15] validateSession distinguishes NETWORK_ERROR from auth failure
+// Updated: card-number flow replaced with phone-based flow
+// to match backend POST /auth/send-otp → { phone }
+//                  POST /auth/verify-otp → { phone, otp }
 
 import { apiClient, ApiError } from "@/lib/api/apiClient";
 import { attemptTokenRefresh } from "@/lib/api/tokenRefresh";
@@ -12,31 +10,26 @@ import * as Device from "expo-device";
 
 // ── Validators ────────────────────────────────────────────────────────────────
 
-// [F9] Card number format — alphanumeric + hyphens, 6–20 chars.
-//      Adjust this regex if your Card.card_number format differs.
-const CARD_RE = /^[A-Z0-9\-]{6,20}$/;
+// E.164 / loose international format — matches backend z.regex(/^\+?[1-9]\d{9,14}$/)
+const PHONE_RE = /^\+?[1-9]\d{9,14}$/;
 
-// OTP: exactly 6 digits (matches OtpLog.max_attempts default and MSG91 length)
+// OTP: exactly 6 digits
 const OTP_RE = /^\d{6}$/;
 
-// E.164 Indian mobile — still used for verifyOtp payload
-const PHONE_RE = /^(\+91)?[6-9]\d{9}$/;
-
 const validators = {
-  // [F9] Step 1 payload: cardNumber, not phone.
-  //      Backend maps: Card → Token → Student → ParentStudent → ParentUser.phone
-  cardPayload: (p) =>
+  // Step 1 payload: { phone }
+  phonePayload: (p) =>
     p !== null &&
     typeof p === "object" &&
-    typeof p.cardNumber === "string" &&
-    CARD_RE.test(p.cardNumber.trim().toUpperCase()),
+    typeof p.phone === "string" &&
+    PHONE_RE.test(p.phone.trim()),
 
-  // Step 2 payload: otp + cardNumber (sessionId handled by server via cardNumber)
+  // Step 2 payload: { phone, otp }
   verifyPayload: (p) =>
     p !== null &&
     typeof p === "object" &&
-    typeof p.cardNumber === "string" &&
-    CARD_RE.test(p.cardNumber.trim().toUpperCase()) &&
+    typeof p.phone === "string" &&
+    PHONE_RE.test(p.phone.trim()) &&
     typeof p.otp === "string" &&
     OTP_RE.test(p.otp),
 
@@ -44,17 +37,19 @@ const validators = {
 
   otpResponse: (d) => d?.success === true,
 
+  // Backend wraps tokens inside { success, message, data: { ... } }
+  // We validate the unwrapped `data` object, not the envelope.
   verifyResponse: (d) =>
     typeof d?.accessToken === "string" &&
     d.accessToken.trim().length > 0 &&
     typeof d?.refreshToken === "string" &&
     d.refreshToken.trim().length > 0 &&
-    typeof d?.expiresAt === "number" &&
-    d.expiresAt > 0 &&
-    d?.user !== null &&
-    typeof d?.user === "object" &&
-    typeof d?.user?.id === "string" &&
-    d.user.id.trim().length > 0,
+    ((d?.user !== null &&
+      typeof d?.user?.id === "string" &&
+      d.user.id.trim().length > 0) ||
+      (d?.parent !== null &&
+        typeof d?.parent?.id === "string" &&
+        d.parent.id.trim().length > 0)),
 
   refreshResponse: (d) =>
     typeof d?.accessToken === "string" &&
@@ -118,38 +113,36 @@ async function request({
 
 export const authApi = Object.freeze({
   /**
-   * Step 1 — Parent enters QR card number, backend resolves phone and sends OTP.
-   * [F9] Payload is { cardNumber }, NOT { phone }.
-   *      Backend: Card.card_number → Token → Student → ParentStudent
-   *               → ParentUser.phone → OtpLog (hashed, 10min TTL)
+   * Step 1 — Send OTP to phone number.
+   * Backend: validates phone → generates OTP → stores hash in Redis → sends SMS.
    *
-   * @param {{ cardNumber: string }} payload
-   * @returns {{ success: boolean, maskedContact: string, sessionId: string }}
+   * @param {{ phone: string }} payload  e.g. { phone: "+919999999999" }
+   * @returns {{ success: boolean, isNewUser: boolean, message: string }}
    */
   async requestOtp(payload) {
-    if (!validators.cardPayload(payload)) {
-      throw new ApiError("INVALID_PAYLOAD_CARD_NUMBER", null, null);
+    if (!validators.phonePayload(payload)) {
+      throw new ApiError("INVALID_PAYLOAD_PHONE", null, null);
     }
-    // Normalise to uppercase before sending
     return request({
-      url: "/auth/request-otp",
-      payload: { cardNumber: payload.cardNumber.trim().toUpperCase() },
+      url: "/auth/send-otp",
+      payload: { phone: payload.phone.trim() },
       errorCode: "OTP_REQUEST_FAILED",
       validate: validators.otpResponse,
     });
   },
 
   /**
-   * Resend OTP — backend sets old OtpLog.invalidated=true, creates new OtpLog.
-   * [F9] Same card-number-based payload as requestOtp.
+   * Resend OTP — backend resets Redis key and sends fresh OTP.
+   *
+   * @param {{ phone: string }} payload
    */
   async resendOtp(payload) {
-    if (!validators.cardPayload(payload)) {
-      throw new ApiError("INVALID_PAYLOAD_CARD_NUMBER", null, null);
+    if (!validators.phonePayload(payload)) {
+      throw new ApiError("INVALID_PAYLOAD_PHONE", null, null);
     }
     return request({
       url: "/auth/resend-otp",
-      payload: { cardNumber: payload.cardNumber.trim().toUpperCase() },
+      payload: { phone: payload.phone.trim() },
       errorCode: "OTP_RESEND_FAILED",
       validate: validators.otpResponse,
     });
@@ -157,32 +150,33 @@ export const authApi = Object.freeze({
 
   /**
    * Step 2 — Verify OTP.
-   * Backend checks OtpLog (hash, attempts, expiry, !invalidated)
-   * → creates Session → returns JWT pair + ParentUser data.
+   * Backend: checks Redis hash → creates/finds ParentUser → returns JWT pair.
    *
-   * @param {{ cardNumber: string, otp: string }} payload
+   * @param {{ phone: string, otp: string }} payload
    * @returns {{ accessToken, refreshToken, expiresAt, user }}
    */
   async verifyOtp(payload) {
     if (!validators.verifyPayload(payload)) {
       throw new ApiError("INVALID_PAYLOAD_OTP", null, null);
     }
-    return request({
+    const envelope = await request({
       url: "/auth/verify-otp",
       payload: {
-        cardNumber: payload.cardNumber.trim().toUpperCase(),
+        phone: payload.phone.trim(),
         otp: payload.otp,
       },
       errorCode: "OTP_VERIFICATION_FAILED",
-      validate: validators.verifyResponse,
+      // Validate the unwrapped data, not the envelope
+      validate: (res) => validators.verifyResponse(res?.data),
     });
+    // Return the inner data so callers get { accessToken, refreshToken, parent, isNewUser }
+    return envelope.data;
   },
 
   /**
    * Token refresh.
-   * [F4] Delegates to the shared attemptTokenRefresh() in tokenRefresh.js.
-   *      This eliminates the duplicate implementation in apiClient.js.
-   *      Returns new access token string (already persisted to SecureStore).
+   * Delegates to the shared attemptTokenRefresh() in tokenRefresh.js.
+   * Returns new access token string (already persisted to SecureStore).
    */
   async refreshToken() {
     return attemptTokenRefresh();
@@ -214,7 +208,7 @@ export const authApi = Object.freeze({
 
   /**
    * Validate current session server-side.
-   * [F15] Now distinguishes network errors from auth failure:
+   * Distinguishes network errors from auth failure:
    *   - Network error: rethrows so caller can show "no connection" UI
    *   - Auth error (401/403): returns false — session is genuinely invalid
    */
@@ -227,20 +221,18 @@ export const authApi = Object.freeze({
       });
       return data?.valid === true;
     } catch (error) {
-      // [F15] Network errors are not auth failures — let caller decide
       if (
         error?.code === "NETWORK_ERROR" ||
         error?.code === "REQUEST_TIMEOUT"
       ) {
         throw error;
       }
-      return false; // 401, 403, etc. → session is invalid
+      return false;
     }
   },
 
   /**
-   * Revoke all sessions — used when card is lost/stolen.
-   * Maps to CARD_BLOCK OtpPurpose in OtpLog schema.
+   * Revoke all sessions.
    * Caller can pass an AbortSignal to allow cancel UI.
    */
   async revokeAllSessions({ signal } = {}) {
