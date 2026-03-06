@@ -374,7 +374,7 @@ export default function LoginScreen() {
       } else {
         // ── Login flow ────────────────────────────────────────────────────
         // POST /auth/send-otp → OTP sent, no nonce needed
-        await authApi.requestOtp({ phone });
+        await authApi.sendOtp(phone);
 
         router.push({
           pathname: '/(auth)/otp',

@@ -1,69 +1,66 @@
-// apiClient.js — Production Grade
-// Fixes applied:
-//   [F4]  attemptTokenRefresh moved to tokenRefresh.js — no duplication
-//   [F8]  activeControllers cleaned up on ALL error paths, not just some
-//   [F11] _lastRefreshFailAt cooldown prevents double-refresh after proactive
-//         refresh failure + subsequent 401
+/**
+ * lib/api/apiClient.js
+ *
+ * Two clients:
+ *   authClient  — no interceptors, used for /auth/refresh (avoids recursive loop)
+ *   apiClient   — full interceptors, used for all protected routes
+ *
+ * Request interceptor:
+ *   1. Attaches X-Request-ID for tracing
+ *   2. Attaches AbortController for cancellation
+ *   3. Proactively refreshes token if < 5 min from expiry
+ *   4. Attaches Authorization: Bearer <token>
+ *
+ * Response interceptor:
+ *   1. Cleans up AbortController on success AND all error paths
+ *   2. On 401: refresh once → retry original request → logout if refresh fails
+ *   3. On 502/503/504: exponential backoff retry (max 2 retries)
+ *   4. Refresh failure cooldown: prevents double-refresh within 5 seconds
+ */
 
 import { storage } from "@/lib/storage/storage";
 import axios from "axios";
 import * as Crypto from "expo-crypto";
-import { attemptTokenRefresh } from "./tokenRefresh";
+import { refreshAccessToken } from "./tokenRefresh";
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+if (!BASE_URL) {
+  throw new Error("EXPO_PUBLIC_API_BASE_URL is not set. Check your .env file.");
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-if (!API_BASE_URL) {
-  throw new Error(
-    "EXPO_PUBLIC_API_BASE_URL is not defined. Check your .env file.",
-  );
-}
-
-const TIMEOUTS = Object.freeze({
-  DEFAULT: 15_000,
-  AUTH: 10_000,
-  UPLOAD: 60_000,
-});
-
+const TIMEOUTS = Object.freeze({ DEFAULT: 15_000, AUTH: 10_000 });
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 300;
+const COOLDOWN_MS = 5_000; // gap between refresh attempts
 
-// ── [F11] Refresh failure cooldown ────────────────────────────────────────────
-// If a proactive refresh in the request interceptor fails, and the server then
-// returns 401, the response interceptor would attempt another refresh immediately.
-// This cooldown prevents that double-attempt within 5 seconds.
-
-let _lastRefreshFailAt = 0;
-const REFRESH_COOLDOWN_MS = 5_000;
-
-// ── Typed Errors ──────────────────────────────────────────────────────────────
+// ── Typed error ───────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
-  constructor(code, status = null, originalError = null) {
+  constructor(code, status = null, original = null) {
     super(code);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
-    this.originalError = originalError;
+    this.original = original;
   }
 }
 
-export const ApiErrorCode = Object.freeze({
-  REQUEST_SETUP_FAILED: "REQUEST_SETUP_FAILED",
-  REQUEST_TIMEOUT: "REQUEST_TIMEOUT",
-  NETWORK_ERROR: "NETWORK_ERROR",
+export const ApiCode = Object.freeze({
+  SETUP_FAILED: "REQUEST_SETUP_FAILED",
+  TIMEOUT: "REQUEST_TIMEOUT",
+  NETWORK: "NETWORK_ERROR",
   SESSION_EXPIRED: "SESSION_EXPIRED",
-  REFRESH_QUEUE_TIMEOUT: "REFRESH_QUEUE_TIMEOUT",
-  SERVER_ERROR: "SERVER_ERROR",
+  QUEUE_TIMEOUT: "REFRESH_QUEUE_TIMEOUT",
+  CANCELLED: "REQUEST_CANCELLED",
 });
 
 // ── Auth client — isolated, no interceptors ───────────────────────────────────
-// Used only for token refresh. Never use apiClient for /auth/refresh —
-// it would trigger the response interceptor recursively.
 
 export const authClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: BASE_URL,
   timeout: TIMEOUTS.AUTH,
   headers: { "Content-Type": "application/json", Accept: "application/json" },
 });
@@ -71,74 +68,78 @@ export const authClient = axios.create({
 // ── Main client ───────────────────────────────────────────────────────────────
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: BASE_URL,
   timeout: TIMEOUTS.DEFAULT,
   headers: { "Content-Type": "application/json", Accept: "application/json" },
 });
 
-// ── Cancellation ──────────────────────────────────────────────────────────────
+// ── Request cancellation ──────────────────────────────────────────────────────
 
-const activeControllers = new Map();
+const controllers = new Map(); // reqId → AbortController
 
 export const cancelAllRequests = () => {
-  activeControllers.forEach((c) => c.abort());
-  activeControllers.clear();
+  controllers.forEach((c) => c.abort());
+  controllers.clear();
 };
 
-// [F8] Centralised cleanup — call from BOTH success and error paths
 const cleanupController = (reqId) => {
-  if (reqId) activeControllers.delete(reqId);
+  if (reqId) controllers.delete(reqId);
 };
 
 // ── Refresh state ─────────────────────────────────────────────────────────────
+// Single in-flight refresh with subscriber queue for concurrent 401s.
 
-const refreshState = (() => {
-  let _isRefreshing = false;
+const refresh = (() => {
+  let _active = false;
   let _subscribers = [];
+  let _lastFailAt = 0;
 
   return {
-    get isRefreshing() {
-      return _isRefreshing;
+    get active() {
+      return _active;
+    },
+    get recentlyFailed() {
+      return Date.now() - _lastFailAt < COOLDOWN_MS;
     },
 
     begin() {
-      _isRefreshing = true;
+      _active = true;
     },
 
-    resolve(newToken) {
-      _subscribers.forEach(({ resolve, timerId }) => {
-        clearTimeout(timerId);
-        resolve(newToken);
+    resolve(token) {
+      _subscribers.forEach(({ resolve: res, timer }) => {
+        clearTimeout(timer);
+        res(token);
       });
       _subscribers = [];
-      _isRefreshing = false;
+      _active = false;
     },
 
     reject(err) {
-      _subscribers.forEach(({ reject: rej, timerId }) => {
-        clearTimeout(timerId);
+      _subscribers.forEach(({ reject: rej, timer }) => {
+        clearTimeout(timer);
         rej(err);
       });
       _subscribers = [];
-      _isRefreshing = false;
-      // [F11] Record failure time for cooldown check
-      _lastRefreshFailAt = Date.now();
+      _active = false;
+      _lastFailAt = Date.now();
     },
 
-    waitForToken(timeoutMs = 10_000) {
-      return new Promise((resolve, reject) => {
-        const timerId = setTimeout(() => {
-          reject(new ApiError(ApiErrorCode.REFRESH_QUEUE_TIMEOUT, 401));
-        }, timeoutMs);
-        _subscribers.push({ resolve, reject, timerId });
+    enqueue(timeoutMs = 10_000) {
+      return new Promise((res, rej) => {
+        const timer = setTimeout(
+          () => rej(new ApiError(ApiCode.QUEUE_TIMEOUT, 401)),
+          timeoutMs,
+        );
+        _subscribers.push({ resolve: res, reject: rej, timer });
       });
     },
   };
 })();
 
-// ── Logout callback — decoupled from store ────────────────────────────────────
-// Register with: setLogoutHandler(() => useAuthStore.getState().logout())
-// Called in app root after store is initialised.
+// ── Logout callback ───────────────────────────────────────────────────────────
+// Registered from root _layout.jsx after store is initialised.
+// Decouples apiClient from the Zustand store.
 
 let _onLogout = null;
 export const setLogoutHandler = (fn) => {
@@ -146,159 +147,133 @@ export const setLogoutHandler = (fn) => {
 };
 
 const triggerLogout = async () => {
-  try {
-    await storage.clearTokens();
-  } catch {
-    /* best-effort */
-  }
+  await storage.clearAuth().catch(() => {});
   _onLogout?.();
 };
 
-// ── Retry helper ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const isRetryable = (status) => [502, 503, 504].includes(status);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const isRetryable = (status) => [502, 503, 504].includes(status);
 
-// ── Request Interceptor ───────────────────────────────────────────────────────
+// ── Request interceptor ───────────────────────────────────────────────────────
 
 apiClient.interceptors.request.use(
   async (config) => {
-    // Unique request ID for tracing and controller cleanup
+    // Unique request ID for tracing
     try {
       config.headers["X-Request-ID"] = Crypto.randomUUID();
     } catch {
-      config.headers["X-Request-ID"] = `fallback-${Date.now()}`;
+      config.headers["X-Request-ID"] = `fb-${Date.now()}`;
     }
 
     // Attach AbortController
     const controller = new AbortController();
     config.signal = controller.signal;
-    activeControllers.set(config.headers["X-Request-ID"], controller);
+    controllers.set(config.headers["X-Request-ID"], controller);
 
     try {
-      const needsRefresh = await storage.shouldRefresh();
+      const needsRefresh = await storage.shouldProactivelyRefresh();
 
-      if (needsRefresh) {
-        // [F11] Skip proactive refresh if one just failed — avoid thrash
-        const recentlyFailed =
-          Date.now() - _lastRefreshFailAt < REFRESH_COOLDOWN_MS;
-
-        if (!recentlyFailed && !refreshState.isRefreshing) {
-          refreshState.begin();
+      if (needsRefresh && !refresh.recentlyFailed) {
+        if (!refresh.active) {
+          refresh.begin();
           try {
-            const newToken = await attemptTokenRefresh(); // [F4] shared impl
-            refreshState.resolve(newToken);
+            const token = await refreshAccessToken();
+            refresh.resolve(token);
           } catch (err) {
-            refreshState.reject(err); // sets _lastRefreshFailAt
+            refresh.reject(err);
+            // Fall through — request proceeds, 401 handler will handle it
           }
-        } else if (refreshState.isRefreshing) {
-          await refreshState.waitForToken();
+        } else {
+          await refresh.enqueue(); // wait for in-flight refresh
         }
-        // If recentlyFailed && !isRefreshing: fall through, send request
-        // without refreshing — the 401 response handler will sort it out
       }
 
       const token = await storage.getAccessToken();
       if (token) config.headers.Authorization = `Bearer ${token}`;
     } catch {
-      // Fail open — let request proceed, 401 handler will catch it
+      // Fail open — let request go, 401 response handler will catch it
     }
 
     return config;
   },
-  (error) =>
-    Promise.reject(
-      new ApiError(ApiErrorCode.REQUEST_SETUP_FAILED, null, error),
-    ),
+  (err) => Promise.reject(new ApiError(ApiCode.SETUP_FAILED, null, err)),
 );
 
-// ── Response Interceptor ──────────────────────────────────────────────────────
+// ── Response interceptor ──────────────────────────────────────────────────────
 
 apiClient.interceptors.response.use(
-  (response) => {
-    // [F8] Cleanup on success
-    cleanupController(response.config?.headers?.["X-Request-ID"]);
-    return response;
+  (res) => {
+    cleanupController(res.config?.headers?.["X-Request-ID"]);
+    return res;
   },
 
-  async (error) => {
-    const originalRequest = error.config;
-    const reqId = originalRequest?.headers?.["X-Request-ID"];
+  async (err) => {
+    const req = err.config;
+    const reqId = req?.headers?.["X-Request-ID"];
 
-    // [F8] Cleanup on EVERY error path — was missing for non-401/non-5xx errors
+    // Always clean up AbortController regardless of error type
     cleanupController(reqId);
 
-    if (axios.isCancel(error)) {
-      return Promise.reject(new ApiError("REQUEST_CANCELLED", null, error));
-    }
+    if (axios.isCancel(err))
+      return Promise.reject(new ApiError(ApiCode.CANCELLED, null, err));
 
-    if (error.code === "ECONNABORTED") {
-      return Promise.reject(
-        new ApiError(ApiErrorCode.REQUEST_TIMEOUT, null, error),
-      );
-    }
+    if (err.code === "ECONNABORTED")
+      return Promise.reject(new ApiError(ApiCode.TIMEOUT, null, err));
 
-    if (!error.response) {
-      return Promise.reject(
-        new ApiError(ApiErrorCode.NETWORK_ERROR, null, error),
-      );
-    }
+    if (!err.response)
+      return Promise.reject(new ApiError(ApiCode.NETWORK, null, err));
 
-    const { status } = error.response;
+    const { status } = err.response;
 
-    // ── 401 — Refresh + retry ─────────────────────────────────────────────────
-    if (status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    // ── 401: Refresh + retry ──────────────────────────────────────────────────
+    if (status === 401 && !req._retry) {
+      req._retry = true;
 
-      // [F11] If refresh just failed, don't retry — go straight to logout
-      if (Date.now() - _lastRefreshFailAt < REFRESH_COOLDOWN_MS) {
+      // If refresh just failed → don't try again, logout immediately
+      if (refresh.recentlyFailed) {
         await triggerLogout();
-        return Promise.reject(
-          new ApiError(ApiErrorCode.SESSION_EXPIRED, 401, error),
-        );
+        return Promise.reject(new ApiError(ApiCode.SESSION_EXPIRED, 401, err));
       }
 
-      if (refreshState.isRefreshing) {
+      // Another request is already refreshing — queue up
+      if (refresh.active) {
         try {
-          const newToken = await refreshState.waitForToken();
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return apiClient(originalRequest);
+          const token = await refresh.enqueue();
+          req.headers.Authorization = `Bearer ${token}`;
+          return apiClient(req);
         } catch {
           return Promise.reject(
-            new ApiError(ApiErrorCode.SESSION_EXPIRED, 401, error),
+            new ApiError(ApiCode.SESSION_EXPIRED, 401, err),
           );
         }
       }
 
-      refreshState.begin();
-
+      // This request leads the refresh
+      refresh.begin();
       try {
-        const newToken = await attemptTokenRefresh(); // [F4] shared impl
-
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        const retryResponse = await apiClient(originalRequest);
-
-        refreshState.resolve(newToken);
-        return retryResponse;
+        const token = await refreshAccessToken();
+        req.headers.Authorization = `Bearer ${token}`;
+        const retried = await apiClient(req);
+        refresh.resolve(token);
+        return retried;
       } catch {
-        refreshState.reject(new ApiError(ApiErrorCode.SESSION_EXPIRED, 401));
+        refresh.reject(new ApiError(ApiCode.SESSION_EXPIRED, 401));
         await triggerLogout();
-        return Promise.reject(
-          new ApiError(ApiErrorCode.SESSION_EXPIRED, 401, error),
-        );
+        return Promise.reject(new ApiError(ApiCode.SESSION_EXPIRED, 401, err));
       }
     }
 
-    // ── 5xx — Retry with exponential backoff ──────────────────────────────────
+    // ── 502/503/504: Exponential backoff retry ────────────────────────────────
     if (isRetryable(status)) {
-      originalRequest._retryCount = (originalRequest._retryCount ?? 0) + 1;
-      if (originalRequest._retryCount <= MAX_RETRIES) {
-        const delay = RETRY_BASE_MS * 2 ** (originalRequest._retryCount - 1);
-        await wait(delay);
-        return apiClient(originalRequest);
+      req._retryCount = (req._retryCount ?? 0) + 1;
+      if (req._retryCount <= MAX_RETRIES) {
+        await wait(RETRY_BASE_MS * 2 ** (req._retryCount - 1));
+        return apiClient(req);
       }
     }
 
-    return Promise.reject(new ApiError(`HTTP_${status}`, status, error));
+    return Promise.reject(new ApiError(`HTTP_${status}`, status, err));
   },
 );

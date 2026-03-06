@@ -16,7 +16,7 @@ export default function AppLayout() {
         {/* ── Visible tab bar screens ── */}
         <Tabs.Screen name="home" />
         <Tabs.Screen name="qr" />
-        <Tabs.Screen name="scan" />
+        <Tabs.Screen name="emergency" />
         <Tabs.Screen name="updates" />
         <Tabs.Screen name="settings" />
 

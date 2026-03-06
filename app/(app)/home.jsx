@@ -501,16 +501,18 @@ function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay }) {
 export default function HomeScreen() {
   const router = useRouter();
   const { parentUser } = useAuthStore();
-  const {
-    student,
-    school,
-    token,
-    card,
-    emergencyProfile,
-    contacts,
-    recentScans,
-    anomalies,
-  } = useProfileStore();
+  const activeStudent = useProfileStore(
+    (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null
+  );
+
+  const student = activeStudent;
+  const school = activeStudent?.school ?? null;
+  const token = activeStudent?.token ?? null;
+  const card = token?.card_number ? { card_number: token.card_number } : null;
+  const emergencyProfile = activeStudent?.emergency ?? null;
+  const contacts = activeStudent?.emergency?.contacts ?? [];
+  const recentScans = [];
+  const anomalies = [];
 
   const lastScan = recentScans?.[0] ?? null;
   const totalScans = recentScans?.length ?? 0;
