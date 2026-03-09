@@ -1,19 +1,20 @@
 /**
  * @file app/(auth)/login.jsx
- * @description Auth screen — SchoolQR Guardian
+ * @description Auth screen — RESQID
+ *
+ * Refactored: All custom SVG icon components replaced with @expo/vector-icons
+ *             (Feather + MaterialCommunityIcons). CornerAccent kept as SVG
+ *             (geometric decoration, no icon equivalent).
  *
  * Modes:
  *   ?mode=register  →  "Link your child's card" (card + mobile)
  *   ?mode=login     →  "Welcome back" (mobile only)
- *
- * API wiring:
- *   - Calls authApi.requestOtp({ phone: "+91XXXXXXXXXX" }) on submit
- *   - Passes phone + mode to OTP screen via router params
- *   - Shows inline error messages from API failures
  */
 
+import { Login_C as C, ERROR_MESSAGES } from '@/constants/constants';
 import { authApi } from '@/features/auth/auth.api';
 import { registrationApi } from '@/features/profile/profile.api';
+import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -28,7 +29,7 @@ import {
   Text,
   TextInput,
   TouchableWithoutFeedback,
-  View
+  View,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -43,64 +44,11 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Circle, Path, Svg } from 'react-native-svg';
 
-// ─── Tokens ────────────────────────────────────────────────────────────────────
 
-const C = {
-  bg: '#0D0D0F',
-  bgDeep: '#120909',
-  surface: '#131315',
-  red: '#FF3B30',
-  redDark: '#C8211A',
-  redSubtle: 'rgba(255,59,48,0.09)',
-  redBorder: 'rgba(255,59,48,0.35)',
-  white: '#FFFFFF',
-  white90: 'rgba(255,255,255,0.90)',
-  white60: 'rgba(255,255,255,0.60)',
-  white40: 'rgba(255,255,255,0.40)',
-  white10: 'rgba(255,255,255,0.10)',
-  white06: 'rgba(255,255,255,0.06)',
-  white03: 'rgba(255,255,255,0.03)',
-  muted: 'rgba(255,255,255,0.42)',
-  dim: 'rgba(255,255,255,0.22)',
-  border: 'rgba(255,255,255,0.07)',
-  inputBorder: 'rgba(255,255,255,0.10)',
-  focusBorder: 'rgba(255,59,48,0.55)',
-  inputBg: 'rgba(255,255,255,0.04)',
-  green: '#2ECC71',
-};
+const getErrorMessage = (error) =>
+  ERROR_MESSAGES[error?.status] ?? ERROR_MESSAGES[error?.code] ?? ERROR_MESSAGES.DEFAULT;
 
-// ─── Error message map ─────────────────────────────────────────────────────────
-
-const ERROR_MESSAGES = {
-  // Login flow
-  INVALID_PAYLOAD_PHONE: 'Invalid phone number format.',
-  OTP_REQUEST_FAILED: 'Could not send OTP. Please try again.',
-  // Registration flow
-  INVALID_PAYLOAD_INIT: 'Check your card number and phone number.',
-  REGISTRATION_INIT_FAILED: 'Could not send OTP. Please try again.',
-  // HTTP status codes from backend (registration)
-  404: 'Card not found. Check the number printed on your card.',
-  409: 'This card is already registered. Try signing in instead.',
-  // Common
-  NETWORK_ERROR: 'No internet connection. Check your network and retry.',
-  REQUEST_TIMEOUT: 'Request timed out. Please try again.',
-  DEFAULT: 'Something went wrong. Please try again.',
-};
-
-const getErrorMessage = (error) => {
-  if (error?.status && ERROR_MESSAGES[error.status]) return ERROR_MESSAGES[error.status];
-  return ERROR_MESSAGES[error?.code] ?? ERROR_MESSAGES.DEFAULT;
-};
-
-// ─── Step Indicator ────────────────────────────────────────────────────────────
-
-const stepS = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.10)' },
-  dotActive: { backgroundColor: '#FF3B30', opacity: 0.5 },
-  dotCurrent: { backgroundColor: '#FF3B30', opacity: 1, width: 18, borderRadius: 3 },
-  label: { color: 'rgba(255,255,255,0.22)', fontSize: 11, marginLeft: 4, letterSpacing: 0.3 },
-});
+// ─── Step Indicator ───────────────────────────────────────────────────────────
 
 const StepIndicator = ({ step, total, label }) => (
   <View style={stepS.wrap}>
@@ -111,14 +59,22 @@ const StepIndicator = ({ step, total, label }) => (
   </View>
 );
 
-// ─── Corner Accent ─────────────────────────────────────────────────────────────
+const stepS = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.10)' },
+  dotActive: { backgroundColor: '#FF3B30', opacity: 0.5 },
+  dotCurrent: { backgroundColor: '#FF3B30', opacity: 1, width: 18, borderRadius: 3 },
+  label: { color: 'rgba(255,255,255,0.22)', fontSize: 11, marginLeft: 4, letterSpacing: 0.3 },
+});
+
+// ─── Corner Accent (kept as SVG — purely decorative geometry) ─────────────────
 
 const CornerAccent = ({ position }) => {
-  const isTopRight = position === 'topRight';
+  const isTR = position === 'topRight';
   return (
     <Svg width={40} height={40} viewBox="0 0 40 40" fill="none"
-      style={[s.cornerAccent, isTopRight ? s.cornerTR : s.cornerBL]}>
-      {isTopRight ? (
+      style={[s.cornerAccent, isTR ? s.cornerTR : s.cornerBL]}>
+      {isTR ? (
         <>
           <Path d="M40 0 L40 18" stroke={C.redBorder} strokeWidth="1" />
           <Path d="M40 0 L22 0" stroke={C.redBorder} strokeWidth="1" />
@@ -135,75 +91,7 @@ const CornerAccent = ({ position }) => {
   );
 };
 
-// ─── Icons ─────────────────────────────────────────────────────────────────────
-
-const BackIcon = () => (
-  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 12H5M5 12l7-7M5 12l7 7" stroke={C.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const PhoneIcon = ({ active }) => (
-  <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 013.09 4.18 2 2 0 015.08 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11l-1.27 1.27a16 16 0 006.29 6.29l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"
-      stroke={active ? C.red : C.white40} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-    />
-  </Svg>
-);
-
-const ArrowRightIcon = () => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Path d="M5 12h14M13 6l6 6-6 6" stroke={C.white} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const ShieldTinyIcon = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 2L4 6v5c0 5.4 3.4 10.4 8 12 4.6-1.6 8-6.6 8-12V6L12 2z"
-      stroke={C.green} strokeWidth="1.8" strokeLinejoin="round" fill="none" />
-    <Path d="M9 12l2 2 4-4" stroke={C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const CardIcon = ({ active }) => (
-  <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
-    <Path d="M2 7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V7z"
-      stroke={active ? C.red : C.white40} strokeWidth="1.8" />
-    <Path d="M2 10h20" stroke={active ? C.red : C.white40} strokeWidth="1.8" strokeLinecap="round" />
-    <Path d="M6 15h4" stroke={active ? C.red : C.white40} strokeWidth="1.8" strokeLinecap="round" />
-  </Svg>
-);
-
-const AlertIcon = () => (
-  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 9v4M12 17h.01" stroke={C.red} strokeWidth="2" strokeLinecap="round" />
-    <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-      stroke={C.red} strokeWidth="1.8" strokeLinejoin="round" />
-  </Svg>
-);
-
-// ─── Input Field ───────────────────────────────────────────────────────────────
-
-const inpS = StyleSheet.create({
-  wrapper: { gap: 7 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { color: 'rgba(255,255,255,0.40)', fontSize: 10.5, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  labelFocused: { color: '#FF3B30' },
-  hint: { color: 'rgba(255,255,255,0.22)', fontSize: 11, letterSpacing: 0.2 },
-  row: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: 14,
-    borderWidth: 1.2, paddingHorizontal: 14, height: 56,
-    backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.10)',
-  },
-  rowFocused: { borderColor: 'rgba(255,59,48,0.55)', backgroundColor: 'rgba(255,255,255,0.055)' },
-  rowError: { borderColor: 'rgba(255,59,48,0.55)', backgroundColor: 'rgba(255,59,48,0.05)' },
-  iconWrap: { marginRight: 10 },
-  prefix: { color: 'rgba(255,255,255,0.60)', fontSize: 15, fontWeight: '600', marginRight: 8 },
-  prefixDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.10)', marginRight: 12 },
-  field: { flex: 1, color: '#FFFFFF', fontSize: 15.5, fontWeight: '500', letterSpacing: 0.3 },
-  validDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ECC71', marginLeft: 8 },
-});
+// ─── Input Field ──────────────────────────────────────────────────────────────
 
 function AppInput({ label, hint, value, onChangeText, placeholder, keyboardType, icon, prefix, maxLength, hasError, autoCapitalize }) {
   const [focused, setFocused] = useState(false);
@@ -242,57 +130,58 @@ function AppInput({ label, hint, value, onChangeText, placeholder, keyboardType,
   );
 }
 
-// ─── Error Banner ──────────────────────────────────────────────────────────────
-
-const errS = StyleSheet.create({
-  banner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(255,59,48,0.10)', borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.30)', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12,
-  },
-  text: { flex: 1, color: '#FF3B30', fontSize: 13, lineHeight: 18, letterSpacing: 0.1 },
+const inpS = StyleSheet.create({
+  wrapper: { gap: 7 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  label: { color: 'rgba(255,255,255,0.40)', fontSize: 10.5, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
+  labelFocused: { color: '#FF3B30' },
+  hint: { color: 'rgba(255,255,255,0.22)', fontSize: 11, letterSpacing: 0.2 },
+  row: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1.2, paddingHorizontal: 14, height: 56, backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.10)' },
+  rowFocused: { borderColor: 'rgba(255,59,48,0.55)', backgroundColor: 'rgba(255,255,255,0.055)' },
+  rowError: { borderColor: 'rgba(255,59,48,0.55)', backgroundColor: 'rgba(255,59,48,0.05)' },
+  iconWrap: { marginRight: 10 },
+  prefix: { color: 'rgba(255,255,255,0.60)', fontSize: 15, fontWeight: '600', marginRight: 8 },
+  prefixDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.10)', marginRight: 12 },
+  field: { flex: 1, color: '#FFFFFF', fontSize: 15.5, fontWeight: '500', letterSpacing: 0.3 },
+  validDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ECC71', marginLeft: 8 },
 });
+
+// ─── Error Banner ─────────────────────────────────────────────────────────────
 
 function ErrorBanner({ message }) {
   if (!message) return null;
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={errS.banner}>
-      <AlertIcon />
+      {/* alert-triangle from Feather replaces custom AlertIcon SVG */}
+      <Feather name="alert-triangle" size={15} color={C.red} />
       <Text style={errS.text} allowFontScaling={false}>{message}</Text>
     </Animated.View>
   );
 }
 
-// ─── Security Note ─────────────────────────────────────────────────────────────
+const errS = StyleSheet.create({
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,59,48,0.10)', borderWidth: 1, borderColor: 'rgba(255,59,48,0.30)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  text: { flex: 1, color: '#FF3B30', fontSize: 13, lineHeight: 18, letterSpacing: 0.1 },
+});
+
+// ─── Security Note ────────────────────────────────────────────────────────────
+
+function SecurityNote() {
+  return (
+    <View style={secS.row}>
+      {/* shield from Feather replaces custom ShieldTinyIcon SVG */}
+      <Feather name="shield" size={13} color="rgba(46,204,113,0.7)" />
+      <Text style={secS.text} allowFontScaling={false}>Your data is encrypted and never shared</Text>
+    </View>
+  );
+}
 
 const secS = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 7, justifyContent: 'center', paddingTop: 4 },
   text: { color: 'rgba(46,204,113,0.55)', fontSize: 11.5, letterSpacing: 0.2 },
 });
 
-function SecurityNote() {
-  return (
-    <View style={secS.row}>
-      <ShieldTinyIcon />
-      <Text style={secS.text} allowFontScaling={false}>{'Your data is encrypted and never shared'}</Text>
-    </View>
-  );
-}
-
-// ── Card Number Tip ────────────────────────────────────────────────────────────
-
-const tipS = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 10,
-  },
-  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: C.red, marginTop: 5, flexShrink: 0 },
-  text: { flex: 1, color: 'rgba(255,255,255,0.38)', fontSize: 12, lineHeight: 18, letterSpacing: 0.1 },
-  highlight: { color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
-});
+// ─── Card Number Tip ──────────────────────────────────────────────────────────
 
 function CardNumberTip() {
   return (
@@ -308,7 +197,14 @@ function CardNumberTip() {
   );
 }
 
-// ─── LoginScreen ───────────────────────────────────────────────────────────────
+const tipS = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: C.red, marginTop: 5, flexShrink: 0 },
+  text: { flex: 1, color: 'rgba(255,255,255,0.38)', fontSize: 12, lineHeight: 18, letterSpacing: 0.1 },
+  highlight: { color: 'rgba(255,255,255,0.65)', fontWeight: '600' },
+});
+
+// ─── LoginScreen ──────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -324,15 +220,15 @@ export default function LoginScreen() {
   const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
 
   const cardValid = cardNumber.trim().length >= 4 && cardNumber.trim().length <= 64;
-  const canSubmit = isRegister
-    ? mobile.length === 10 && cardValid
-    : mobile.length === 10;
+  const canSubmit = isRegister ? mobile.length === 10 && cardValid : mobile.length === 10;
 
   const handleBack = useCallback(() => {
     router.canGoBack() ? router.back() : router.replace('/');
   }, []);
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  const switchMode = useCallback(() => {
+    router.replace({ pathname: '/(auth)/login', params: { mode: isRegister ? 'login' : 'register' } });
+  }, [isRegister]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || loading) return;
@@ -345,48 +241,34 @@ export default function LoginScreen() {
     );
 
     setLoading(true);
-
     try {
       const phone = `+91${mobile.trim()}`;
 
       if (isRegister) {
-        // ── Registration flow ─────────────────────────────────────────────
-        // POST /parent/auth/register/init → { nonce, masked_phone }
-        // nonce passed as router param — never stored to disk, never logged
         const response = await registrationApi.initRegistration({
           card_number: cardNumber.trim().toUpperCase(),
           phone,
         });
-
         router.push({
           pathname: '/(auth)/otp',
           params: {
             phone,
             mode: 'register',
-            // nonce is a 64-char hex string — safe to pass as URL param
-            // It is opaque to the client; only the backend can validate it
             nonce: response.data.nonce,
             maskedPhone: response.data.masked_phone,
-            // cardNumber needed by otp.jsx for resend (re-calls initRegistration)
             cardNumber: cardNumber.trim().toUpperCase(),
           },
         });
       } else {
-        // ── Login flow ────────────────────────────────────────────────────
-        // POST /auth/send-otp → OTP sent, no nonce needed
         await authApi.sendOtp(phone);
-
-        router.push({
-          pathname: '/(auth)/otp',
-          params: { phone, mode: 'login' },
-        });
+        router.push({ pathname: '/(auth)/otp', params: { phone, mode: 'login' } });
       }
     } catch (error) {
       setApiError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, [canSubmit, loading, mobile, cardNumber, mode, isRegister, btnScale]);
+  }, [canSubmit, loading, mobile, cardNumber, isRegister, btnScale]);
 
   return (
     <View style={s.root}>
@@ -415,13 +297,11 @@ export default function LoginScreen() {
             {/* Top nav */}
             <Animated.View entering={FadeIn.duration(400)} style={s.topNav}>
               <Pressable onPress={handleBack} style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]} accessibilityRole="button">
-                <BackIcon />
+                {/* chevron-left from Feather replaces custom BackIcon SVG */}
+                <Feather name="chevron-left" size={20} color={C.white} />
               </Pressable>
               <StepIndicator step={1} total={2} label="Enter mobile" />
-              <Pressable
-                onPress={() => router.replace({ pathname: '/(auth)/login', params: { mode: isRegister ? 'login' : 'register' } })}
-                style={({ pressed }) => [s.modePill, pressed && { opacity: 0.7 }]}
-              >
+              <Pressable onPress={switchMode} style={({ pressed }) => [s.modePill, pressed && { opacity: 0.7 }]}>
                 <Text style={s.modePillText} allowFontScaling={false}>{isRegister ? 'Sign In' : 'Register'}</Text>
               </Pressable>
             </Animated.View>
@@ -434,10 +314,10 @@ export default function LoginScreen() {
               </View>
               <Text style={s.title} allowFontScaling={false}>
                 {isRegister ? 'Create your\n' : 'Welcome\n'}
-                <Text style={s.titleAccent} allowFontScaling={false}>{isRegister ? 'account' : 'back'}</Text>
+                <Text style={s.titleAccent}>{isRegister ? 'account' : 'back'}</Text>
               </Text>
               <Text style={s.subtitle} allowFontScaling={false}>
-                {'Enter your registered mobile number to receive a one-time verification code.'}
+                Enter your registered mobile number to receive a one-time verification code.
               </Text>
             </Animated.View>
 
@@ -446,18 +326,15 @@ export default function LoginScreen() {
               <CornerAccent position="topRight" />
               <CornerAccent position="bottomLeft" />
 
-              {/* Card Number — register mode only */}
               {isRegister && (
                 <>
                   <AppInput
                     label="Card Number"
                     value={cardNumber}
-                    onChangeText={(t) => {
-                      setCardNumber(t.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 16));
-                      setApiError(null);
-                    }}
+                    onChangeText={(t) => { setCardNumber(t.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 16)); setApiError(null); }}
                     placeholder="RESQID-A4F9B2"
-                    icon={<CardIcon active={cardNumber.length > 0} />}
+                    // credit-card from Feather replaces custom CardIcon SVG
+                    icon={<Feather name="credit-card" size={17} color={cardNumber.length > 0 ? C.red : C.white40} />}
                     maxLength={16}
                     hasError={!!apiError}
                     autoCapitalize="characters"
@@ -473,16 +350,15 @@ export default function LoginScreen() {
                 onChangeText={(t) => { setMobile(t.replace(/\D/g, '').slice(0, 10)); setApiError(null); }}
                 placeholder="98765 43210"
                 keyboardType="phone-pad"
-                icon={<PhoneIcon active={mobile.length > 0} />}
+                // phone from Feather replaces custom PhoneIcon SVG
+                icon={<Feather name="phone" size={17} color={mobile.length > 0 ? C.red : C.white40} />}
                 prefix="+91"
                 maxLength={10}
                 hasError={!!apiError}
               />
 
-              {/* Inline API error */}
               <ErrorBanner message={apiError} />
 
-              {/* Submit */}
               <Animated.View style={btnStyle}>
                 <Pressable
                   onPress={handleSubmit}
@@ -499,7 +375,10 @@ export default function LoginScreen() {
                       {loading ? 'Sending OTP…' : 'Send OTP'}
                     </Text>
                     {canSubmit && !loading && (
-                      <View style={s.submitArrow}><ArrowRightIcon /></View>
+                      <View style={s.submitArrow}>
+                        {/* arrow-right from Feather replaces custom ArrowRightIcon SVG */}
+                        <Feather name="arrow-right" size={18} color={C.white} />
+                      </View>
                     )}
                   </LinearGradient>
                 </Pressable>
@@ -513,10 +392,7 @@ export default function LoginScreen() {
               <Text style={s.footerText} allowFontScaling={false}>
                 {isRegister ? 'Already have an account?' : "Don't have an account?"}
               </Text>
-              <Pressable
-                onPress={() => router.replace({ pathname: '/(auth)/login', params: { mode: isRegister ? 'login' : 'register' } })}
-                style={({ pressed }) => pressed && { opacity: 0.7 }}
-              >
+              <Pressable onPress={switchMode} style={({ pressed }) => pressed && { opacity: 0.7 }}>
                 <Text style={s.footerLink} allowFontScaling={false}>
                   {isRegister ? '  Sign In →' : '  Get Started →'}
                 </Text>
@@ -530,7 +406,7 @@ export default function LoginScreen() {
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },

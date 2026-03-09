@@ -53,10 +53,12 @@ export const useAuthStore = create((set, get) => {
 
       _hydrationPromise = (async () => {
         try {
-          const [hasSession, authState] = await Promise.all([
-            storage.hasValidSession(),
-            storage.readAuth(),
-          ]);
+          const authState = await storage.readAuth(); // single read
+          const hasSession = authState
+            ? authState.expiresAt - Math.floor(Date.now() / 1000) > 60 &&
+              !!authState.accessToken &&
+              !!authState.refreshToken
+            : false;
 
           set({
             isAuthenticated: hasSession,
@@ -156,6 +158,16 @@ export const useAuthStore = create((set, get) => {
       });
       _hydrationPromise = null;
     },
+
+    reset: () => {
+      set({
+        isAuthenticated: false,
+        isHydrated: false,
+        isNewUser: false,
+        parentUser: null,
+      });
+      _hydrationPromise = null;
+    },
   };
 });
 
@@ -164,7 +176,8 @@ export const useAuthStore = create((set, get) => {
 export const useIsAuthenticated = () => useAuthStore((s) => s.isAuthenticated);
 export const useIsHydrated = () => useAuthStore((s) => s.isHydrated);
 export const useIsNewUser = () => useAuthStore((s) => s.isNewUser);
-export const useParentUser = () => useAuthStore((s) => s.parentUser);
+export const useParentUserId = () =>
+  useAuthStore((s) => s.parentUser?.id ?? null);
 
 /** True when hydration is complete and ready to render screens. */
 export const useAuthReady = () => useAuthStore((s) => s.isHydrated);
