@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "expo": {
     "name": "safety-qr-app",
@@ -49,3 +50,61 @@
     }
   }
 }
+=======
+{
+  "expo": {
+    "name": "RESQID",
+    "slug": "safety-qr-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "safetyqrapp",
+    "icon": "./assets/images/app_icon.png",
+    "userInterfaceStyle": "automatic",
+
+    "updates": {
+      "enabled": false
+    },
+
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.animesh144.safetyqrapp"
+    },
+
+    "android": {
+      "package": "com.animesh144.safetyqrapp",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/app_icon.png",
+        "backgroundColor": "#1a1a1a"
+      },
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true
+    },
+
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/app_icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1a1a1a"
+        }
+      ],
+      "expo-font",
+      "expo-secure-store"
+    ],
+
+    "extra": {
+      "eas": {
+        "projectId": "8b193d0d-4f69-41d2-8e0e-59aeecc83565"
+      }
+    },
+
+    "owner": "optimas144"
+  }
+}
+>>>>>>> 2065c22146e4ebfa3f1df268c6bea2a07931993b

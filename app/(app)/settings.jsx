@@ -75,7 +75,7 @@ export default function SettingsScreen() {
                 { text: 'Cancel', style: 'cancel' },
                 {
                     text: 'Log Out', style: 'destructive',
-                    onPress: () => { logout(); router.replace('/(auth)/login'); }
+                    onPress: async () => { await logout(); router.replace('/(auth)/login'); }
                 },
             ]
         );
@@ -247,7 +247,7 @@ export default function SettingsScreen() {
                         <SettingsRow
                             icon={<IconPhone color={colors.warning} />} iconBg={colors.warningBg}
                             title="Change Phone Number" subtitle="OTP verification required"
-                            onPress={() => router.push('/(app)/change-phone')}
+                            onPress={() => Alert.alert('Coming Soon', 'Phone number change will be available in a future update.')}
                         />
                         <SettingsRow
                             icon={<IconInfo color={colors.info} />} iconBg={colors.infoBg}

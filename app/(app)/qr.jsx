@@ -1,35 +1,31 @@
 /**
- * QR Screen — Student card viewer + full card management for parents.
+ * QR Screen — Physical Card Manager
  *
- * Schema fields used:
- *   Token:  status (TokenStatus), expires_at, activated_at, revoked_at
- *   Card:   card_number, print_status, printed_at
- *   TokenStatus enum: UNASSIGNED | ISSUED | ACTIVE | INACTIVE | REVOKED | EXPIRED
- *   NotificationType: CARD_REVOKED, CARD_REPLACED (fired by backend on revoke/replace)
+ * No QR code shown — card is physical only.
+ * Shows card info, status, actions, and glossary.
  *
- * Card actions available to parent:
- *   ACTIVE   → Block Card (→ INACTIVE, reversible)  |  Report Lost (→ REVOKED, permanent)
- *   INACTIVE → Unblock Card (→ ACTIVE)              |  Report Lost (→ REVOKED, permanent)
- *   ISSUED   → Activate Card (→ ACTIVE)
- *   REVOKED  → Request Replacement (school contact)
- *   EXPIRED  → Request Replacement (school contact)
+ * Store shape fix applied:
+ *   uses s.students + s.activeStudentId (not flat keys)
+ *
+ * Token actions (block/unblock/revoke/activate) are
+ * stubbed as no-ops — wire to your API when ready.
  */
 
 import Screen from '@/components/common/Screen';
-import QrCard from '@/components/qr/QrCard';
-import { ShareIcon } from '@/components/ui/ShareIcon';
 import { useProfileStore } from '@/features/profile/profile.store';
+import { useScreenSecurity } from '@/hooks/useScreenSecurity';
 import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+    Alert,
     Modal,
     Pressable,
     Share,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import Animated, {
     FadeIn,
@@ -106,6 +102,21 @@ const IconInfo = ({ color = colors.textTertiary, size = 14 }) => (
     </Svg>
 );
 
+const IconShare = ({ color = colors.textSecondary, size = 18 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
+            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+
+const IconCard = ({ color = colors.primary, size = 28 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Rect x={1} y={4} width={22} height={16} rx={3} stroke={color} strokeWidth={1.8} />
+        <Path d="M1 10h22" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+        <Path d="M5 16h4M15 16h4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+);
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(iso) {
@@ -115,56 +126,96 @@ function fmtDate(iso) {
     });
 }
 
-/**
- * Token.status → visual meta for the status pill
- */
 function tokenMeta(status) {
     switch (status) {
-        case 'ACTIVE': return { label: 'Active', color: colors.success, bg: colors.successBg, desc: 'Card is working normally' };
-        case 'INACTIVE': return { label: 'Blocked', color: colors.warning, bg: colors.warningBg, desc: 'Scanning is temporarily paused' };
-        case 'ISSUED': return { label: 'Not Activated', color: colors.info, bg: colors.infoBg, desc: 'Tap Activate to enable this card' };
-        case 'REVOKED': return { label: 'Reported Lost', color: colors.primary, bg: colors.primaryBg, desc: 'Card is permanently disabled' };
-        case 'EXPIRED': return { label: 'Expired', color: colors.primary, bg: colors.primaryBg, desc: 'Request a replacement from school' };
-        case 'UNASSIGNED': return { label: 'Not Set Up', color: colors.textTertiary, bg: colors.surface3, desc: 'Contact school to set up this card' };
-        default: return { label: status ?? '—', color: colors.textTertiary, bg: colors.surface3, desc: '' };
+        case 'ACTIVE':
+            return { label: 'Active', color: colors.success, bg: colors.successBg, desc: 'Card is working normally', pulse: true };
+        case 'INACTIVE':
+            return { label: 'Blocked', color: colors.warning, bg: colors.warningBg, desc: 'Scanning is temporarily paused', pulse: false };
+        case 'ISSUED':
+            return { label: 'Not Activated', color: colors.info, bg: colors.infoBg, desc: 'Tap Activate to enable this card', pulse: false };
+        case 'REVOKED':
+            return { label: 'Reported Lost', color: colors.primary, bg: colors.primaryBg, desc: 'Card is permanently disabled', pulse: false };
+        case 'EXPIRED':
+            return { label: 'Expired', color: colors.primary, bg: colors.primaryBg, desc: 'Request a replacement from school', pulse: false };
+        case 'UNASSIGNED':
+            return { label: 'Not Set Up', color: colors.textTertiary, bg: colors.surface3, desc: 'Contact school to set up this card', pulse: false };
+        default:
+            return { label: status ?? '—', color: colors.textTertiary, bg: colors.surface3, desc: '', pulse: false };
     }
 }
 
-/**
- * Card.print_status → label
- */
-function printStatusLabel(s) {
-    if (s === 'PRINTED') return '✓ Printed';
-    if (s === 'PENDING') return 'Awaiting print';
-    if (s === 'SHIPPED') return 'On the way';
-    return s ?? '—';
+// ─── Physical Card Banner ─────────────────────────────────────────────────────
+// Replaces QrCard — no QR stored in backend, card is physical PDF only
+
+function PhysicalCardBanner({ student, token, card }) {
+    const isExpiringSoon = token?.expires_at &&
+        (new Date(token.expires_at) - new Date()) < 30 * 24 * 60 * 60 * 1000;
+
+    const meta = tokenMeta(token?.status ?? 'UNASSIGNED');
+
+    return (
+        <View style={styles.physicalCard}>
+            {/* Status accent line at top */}
+            <View style={[styles.physicalCardAccent, { backgroundColor: meta.color }]} />
+
+            <View style={styles.physicalCardInner}>
+                {/* Card icon */}
+                <View style={[styles.physicalCardIconWrap, { backgroundColor: `${meta.color}15` }]}>
+                    <IconCard color={meta.color} size={26} />
+                </View>
+
+                {/* Info */}
+                <View style={{ flex: 1, gap: spacing[1.5] }}>
+                    <Text style={styles.physicalCardTitle}>
+                        {student?.first_name
+                            ? `${student.first_name}'s Emergency Card`
+                            : 'Emergency Card'}
+                    </Text>
+                    <Text style={styles.physicalCardNumber}>
+                        {card?.card_number ?? '—'}
+                    </Text>
+                    {token?.expires_at && (
+                        <Text style={[
+                            styles.physicalCardExpiry,
+                            isExpiringSoon && { color: colors.warning },
+                        ]}>
+                            Valid until {fmtDate(token.expires_at)}
+                            {isExpiringSoon ? '  ⚠ Expiring soon' : ''}
+                        </Text>
+                    )}
+                </View>
+            </View>
+
+            {/* Info note */}
+            <View style={styles.physicalCardNote}>
+                <IconInfo color={colors.textTertiary} size={13} />
+                <Text style={styles.physicalCardNoteText}>
+                    Your child carries this card physically. First responders scan it to instantly view emergency info — no app needed.
+                </Text>
+            </View>
+        </View>
+    );
 }
 
-// ─── Confirm modal ────────────────────────────────────────────────────────────
-// Used for destructive actions — block and report lost
+// ─── Confirm Modal ────────────────────────────────────────────────────────────
 
 function ConfirmModal({ visible, title, body, confirmLabel, confirmColor = colors.primary, onConfirm, onCancel, icon, warning }) {
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
             <Pressable style={styles.modalOverlay} onPress={onCancel}>
-                <Animated.View entering={FadeInUp.duration(300)} style={styles.modalSheet}>
-                    {/* Icon */}
+                <Animated.View entering={FadeInUp.duration(280)} style={styles.modalSheet}>
                     <View style={[styles.modalIconWrap, { backgroundColor: `${confirmColor}15` }]}>
                         {icon}
                     </View>
-
                     <Text style={styles.modalTitle}>{title}</Text>
                     <Text style={styles.modalBody}>{body}</Text>
-
-                    {/* Warning note */}
                     {warning && (
                         <View style={styles.modalWarning}>
                             <IconAlertTriangle color={colors.warning} size={14} />
                             <Text style={styles.modalWarningText}>{warning}</Text>
                         </View>
                     )}
-
-                    {/* Actions */}
                     <View style={styles.modalActions}>
                         <TouchableOpacity style={styles.modalCancelBtn} onPress={onCancel} activeOpacity={0.7}>
                             <Text style={styles.modalCancelText}>Cancel</Text>
@@ -183,7 +234,7 @@ function ConfirmModal({ visible, title, body, confirmLabel, confirmColor = color
     );
 }
 
-// ─── Action button ────────────────────────────────────────────────────────────
+// ─── Action Button ────────────────────────────────────────────────────────────
 
 function ActionBtn({ icon, label, sublabel, onPress, color, bg, border, disabled }) {
     return (
@@ -208,7 +259,7 @@ function ActionBtn({ icon, label, sublabel, onPress, color, bg, border, disabled
     );
 }
 
-// ─── Card detail row ──────────────────────────────────────────────────────────
+// ─── Detail Row ───────────────────────────────────────────────────────────────
 
 function DetailRow({ label, value, valueColor, last }) {
     return (
@@ -222,62 +273,77 @@ function DetailRow({ label, value, valueColor, last }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function QrScreen() {
+    useScreenSecurity()
     const router = useRouter();
-    const { student, emergencyProfile, token, card, blockCard, unblockCard, revokeCard, activateCard } = useProfileStore();
+
+    // ── Fixed store access (uses students array, not flat keys) ──────
+    const activeStudent = useProfileStore(
+        (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null
+    );
+
+    const student = activeStudent;
+    const token = activeStudent?.token ?? null;
+    const card = token?.card_number ? { card_number: token.card_number } : null;
+    const emergencyProfile = activeStudent?.emergency ?? null;
+
+    // Card actions — not yet wired to API, show informative alert until backend ready
+    const _cardActionNotReady = (action) => Alert.alert(
+        'Not Available Yet',
+        `Card ${action} will be available once connected to your backend. Wire this to profileApi when ready.`,
+        [{ text: 'OK' }]
+    );
+    const blockCard = () => _cardActionNotReady('block');
+    const unblockCard = () => _cardActionNotReady('unblock');
+    const revokeCard = () => _cardActionNotReady('revoke');
+    const activateCard = () => _cardActionNotReady('activate');
 
     const status = token?.status ?? 'UNASSIGNED';
     const meta = tokenMeta(status);
 
-    // Modal states
+    // ── Modal states ─────────────────────────────────────────────────
     const [showBlockConfirm, setShowBlockConfirm] = useState(false);
     const [showUnblockConfirm, setShowUnblockConfirm] = useState(false);
     const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
     const [showActivateConfirm, setShowActivateConfirm] = useState(false);
-    const [actionDone, setActionDone] = useState(null); // 'blocked'|'unblocked'|'revoked'|'activated'
+    const [actionDone, setActionDone] = useState(null);
 
     // ── Action handlers ──────────────────────────────────────────────
-
     const doBlock = async () => {
         setShowBlockConfirm(false);
-        await blockCard?.();              // sets Token.status = INACTIVE
+        await blockCard?.();
         setActionDone('blocked');
         setTimeout(() => setActionDone(null), 3000);
     };
 
     const doUnblock = async () => {
         setShowUnblockConfirm(false);
-        await unblockCard?.();            // sets Token.status = ACTIVE
+        await unblockCard?.();
         setActionDone('unblocked');
         setTimeout(() => setActionDone(null), 3000);
     };
 
     const doRevoke = async () => {
         setShowRevokeConfirm(false);
-        await revokeCard?.();             // sets Token.status = REVOKED, fires CARD_REVOKED notification
+        await revokeCard?.();
         setActionDone('revoked');
     };
 
     const doActivate = async () => {
         setShowActivateConfirm(false);
-        await activateCard?.();           // sets Token.status = ACTIVE
+        await activateCard?.();
         setActionDone('activated');
         setTimeout(() => setActionDone(null), 3000);
     };
 
     const handleShare = async () => {
         await Share.share({
-            message: `${student?.first_name ?? 'Child'}'s emergency card — scan in case of emergency. Card: ${card?.card_number ?? token?.token_hash ?? ''}`,
+            message: `${student?.first_name ?? 'Child'}'s emergency card — Card No: ${card?.card_number ?? '—'}. Scan in case of emergency.`,
         });
     };
 
-    const handleRequestReplacement = () => {
-        router.push('/(app)/support');
-    };
-
-    // ── Actions to show based on current Token.status ────────────────
+    // ── Actions by status ────────────────────────────────────────────
     const renderActions = () => {
         switch (status) {
-
             case 'ACTIVE':
                 return (
                     <>
@@ -358,7 +424,7 @@ export default function QrScreen() {
                             color={colors.info}
                             bg={colors.infoBg}
                             border="rgba(59,130,246,0.25)"
-                            onPress={handleRequestReplacement}
+                            onPress={() => router.push('/(app)/support')}
                         />
                         <ActionBtn
                             icon={<IconPhone color={colors.textSecondary} size={16} />}
@@ -384,7 +450,7 @@ export default function QrScreen() {
         }
     };
 
-    // ── Toast feedback bar ───────────────────────────────────────────
+    // ── Toast ────────────────────────────────────────────────────────
     const toastMeta = {
         blocked: { label: 'Card blocked — scanning is paused', color: colors.warning, bg: colors.warningBg },
         unblocked: { label: 'Card unblocked — scanning is active', color: colors.success, bg: colors.successBg },
@@ -408,7 +474,6 @@ export default function QrScreen() {
                 onConfirm={doBlock}
                 onCancel={() => setShowBlockConfirm(false)}
             />
-
             <ConfirmModal
                 visible={showUnblockConfirm}
                 title="Unblock This Card?"
@@ -419,7 +484,6 @@ export default function QrScreen() {
                 onConfirm={doUnblock}
                 onCancel={() => setShowUnblockConfirm(false)}
             />
-
             <ConfirmModal
                 visible={showRevokeConfirm}
                 title="Report Card as Lost?"
@@ -431,7 +495,6 @@ export default function QrScreen() {
                 onConfirm={doRevoke}
                 onCancel={() => setShowRevokeConfirm(false)}
             />
-
             <ConfirmModal
                 visible={showActivateConfirm}
                 title="Activate This Card?"
@@ -451,14 +514,16 @@ export default function QrScreen() {
                         <Text style={styles.pageTitle}>
                             {student?.first_name ? `${student.first_name}'s Card` : 'Emergency Card'}
                         </Text>
-                        <Text style={styles.pageSubtitle}>Manage and share your child's QR card</Text>
+                        <Text style={styles.pageSubtitle}>
+                            Manage your child's physical emergency card
+                        </Text>
                     </View>
                     <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.7}>
-                        <ShareIcon />
+                        <IconShare color={colors.textSecondary} size={17} />
                     </TouchableOpacity>
                 </Animated.View>
 
-                {/* ── Action feedback toast ── */}
+                {/* ── Toast ── */}
                 {toast && (
                     <Animated.View
                         entering={FadeInDown.duration(300)}
@@ -478,12 +543,12 @@ export default function QrScreen() {
                     <Text style={styles.statusDesc}>{meta.desc}</Text>
                 </Animated.View>
 
-                {/* ── QR Card ── */}
+                {/* ── Physical card banner (replaces QrCard) ── */}
                 <Animated.View entering={FadeIn.delay(80).duration(500)}>
-                    <QrCard
+                    <PhysicalCardBanner
                         student={student}
                         token={token}
-                        emergencyProfile={emergencyProfile}
+                        card={card}
                     />
                 </Animated.View>
 
@@ -495,13 +560,27 @@ export default function QrScreen() {
                     </View>
                 </Animated.View>
 
-                {/* ── Card details strip ── */}
+                {/* ── Card details ── */}
                 <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.detailsCard}>
                     <Text style={styles.sectionLabel}>Card Details</Text>
                     <View style={styles.detailsBlock}>
                         <DetailRow
                             label="Card Number"
                             value={card?.card_number ?? '—'}
+                        />
+                        <DetailRow
+                            label="Student"
+                            value={[student?.first_name, student?.last_name].filter(Boolean).join(' ') || '—'}
+                        />
+                        <DetailRow
+                            label="Class"
+                            value={student?.class
+                                ? `${student.class}${student?.section ? `-${student.section}` : ''}`
+                                : '—'}
+                        />
+                        <DetailRow
+                            label="School"
+                            value={student?.school?.name ?? '—'}
                         />
                         <DetailRow
                             label="Valid Until"
@@ -513,12 +592,9 @@ export default function QrScreen() {
                             }
                         />
                         <DetailRow
-                            label="Activated On"
-                            value={fmtDate(token?.activated_at)}
-                        />
-                        <DetailRow
-                            label="Print Status"
-                            value={printStatusLabel(card?.print_status)}
+                            label="Card Status"
+                            value={meta.label}
+                            valueColor={meta.color}
                             last
                         />
                     </View>
@@ -528,7 +604,7 @@ export default function QrScreen() {
                 <Animated.View entering={FadeInDown.delay(240).duration(400)} style={styles.safetyTip}>
                     <IconShield color={colors.success} size={14} />
                     <Text style={styles.safetyTipText}>
-                        🔒  This QR code is unique to your child. Only share with trusted school staff or emergency services.
+                        🔒  This card is unique to your child. The QR on the physical card links directly to their emergency profile — keep it safe.
                     </Text>
                 </Animated.View>
 
@@ -538,7 +614,7 @@ export default function QrScreen() {
                     {[
                         { label: 'Active', desc: 'Card works normally. Emergency info shows when scanned.', color: colors.success },
                         { label: 'Blocked', desc: 'Temporarily paused by you. Unblock at any time.', color: colors.warning },
-                        { label: 'Lost/Revoked', desc: 'Permanently disabled. Request a replacement from school.', color: colors.primary },
+                        { label: 'Lost / Revoked', desc: 'Permanently disabled. Request a replacement from school.', color: colors.primary },
                         { label: 'Expired', desc: 'Card past its valid date. Request renewal from school.', color: colors.primary },
                     ].map((g, i) => (
                         <View key={i} style={[styles.glossaryRow, i < 3 && styles.glossaryRowBorder]}>
@@ -635,6 +711,63 @@ const styles = StyleSheet.create({
         flex: 1,
     },
 
+    // ── Physical card banner ──────────────────────────────────────────
+    physicalCard: {
+        backgroundColor: colors.surface,
+        borderRadius: radius.cardSm,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
+    },
+    physicalCardAccent: {
+        height: 3,
+        width: '100%',
+    },
+    physicalCardInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[4],
+        padding: spacing[4],
+    },
+    physicalCardIconWrap: {
+        width: 56,
+        height: 56,
+        borderRadius: radius.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    physicalCardTitle: {
+        ...typography.labelLg,
+        color: colors.textPrimary,
+        fontWeight: '700',
+    },
+    physicalCardNumber: {
+        ...typography.mono,
+        color: colors.textSecondary,
+        fontSize: 13,
+        letterSpacing: 0.5,
+    },
+    physicalCardExpiry: {
+        ...typography.labelXs,
+        color: colors.textTertiary,
+    },
+    physicalCardNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing[2],
+        backgroundColor: colors.surface3,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        padding: spacing[3],
+    },
+    physicalCardNoteText: {
+        ...typography.labelXs,
+        color: colors.textTertiary,
+        flex: 1,
+        lineHeight: 17,
+    },
+
     // ── Section label ─────────────────────────────────────────────────
     sectionLabel: {
         ...typography.overline,
@@ -688,7 +821,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primaryBg,
         borderRadius: radius.cardSm,
         borderWidth: 1,
-        borderColor: `rgba(232,52,42,0.2)`,
+        borderColor: 'rgba(232,52,42,0.2)',
         padding: spacing[3.5],
     },
     revokedNoticeText: {
@@ -728,6 +861,8 @@ const styles = StyleSheet.create({
         ...typography.labelMd,
         color: colors.textPrimary,
         fontWeight: '600',
+        maxWidth: '55%',
+        textAlign: 'right',
     },
 
     // ── Safety tip ────────────────────────────────────────────────────
@@ -738,7 +873,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.successBg,
         borderRadius: radius.cardSm,
         borderWidth: 1,
-        borderColor: `rgba(22,163,74,0.2)`,
+        borderColor: 'rgba(22,163,74,0.2)',
         padding: spacing[3.5],
     },
     safetyTipText: {
@@ -783,7 +918,7 @@ const styles = StyleSheet.create({
     glossaryLabel: {
         ...typography.labelSm,
         fontWeight: '700',
-        width: 88,
+        width: 96,
         flexShrink: 0,
     },
     glossaryDesc: {
@@ -793,7 +928,7 @@ const styles = StyleSheet.create({
         lineHeight: 16,
     },
 
-    // ── Confirm modal ─────────────────────────────────────────────────
+    // ── Modal ─────────────────────────────────────────────────────────
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -837,7 +972,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.warningBg,
         borderRadius: radius.cardSm,
         borderWidth: 1,
-        borderColor: `rgba(245,158,11,0.25)`,
+        borderColor: 'rgba(245,158,11,0.25)',
         padding: spacing[3],
         width: '100%',
     },

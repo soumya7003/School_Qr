@@ -1,0 +1,13 @@
+1. Certificate Pinning — add react-native-ssl-pinning. Without it, a MITM attack on a compromised network can intercept tokens even over HTTPS.
+2. Device Fingerprint on Refresh — send a device ID with every /auth/refresh call. Backend should reject refresh tokens used from an unrecognised device. Right now a stolen refresh token works from anywhere.
+3. Jailbreak/Root Detection — add react-native-device-info checks. On a rooted device, SecureStore's OS-level protections can be bypassed entirely.
+4. Refresh Token Rotation — your backend currently returns only a new access token on refresh. Proper rotation means issuing a new refresh token too and invalidating the old one. Stolen refresh tokens then have a very short window.
+5. Biometric Re-auth for Sensitive Actions — block/revoke card, revokeAllSessions, update emergency contacts should require a FaceID/fingerprint confirmation via expo-local-authentication.
+6. Rate Limiting Awareness on Frontend — if the backend rate-limits OTP requests, the frontend should handle the 429 gracefully and show a cooldown timer rather than letting users spam resend.
+7. Token Binding / Device Registration — register the device on first login (updateDeviceToken exists but isn't enforced). Backend should whitelist known device tokens and reject sessions from unregistered devices.
+8. Logout on Uninstall — SecureStore data can persist after uninstall on Android. On first boot, detect a "fresh install" state and force-clear any stale tokens before hydration.
+
+Lower priority but worth it:
+
+1. Obfuscation / Code Protection — use Hermes + ProGuard on Android. Decompiling the JS bundle can expose your API base URL and endpoint paths.
+2. Audit Logging Hook — add a silent call on login, logout, and token refresh so the backend can flag unusual patterns (login from new country, 10 refreshes in an hour, etc.).
