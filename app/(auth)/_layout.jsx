@@ -1,19 +1,3 @@
-<<<<<<< HEAD
-import { Stack } from "expo-router";
-
-export default function Layout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: "#0D0D0F" },
-      }}
-    >
-      <Stack.Screen name="login" />
-      <Stack.Screen name="otp" />
-    </Stack>
-  );
-=======
 /**
  * app/(auth)/_layout.jsx
  * Inside Expo Router tree — Redirect works correctly here.
@@ -40,5 +24,4 @@ export default function AuthLayout() {
       <Stack.Screen name="otp" />
     </Stack>
   );
->>>>>>> 2065c22146e4ebfa3f1df268c6bea2a07931993b
 }
