@@ -9,7 +9,7 @@ import { useProfileStore } from '@/features/profile/profile.store';
 import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
@@ -210,14 +210,22 @@ export default function VisibilityScreen() {
     // EmergencyProfile.visibility — default PUBLIC per schema
     const [selected, setSelected] = useState(emergencyProfile?.visibility ?? 'PUBLIC');
     const [saved, setSaved] = useState(false);
+    const [saving, setSaving] = useState(false);
 
-    const handleSave = () => {
-        updateVisibility(selected);
-        setSaved(true);
-        setTimeout(() => {
-            setSaved(false);
-            router.back();
-        }, 1200);
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await updateVisibility(selected);
+            setSaved(true);
+            setTimeout(() => {
+                setSaved(false);
+                router.back();
+            }, 1200);
+        } catch {
+            Alert.alert('Save Failed', 'Could not update visibility. Please try again.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const current = VISIBILITY_OPTIONS.find(o => o.value === selected);
@@ -268,15 +276,17 @@ export default function VisibilityScreen() {
                             styles.saveBtn,
                             saved && styles.saveBtnDone,
                             { borderColor: current?.accentColor ?? colors.primary },
+                            saving && { opacity: 0.6 },
                         ]}
                         onPress={handleSave}
                         activeOpacity={0.8}
+                        disabled={saving}
                     >
                         <Text style={[
                             styles.saveBtnText,
                             saved && { color: colors.success },
                         ]}>
-                            {saved ? '✓ Saved' : `Save — ${current?.label}`}
+                            {saving ? 'Saving…' : saved ? '✓ Saved' : `Save — ${current?.label}`}
                         </Text>
                     </TouchableOpacity>
                 </Animated.View>

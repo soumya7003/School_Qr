@@ -13,6 +13,7 @@ import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -274,9 +275,16 @@ function EmptyState() {
 
 export default function ScanHistoryScreen() {
     const router = useRouter();
-    const { recentScans, anomalies } = useProfileStore();
+    const { recentScans, anomalies, fetchIfStale } = useProfileStore();
 
     const [activeFilter, setActiveFilter] = useState('All');
+    const [refreshing, setRefreshing] = useState(false);
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try { await fetchIfStale(); } catch { /* ignore */ }
+        finally { setRefreshing(false); }
+    };
 
     const scans = recentScans ?? [];
     const allAnomalies = anomalies ?? [];
@@ -320,6 +328,14 @@ export default function ScanHistoryScreen() {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scroll}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        tintColor={colors.primary}
+                        colors={[colors.primary]}
+                    />
+                }
             >
                 {/* Stats row */}
                 <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.statsRow}>

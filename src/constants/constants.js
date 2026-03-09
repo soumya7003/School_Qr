@@ -103,3 +103,23 @@ export const ERROR_MESSAGES = {
   REQUEST_TIMEOUT: "Request timed out. Please try again.",
   DEFAULT: "Something went wrong. Please try again.",
 };
+
+export const SUSPICIOUS_PATHS_ANDROID = [
+  "/system/app/Superuser.apk",
+  "/sbin/su",
+  "/system/bin/su",
+  "/system/xbin/su",
+  "/data/local/xbin/su",
+  "/su/bin/su",
+];
+
+export const ApiCode = Object.freeze({
+  SETUP_FAILED: "REQUEST_SETUP_FAILED",
+  TIMEOUT: "REQUEST_TIMEOUT",
+  NETWORK: "NETWORK_ERROR",
+  OFFLINE: "DEVICE_OFFLINE",
+  SESSION_EXPIRED: "SESSION_EXPIRED",
+  FORBIDDEN: "FORBIDDEN",
+  QUEUE_TIMEOUT: "REFRESH_QUEUE_TIMEOUT",
+  CANCELLED: "REQUEST_CANCELLED",
+});

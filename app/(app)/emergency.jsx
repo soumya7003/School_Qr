@@ -27,6 +27,7 @@
 
 import Screen from '@/components/common/Screen';
 import { useProfileStore } from '@/features/profile/profile.store';
+import { useScreenSecurity } from '@/hooks/useScreenSecurity';
 import { colors, radius, spacing, typography } from '@/theme';
 import { useState } from 'react';
 import {
@@ -392,6 +393,7 @@ function FieldToggleRow({ field, visible, disabled, onToggle }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function EmergencyScreen() {
+    useScreenSecurity()
     // ── Store access (fixed shape) ───────────────────────────────────
     const activeStudent = useProfileStore(
         (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null

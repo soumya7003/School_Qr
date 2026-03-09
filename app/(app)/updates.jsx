@@ -322,6 +322,11 @@ function ContactModal({ visible, contact, onSave, onClose }) {
       Alert.alert("Missing Info", "Name and phone are required.");
       return;
     }
+    // Validate Indian phone number format
+    if (!/^[6-9]\d{9}$/.test(phone.trim())) {
+      Alert.alert("Invalid Phone", "Enter a valid 10-digit Indian mobile number.");
+      return;
+    }
     onSave({ name: name.trim(), phone: phone.trim(), relationship: relationship.trim() });
     onClose();
   };
@@ -489,6 +494,18 @@ export default function UpdatesScreen() {
 
   // ── Save
   const handleSave = async () => {
+    // Validate before sending to API
+    if (activeTab === "child") {
+      if (!firstName.trim() || !lastName.trim()) {
+        Alert.alert("Missing Info", "First name and last name are required.");
+        return;
+      }
+    } else if (activeTab === "medical") {
+      if (doctorPhone && !/^[6-9]\d{9}$/.test(doctorPhone.trim())) {
+        Alert.alert("Invalid Phone", "Enter a valid 10-digit doctor phone number.");
+        return;
+      }
+    }
     setSaving(true);
     try {
       if (activeTab === "child") {

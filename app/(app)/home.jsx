@@ -346,8 +346,9 @@ export default function HomeScreen() {
   const card = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = activeStudent?.emergency ?? null;
   const contacts = activeStudent?.emergency?.contacts ?? [];
-  const recentScans = [];
-  const anomalies = [];
+  // FIX: was hardcoded [] — now reads from store
+  const recentScans = useProfileStore((s) => s.recentScans) ?? [];
+  const anomalies = useProfileStore((s) => s.anomalies) ?? [];
 
   const lastScan = recentScans?.[0] ?? null;
   const totalScans = recentScans?.length ?? 0;

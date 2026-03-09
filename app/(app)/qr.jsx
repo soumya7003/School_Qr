@@ -13,10 +13,12 @@
 
 import Screen from '@/components/common/Screen';
 import { useProfileStore } from '@/features/profile/profile.store';
+import { useScreenSecurity } from '@/hooks/useScreenSecurity';
 import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+    Alert,
     Modal,
     Pressable,
     Share,
@@ -271,6 +273,7 @@ function DetailRow({ label, value, valueColor, last }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function QrScreen() {
+    useScreenSecurity()
     const router = useRouter();
 
     // ── Fixed store access (uses students array, not flat keys) ──────
@@ -283,12 +286,16 @@ export default function QrScreen() {
     const card = token?.card_number ? { card_number: token.card_number } : null;
     const emergencyProfile = activeStudent?.emergency ?? null;
 
-    // Card actions — stub these out until you add them to profile.store + API
-    // TODO: wire blockCard, unblockCard, revokeCard, activateCard to profileApi
-    const blockCard = null;
-    const unblockCard = null;
-    const revokeCard = null;
-    const activateCard = null;
+    // Card actions — not yet wired to API, show informative alert until backend ready
+    const _cardActionNotReady = (action) => Alert.alert(
+        'Not Available Yet',
+        `Card ${action} will be available once connected to your backend. Wire this to profileApi when ready.`,
+        [{ text: 'OK' }]
+    );
+    const blockCard = () => _cardActionNotReady('block');
+    const unblockCard = () => _cardActionNotReady('unblock');
+    const revokeCard = () => _cardActionNotReady('revoke');
+    const activateCard = () => _cardActionNotReady('activate');
 
     const status = token?.status ?? 'UNASSIGNED';
     const meta = tokenMeta(status);
