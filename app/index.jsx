@@ -133,7 +133,6 @@ const FeaturePill = ({ lib, icon, label, delay }) => (
 // ─── WelcomeScreen ────────────────────────────────────────────────────────────
 
 export default function WelcomeScreen() {
-  console.log('[WelcomeScreen] rendered');
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 

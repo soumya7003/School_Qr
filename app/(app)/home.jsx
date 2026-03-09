@@ -334,7 +334,6 @@ function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  console.log('[HomeScreen] rendered');
 
   const router = useRouter();
   const { parentUser } = useAuthStore();
