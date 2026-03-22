@@ -10,6 +10,7 @@ import { useProfileStore } from '@/features/profile/profile.store';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Easing,
@@ -22,7 +23,6 @@ import {
   View,
 } from 'react-native';
 import Animated2, { FadeInDown } from 'react-native-reanimated';
-import { useTranslation } from 'react-i18next';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -98,25 +98,25 @@ function RingGlow({ color = C.green }) {
 // (called inside components that have access to t)
 function tokenMeta(status, t) {
   switch (status) {
-    case 'ACTIVE':    return { label: t('home.statusActive'),    color: C.green, bg: C.greenBg,  bd: C.greenBd,  pulse: true  };
-    case 'INACTIVE':  return { label: t('home.statusInactive'),  color: C.tx3,   bg: C.surface3, bd: C.border,   pulse: false };
-    case 'ISSUED':    return { label: t('home.statusIssued'),    color: C.amber, bg: C.amberBg,  bd: C.amberBd,  pulse: true  };
-    case 'REVOKED':   return { label: t('home.statusRevoked'),   color: C.red,   bg: C.redBg,    bd: C.redBd,    pulse: false };
-    case 'EXPIRED':   return { label: t('home.statusExpired'),   color: C.red,   bg: C.redBg,    bd: C.redBd,    pulse: false };
-    case 'UNASSIGNED':return { label: t('home.statusNotSetUp'),  color: C.amber, bg: C.amberBg,  bd: C.amberBd,  pulse: false };
-    default:          return { label: t('home.statusUnknown'),   color: C.tx3,   bg: C.surface3, bd: C.border,   pulse: false };
+    case 'ACTIVE': return { label: t('home.statusActive'), color: C.green, bg: C.greenBg, bd: C.greenBd, pulse: true };
+    case 'INACTIVE': return { label: t('home.statusInactive'), color: C.tx3, bg: C.surface3, bd: C.border, pulse: false };
+    case 'ISSUED': return { label: t('home.statusIssued'), color: C.amber, bg: C.amberBg, bd: C.amberBd, pulse: true };
+    case 'REVOKED': return { label: t('home.statusRevoked'), color: C.red, bg: C.redBg, bd: C.redBd, pulse: false };
+    case 'EXPIRED': return { label: t('home.statusExpired'), color: C.red, bg: C.redBg, bd: C.redBd, pulse: false };
+    case 'UNASSIGNED': return { label: t('home.statusNotSetUp'), color: C.amber, bg: C.amberBg, bd: C.amberBd, pulse: false };
+    default: return { label: t('home.statusUnknown'), color: C.tx3, bg: C.surface3, bd: C.border, pulse: false };
   }
 }
 
 function fmtRelTime(iso, t) {
   if (!iso) return null;
   const diff = Date.now() - new Date(iso).getTime();
-  const mins  = Math.floor(diff / 60000);
+  const mins = Math.floor(diff / 60000);
   const hours = Math.floor(mins / 60);
-  const days  = Math.floor(hours / 24);
-  if (days  > 0) return t('home.daysAgo',  { count: days  });
+  const days = Math.floor(hours / 24);
+  if (days > 0) return t('home.daysAgo', { count: days });
   if (hours > 0) return t('home.hoursAgo', { count: hours });
-  if (mins  > 0) return t('home.minsAgo',  { count: mins  });
+  if (mins > 0) return t('home.minsAgo', { count: mins });
   return t('home.justNow');
 }
 
@@ -132,10 +132,10 @@ function profileCompleteness(ep, contacts) {
 
 function missingFields(ep, contacts, t) {
   const m = [];
-  if (!ep?.blood_group)   m.push(t('updates.bloodGroup'));
-  if (!ep?.allergies)     m.push(t('updates.allergies'));
-  if (!ep?.doctor_phone)  m.push(t('home.missingDoctorPhone'));
-  if (!contacts?.length)  m.push(t('home.missingContact'));
+  if (!ep?.blood_group) m.push(t('updates.bloodGroup'));
+  if (!ep?.allergies) m.push(t('updates.allergies'));
+  if (!ep?.doctor_phone) m.push(t('home.missingDoctorPhone'));
+  if (!contacts?.length) m.push(t('home.missingContact'));
   return m;
 }
 
@@ -246,7 +246,7 @@ function AnomalyAlert({ anomaly, onPress, delay }) {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 0.7, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1,   duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
       ])
     ).start();
   }, []);
@@ -278,22 +278,22 @@ function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay }) {
   const actions = [
     {
       label: t('home.showQR'),
-      sub:   t('home.emergencyAccess'),
-      icon:  <MaterialCommunityIcons name="qrcode-scan" size={22} color={C.red} />,
+      sub: t('home.emergencyAccess'),
+      icon: <MaterialCommunityIcons name="qrcode-scan" size={22} color={C.red} />,
       bg: C.redBg, bd: C.redBd,
       onPress: onShowQR,
     },
     {
       label: t('home.editProfile'),
-      sub:   t('home.medicalInfo'),
-      icon:  <Feather name="edit-2" size={19} color={C.blue} />,
+      sub: t('home.medicalInfo'),
+      icon: <Feather name="edit-2" size={19} color={C.blue} />,
       bg: C.blueBg, bd: C.blueBd,
       onPress: onEditProfile,
     },
     {
       label: t('home.scanLogs'),
-      sub:   t('home.activityHistory'),
-      icon:  <Feather name="activity" size={19} color={C.tx2} />,
+      sub: t('home.activityHistory'),
+      icon: <Feather name="activity" size={19} color={C.tx2} />,
       bg: C.surface3, bd: C.border,
       onPress: onScanHistory,
     },
@@ -534,34 +534,16 @@ export default function HomeScreen() {
     (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null
   );
 
-  const school          = activeStudent?.school ?? null;
-  const token           = activeStudent?.token ?? null;
-  const card            = token?.card_number ? { card_number: token.card_number } : null;
+  const school = activeStudent?.school ?? null;
+  const token = activeStudent?.token ?? null;
+  const card = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = activeStudent?.emergency ?? null;
-<<<<<<< HEAD
   const contacts = activeStudent?.emergency?.contacts ?? [];
   const recentScans = useProfileStore((s) => s.lastScan ? [s.lastScan] : []);
   const anomalies = useProfileStore((s) => s.anomaly ? [s.anomaly] : []);
   const lastScan = recentScans?.[0] ?? null;
   const totalScans = recentScans?.length ?? 0;
   const unresolvedAnomaly = anomalies.find((a) => !a.resolved);
-=======
-  const contacts        = activeStudent?.emergency?.contacts ?? [];
-  const recentScans     = useProfileStore((s) => s.recentScans) ?? [];
-  const anomalies       = useProfileStore((s) => s.anomalies) ?? [];
-
-  const lastScan           = recentScans?.[0] ?? null;
-  const totalScans         = recentScans?.length ?? 0;
-  const unresolvedAnomaly  = anomalies.find((a) => !a.resolved);
-
-  // Time-of-day greeting
-  const greetingText = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return t('home.greetingMorning');
-    if (h < 17) return t('home.greetingAfternoon');
-    return t('home.greetingEvening');
-  })();
->>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
@@ -654,7 +636,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between', paddingVertical: 4,
   },
   greetLine: { fontSize: 22, fontWeight: '800', color: C.tx, letterSpacing: -0.3 },
-  greetSub:  { fontSize: 13, color: C.tx3, marginTop: 2, fontWeight: '500' },
+  greetSub: { fontSize: 13, color: C.tx3, marginTop: 2, fontWeight: '500' },
   notifBtn: {
     width: 40, height: 40, borderRadius: 12,
     backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
@@ -669,12 +651,12 @@ const s = StyleSheet.create({
     backgroundColor: C.surface, borderRadius: 20,
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',
     ...Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
       android: { elevation: 8 },
     }),
   },
   heroAccent: { height: 3, width: '100%' },
-  heroInner:  { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
+  heroInner: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
   heroAvatarCol: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   heroAvatarRing: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   heroAvatar: { width: 58, height: 58, borderRadius: 999, backgroundColor: C.redBg, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
@@ -699,13 +681,13 @@ const s = StyleSheet.create({
   anomalyIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   anomalyBody: { flex: 1 },
   anomalyTitle: { fontSize: 13.5, fontWeight: '800', color: C.amber },
-  anomalyDesc:  { fontSize: 12, color: C.amber, opacity: 0.75, marginTop: 3, lineHeight: 16 },
+  anomalyDesc: { fontSize: 12, color: C.amber, opacity: 0.75, marginTop: 3, lineHeight: 16 },
   anomalyArrow: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   quickRow: { flexDirection: 'row', gap: 10 },
   quickCard: { flex: 1, alignItems: 'center', gap: 7, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.border, paddingVertical: 16, paddingHorizontal: 6 },
   quickIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   quickLabel: { fontSize: 12.5, fontWeight: '700', color: C.tx, textAlign: 'center' },
-  quickSub:   { fontSize: 10,   fontWeight: '500', color: C.tx3, textAlign: 'center' },
+  quickSub: { fontSize: 10, fontWeight: '500', color: C.tx3, textAlign: 'center' },
   sectionCard: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border },
   sectionHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -741,19 +723,19 @@ const s = StyleSheet.create({
   contactAv: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   contactAvTx: { fontSize: 15, fontWeight: '900' },
   contactName: { fontSize: 14, fontWeight: '700', color: C.tx },
-  contactRel:  { fontSize: 11.5, color: C.tx3, marginTop: 2 },
+  contactRel: { fontSize: 11.5, color: C.tx3, marginTop: 2 },
   callBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.greenBg, borderWidth: 1, borderColor: C.greenBd, alignItems: 'center', justifyContent: 'center' },
   addContactNudge: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
   addContactTx: { fontSize: 13, color: C.red, fontWeight: '700', flex: 1 },
   noScanWrap: { alignItems: 'center', padding: 28, gap: 8 },
   noScanIconBox: { width: 52, height: 52, borderRadius: 999, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   noScanTitle: { fontSize: 14, fontWeight: '800', color: C.tx2 },
-  noScanBody:  { fontSize: 12.5, color: C.tx3, textAlign: 'center', lineHeight: 17 },
+  noScanBody: { fontSize: 12.5, color: C.tx3, textAlign: 'center', lineHeight: 17 },
   scanRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   scanTypeDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   scanTypeLabel: { fontSize: 14, fontWeight: '700', color: C.tx },
   scanMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  scanMetaTx:  { fontSize: 11.5, color: C.tx3 },
+  scanMetaTx: { fontSize: 11.5, color: C.tx3 },
   scanMetaDot: { fontSize: 10, color: C.tx3 },
   scanResultBadge: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 3 },
   scanResultTx: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
