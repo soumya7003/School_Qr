@@ -19,12 +19,8 @@ import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
 // ── DEV BYPASS ────────────────────────────────────────────────────────────────
-// TODO: flip to false before commit / production build
-const __DEV_BYPASS_AUTH__ = true;
-const __DEV_USER__ = Object.freeze({
-  id: "dev-parent-001",
-  phone: "+919999999999",
-});
+// false = real OTP login required (production behaviour)
+const __DEV_BYPASS_AUTH__ = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Validation ────────────────────────────────────────────────────────────────

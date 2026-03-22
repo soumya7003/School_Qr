@@ -275,8 +275,9 @@ function EmptyState() {
 
 export default function ScanHistoryScreen() {
     const router = useRouter();
-    const { recentScans, anomalies, fetchIfStale } = useProfileStore();
-
+    const recentScans = useProfileStore((s) => s.lastScan ? [s.lastScan] : []);
+    const anomalies = useProfileStore((s) => s.anomaly ? [s.anomaly] : []);
+    const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
     const [activeFilter, setActiveFilter] = useState('All');
     const [refreshing, setRefreshing] = useState(false);
 

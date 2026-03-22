@@ -561,9 +561,8 @@ export default function HomeScreen() {
   const card = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = activeStudent?.emergency ?? null;
   const contacts = activeStudent?.emergency?.contacts ?? [];
-  const recentScans = useProfileStore((s) => s.recentScans) ?? [];
-  const anomalies = useProfileStore((s) => s.anomalies) ?? [];
-
+  const recentScans = useProfileStore((s) => s.lastScan ? [s.lastScan] : []);
+  const anomalies = useProfileStore((s) => s.anomaly ? [s.anomaly] : []);
   const lastScan = recentScans?.[0] ?? null;
   const totalScans = recentScans?.length ?? 0;
   const unresolvedAnomaly = anomalies.find((a) => !a.resolved);
