@@ -18,6 +18,15 @@
 import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
+// ── DEV BYPASS ────────────────────────────────────────────────────────────────
+// TODO: flip to false before commit / production build
+const __DEV_BYPASS_AUTH__ = true;
+const __DEV_USER__ = Object.freeze({
+  id: "dev-parent-001",
+  phone: "+919999999999",
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ── Validation ────────────────────────────────────────────────────────────────
 // Relaxed: phone is optional — backend only returns { id } in parent object.
 // Phone is populated later from GET /parent/me via profile.store.
@@ -35,10 +44,10 @@ export const useAuthStore = create((set, get) => {
 
   return {
     // ── State ─────────────────────────────────────────────────────────────────
-    isAuthenticated: false,
-    isHydrated: false,
+    isAuthenticated: __DEV_BYPASS_AUTH__,
+    isHydrated: __DEV_BYPASS_AUTH__,
     isNewUser: false,
-    parentUser: null, // { id, phone? } — minimal, full profile in profile.store
+    parentUser: __DEV_BYPASS_AUTH__ ? __DEV_USER__ : null,
 
     // ── Hydrate ───────────────────────────────────────────────────────────────
     /**
@@ -49,6 +58,8 @@ export const useAuthStore = create((set, get) => {
      * they're correctly routed back to /updates on next open.
      */
     hydrate: async () => {
+      if (__DEV_BYPASS_AUTH__) return; // skip SecureStore read in dev
+
       if (_hydrationPromise) return _hydrationPromise;
 
       _hydrationPromise = (async () => {

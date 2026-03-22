@@ -1,6 +1,5 @@
 /**
  * app/(app)/_layout.jsx
- * Inside Expo Router tree — Redirect works correctly here.
  */
 
 import BiometricGate from "@/components/auth/BiometricGate.jsx";
@@ -8,10 +7,7 @@ import TabBar from "@/components/navigation/TabBar";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useInactivityLock } from "@/hooks/useInactivityLock";
 import { Redirect, Tabs, useSegments } from "expo-router";
-import { View } from "react-native"; // FIX 1: was react-native-web
-
-// FIX 2: isDeviceRooted completely removed — already runs in root _layout.jsx
-// Running it twice = wasteful + shows duplicate security alerts
+import { View } from "react-native";
 
 export default function AppLayout() {
   const isHydrated = useAuthStore((s) => s.isHydrated);
@@ -19,8 +15,6 @@ export default function AppLayout() {
   const isNewUser = useAuthStore((s) => s.isNewUser);
   const segments = useSegments();
 
-  // FIX 3: useInactivityLock moved ABOVE early returns — Rules of Hooks
-  // Hooks must never be called after a conditional return
   const inactivityHandlers = useInactivityLock();
 
   if (!isHydrated) return null;
@@ -41,6 +35,7 @@ export default function AppLayout() {
           <Tabs.Screen name="visibility" options={{ href: null }} />
           <Tabs.Screen name="scan-history" options={{ href: null }} />
           <Tabs.Screen name="support" options={{ href: null }} />
+          <Tabs.Screen name="change-phone" options={{ href: null }} />
         </Tabs>
       </View>
     </BiometricGate>
