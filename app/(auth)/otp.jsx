@@ -47,7 +47,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  StyleSheet,
   TouchableOpacity,
   useWindowDimensions,
   View,
