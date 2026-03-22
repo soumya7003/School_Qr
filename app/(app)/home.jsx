@@ -23,6 +23,7 @@ import {
   View,
 } from 'react-native';
 import Animated2, { FadeInDown } from 'react-native-reanimated';
+import { useShallow } from 'zustand/react/shallow';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -94,8 +95,7 @@ function RingGlow({ color = C.green }) {
   );
 }
 
-// ─── tokenMeta — labels now come from t() passed in as prop ──────────────────
-// (called inside components that have access to t)
+// ─── tokenMeta ────────────────────────────────────────────────────────────────
 function tokenMeta(status, t) {
   switch (status) {
     case 'ACTIVE': return { label: t('home.statusActive'), color: C.green, bg: C.greenBg, bd: C.greenBd, pulse: true };
@@ -126,7 +126,11 @@ function fmtDate(iso) {
 }
 
 function profileCompleteness(ep, contacts) {
-  const fields = [ep?.blood_group, ep?.allergies, ep?.conditions, ep?.medications, ep?.doctor_name, ep?.doctor_phone, contacts?.length > 0 ? 'ok' : null];
+  const fields = [
+    ep?.blood_group, ep?.allergies, ep?.conditions,
+    ep?.medications, ep?.doctor_name, ep?.doctor_phone,
+    contacts?.length > 0 ? 'ok' : null,
+  ];
   return Math.round(fields.filter(Boolean).length / fields.length * 100);
 }
 
@@ -319,7 +323,12 @@ function CompletenessRing({ pct, isComplete }) {
   const { t } = useTranslation();
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(anim, { toValue: pct / 100, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(anim, {
+      toValue: pct / 100,
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
   }, [pct]);
 
   const color = isComplete ? C.green : pct >= 60 ? C.amber : C.red;
@@ -498,7 +507,10 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
                 <Text style={s.scanMetaTx}>{fmtRelTime(scan.created_at, t)}</Text>
               </View>
             </View>
-            <View style={[s.scanResultBadge, { backgroundColor: isSuccess ? C.greenBg : C.redBg, borderColor: isSuccess ? C.greenBd : C.redBd }]}>
+            <View style={[s.scanResultBadge, {
+              backgroundColor: isSuccess ? C.greenBg : C.redBg,
+              borderColor: isSuccess ? C.greenBd : C.redBd,
+            }]}>
               <Text style={[s.scanResultTx, { color: isSuccess ? C.green : C.red }]}>
                 {scan.result}
               </Text>
@@ -530,19 +542,34 @@ export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { parentUser } = useAuthStore();
+
+  // ── FIX 1: useShallow prevents new object ref on every render ──────────────
   const activeStudent = useProfileStore(
-    (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null
+    useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
   );
 
+  // ── FIX 2: Select primitives — never wrap in [] inside the selector ────────
+  const lastScanRaw = useProfileStore((s) => s.lastScan);
+  const anomalyRaw = useProfileStore((s) => s.anomaly);
+
+  // ── FIX 3: greetingText defined locally ───────────────────────────────────
+  const hour = new Date().getHours();
+  const greetingText = hour < 12
+    ? t('home.goodMorning')
+    : hour < 17
+      ? t('home.goodAfternoon')
+      : t('home.goodEvening');
+
+  // Derived — computed outside the store so no new refs inside selectors
   const school = activeStudent?.school ?? null;
   const token = activeStudent?.token ?? null;
   const card = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = activeStudent?.emergency ?? null;
   const contacts = activeStudent?.emergency?.contacts ?? [];
-  const recentScans = useProfileStore((s) => s.lastScan ? [s.lastScan] : []);
-  const anomalies = useProfileStore((s) => s.anomaly ? [s.anomaly] : []);
-  const lastScan = recentScans?.[0] ?? null;
-  const totalScans = recentScans?.length ?? 0;
+  const recentScans = lastScanRaw ? [lastScanRaw] : [];
+  const anomalies = anomalyRaw ? [anomalyRaw] : [];
+  const lastScan = recentScans[0] ?? null;
+  const totalScans = recentScans.length;
   const unresolvedAnomaly = anomalies.find((a) => !a.resolved);
 
   return (

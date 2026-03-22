@@ -27,7 +27,7 @@ import ScanHistoryPreview from "@/components/settings/ScanHistoryPreview";
 import ThemeSegment from "@/components/settings/ThemeSegment";
 import { LANGUAGES } from "@/constants/constants";
 import { useAuthStore } from "@/features/auth/auth.store";
-import { useProfileStore } from "@/features/profile/profile.store";
+import { useProfile } from "@/features/profile/useProfile";
 import { useThemeContext } from "@/providers/ThemeProvider";
 import { spacing } from "@/theme";
 import { visibilityLabel } from "@/utils/helpers";
@@ -41,7 +41,7 @@ import {
     Switch,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
@@ -68,7 +68,8 @@ const LogOut = ({ c, s = 16 }) => (
 );
 
 // ─── Section header ───────────────────────────────────────────────────────────
-function SectionLabel({ label, accent }) {
+// FIX: removed undefined `isPrimary` — now accepts it as an optional prop
+function SectionLabel({ label, accent, isPrimary = false }) {
     return (
         <View style={sl.wrap}>
             <View style={[sl.line, { backgroundColor: accent, height: isPrimary ? 14 : 10 }]} />
@@ -183,8 +184,8 @@ function ParentCard({ parentUser, C }) {
             <View style={pc.ending}>
                 <Text style={[pc.endingLabel, { color: C.tx3 }]}>{t("settings.endsIn")}</Text>
                 <Text style={[pc.endingNum, { color: C.tx2 }]}>{lastFour}</Text>
-            </View >
-        </View >
+            </View>
+        </View>
     );
 }
 const pc = StyleSheet.create({
@@ -213,13 +214,16 @@ export default function SettingsScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation();
     const { parentUser, logout } = useAuthStore();
+
+    // FIX: use the useProfile() hook instead of calling useProfileStore()
+    // without a selector (which returns a new object ref every render = infinite loop)
     const {
         student, token, card, emergencyProfile,
         recentScans, anomalies, updateRequests,
         trustedContacts,
         locationConsent, updateLocationConsent,
         updateNotificationPref, notificationPrefs,
-    } = useProfileStore();
+    } = useProfile();
 
     // ── Theme ─────────────────────────────────────────────────────────────────
     const { colors: C } = useThemeContext() ?? {};
@@ -235,7 +239,9 @@ export default function SettingsScreen() {
 
     const unresolvedAnomalies = (anomalies ?? []).filter((a) => !a.resolved);
 
-    // ── Logout ────────────────────────────────────────────────────────────────
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    // FIX: handleLogout properly closed — handleExport and return are now
+    // at the top level of the component, not nested inside handleLogout
     const handleLogout = () => {
         Alert.alert(
             t("common.logout"),
@@ -252,276 +258,252 @@ export default function SettingsScreen() {
                 },
             ],
         );
+    }; // ← correctly closed here
 
-        const handleExport = () =>
-            Alert.alert('Export Data', 'A download link will be sent to your registered phone number within a few minutes.');
+    const handleExport = () =>
+        Alert.alert('Export Data', 'A download link will be sent to your registered phone number within a few minutes.');
 
-        // Guard: wait for theme to be ready
-        if (!C) return null;
+    // Guard: wait for theme to be ready
+    if (!C) return null;
 
-        return (
-            <Screen bg={C.bg} edges={["top", "left", "right"]}>
-                <LanguageModal visible={langModalOpen} onClose={() => setLangModal(false)} />
+    return (
+        <Screen bg={C.bg} edges={["top", "left", "right"]}>
+            <LanguageModal visible={langModalOpen} onClose={() => setLangModal(false)} />
 
-                <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={[s.scroll, { gap: spacing[4] }]}
-                >
-                    {/* ── Page header ── */}
-                    <Animated.View entering={FadeInDown.delay(40).duration(350)} style={s.header}>
-                        <View>
-                            <Text style={[s.pageTitle, { color: C.tx }]}>{t("settings.title")}</Text>
-                            <Text style={[s.pageSub, { color: C.tx3 }]}>
-                                {student?.first_name
-                                    ? `${student.first_name}'s emergency card`
-                                    : t("settings.subtitle")}
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[s.scroll, { gap: spacing[4] }]}
+            >
+                {/* ── Page header ── */}
+                <Animated.View entering={FadeInDown.delay(40).duration(350)} style={s.header}>
+                    <View>
+                        <Text style={[s.pageTitle, { color: C.tx }]}>{t("settings.title")}</Text>
+                        <Text style={[s.pageSub, { color: C.tx3 }]}>
+                            {student?.first_name
+                                ? `${student.first_name}'s emergency card`
+                                : t("settings.subtitle")}
+                        </Text>
+                    </View>
+                    {token?.status && (
+                        <View style={[
+                            s.statusPill,
+                            token.status === "ACTIVE"
+                                ? { backgroundColor: C.okBg, borderColor: C.okBd }
+                                : { backgroundColor: C.ambBg, borderColor: C.ambBd },
+                        ]}>
+                            <View style={[s.statusDot, {
+                                backgroundColor: token.status === "ACTIVE" ? C.ok : C.amb,
+                            }]} />
+                            <Text style={[s.statusText, {
+                                color: token.status === "ACTIVE" ? C.ok : C.amb,
+                            }]}>
+                                {token.status === "ACTIVE" ? t("settings.cardLive") : token.status}
                             </Text>
                         </View>
-                        {token?.status && (
-                            <View style={[
-                                s.statusPill,
-                                token.status === "ACTIVE"
-                                    ? { backgroundColor: C.okBg, borderColor: C.okBd }
-                                    : { backgroundColor: C.ambBg, borderColor: C.ambBd },
-                            ]}>
-                                <View style={[s.statusDot, {
-                                    backgroundColor: token.status === "ACTIVE" ? C.ok : C.amb,
-                                }]} />
-                                <Text style={[s.statusText, {
-                                    color: token.status === "ACTIVE" ? C.ok : C.amb,
-                                }]}>
-                                    {token.status === "ACTIVE" ? t("settings.cardLive") : token.status}
-                                </Text>
-                            </View>
-                        )}
+                    )}
+                </Animated.View>
+
+                {/* Parent identity */}
+                <Animated.View entering={FadeInDown.delay(70).duration(350)}>
+                    <ParentCard parentUser={parentUser} C={C} />
+                </Animated.View>
+
+                {/* ── Pending updates ── */}
+                {(updateRequests?.length ?? 0) > 0 && (
+                    <Animated.View entering={FadeInDown.delay(85).duration(350)}>
+                        <PendingUpdatesBanner requests={updateRequests} />
                     </Animated.View>
+                )}
 
-                    {/* Parent identity */}
-                    <Animated.View entering={FadeInDown.delay(70).duration(350)}>
-                        <ParentCard parentUser={parentUser} C={C} />
-                    </Animated.View>
+                {/* ── Physical card ── */}
+                <Animated.View entering={FadeInDown.delay(110).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.physicalCard")} accent={C.blue} />
+                    <SettingsCard C={C}>
+                        <CardStatusBlock token={token} card={card} />
+                        <Row
+                            C={C}
+                            iconEl={<IconScan color={C.red} />}
+                            iconBg={C.redBg} iconBd={C.redBd}
+                            title={t("settings.deactivateCard")}
+                            subtitle={t("settings.deactivateCardSub")}
+                            onPress={() => router.push("/(app)/qr")}
+                            isLast
+                        />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Pending updates ── */}
-                    {
-                        (updateRequests?.length ?? 0) > 0 && (
-                            <Animated.View entering={FadeInDown.delay(85).duration(350)}>
-                                <PendingUpdatesBanner requests={updateRequests} />
-                            </Animated.View>
-                        )
-                    }
+                {/* ── Scan history ── */}
+                <Animated.View entering={FadeInDown.delay(140).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.scanActivity")} accent={C.blue} />
+                    <SettingsCard C={C}>
+                        <ScanHistoryPreview
+                            scans={recentScans ?? []}
+                            anomalyCount={unresolvedAnomalies.length}
+                            onViewAll={() => router.push("/(app)/scan-history")}
+                        />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Physical card ── */}
-                    <Animated.View entering={FadeInDown.delay(110).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.physicalCard")} accent={C.blue} />
-                        <SettingsCard C={C}>
-                            <CardStatusBlock token={token} card={card} />
-                            <Row
-                                C={C}
-                                iconEl={<IconScan color={C.red} />}
-                                iconBg={C.redBg} iconBd={C.redBd}
-                                title={t("settings.deactivateCard")}
-                                subtitle={t("settings.deactivateCardSub")}
-                                onPress={() => router.push("/(app)/qr")}
-                                isLast
-                            />
-                        </SettingsCard>
-                    </Animated.View>
+                {/* ── Emergency profile ── */}
+                <Animated.View entering={FadeInDown.delay(170).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.emergencyProfile")} accent={C.red} />
+                    <SettingsCard C={C}>
+                        <Row
+                            C={C}
+                            iconEl={<IconEye color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.visibilityControls")}
+                            subtitle={visibilityLabel(emergencyProfile?.visibility)}
+                            onPress={() => router.push('/(app)/visibility')}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<IconShield color={C.red} />}
+                            iconBg={C.redBg} iconBd={C.redBd}
+                            title={t("settings.emergencyInfo")}
+                            subtitle={`${t("settings.emergencyInfoSub")} · ${student?.first_name ?? "child"}'s card`}
+                            onPress={() => router.push("/(app)/updates")}
+                            isLast
+                        />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Scan history ── */}
-                    <Animated.View entering={FadeInDown.delay(140).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.scanActivity")} accent={C.blue} />
-                        <SettingsCard C={C}>
-                            <ScanHistoryPreview
-                                scans={recentScans ?? []}
-                                anomalyCount={unresolvedAnomalies.length}
-                                onViewAll={() => router.push("/(app)/scan-history")}
-                            />
-                        </SettingsCard>
-                    </Animated.View>
+                {/* ── Security ── */}
+                <Animated.View entering={FadeInDown.delay(200).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.security")} accent={C.purp} />
+                    <SettingsCard C={C}>
+                        <BiometricRow isLast />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Emergency profile ── */}
-                    <Animated.View entering={FadeInDown.delay(170).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.emergencyProfile")} accent={C.red} />
-                        <SettingsCard C={C}>
-                            <Row
-                                C={C}
-                                iconEl={<IconEye color={C.blue} />}
-                                iconBg={C.blueBg} iconBd={C.blueBd}
-                                title={t("settings.visibilityControls")}
-                                subtitle={visibilityLabel(emergencyProfile?.visibility)}
-                                onPress={() => router.push('/(app)/visibility')}
-                            />
-                            <Row
-                                C={C}
-                                iconEl={<IconShield color={C.red} />}
-                                iconBg={C.redBg} iconBd={C.redBd}
-                                title={t("settings.emergencyInfo")}
-                                subtitle={`${t("settings.emergencyInfoSub")} · ${student?.first_name ?? "child"}'s card`}
-                                onPress={() => router.push("/(app)/updates")}
-                                isLast
-                            />
-                        </SettingsCard >
-                    </Animated.View >
+                {/* ── Notifications ── */}
+                <Animated.View entering={FadeInDown.delay(230).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.notifications")} accent={C.ok} />
+                    <SettingsCard C={C}>
+                        <Row
+                            C={C}
+                            iconEl={<IconBell color={C.ok} />}
+                            iconBg={C.okBg} iconBd={C.okBd}
+                            title={t("settings.scanAlerts")}
+                            subtitle={t("settings.scanAlertsSub")}
+                            toggle toggleVal={scanAlerts}
+                            onToggle={(v) => { setScanAlerts(v); updateNotificationPref?.('scanAlerts', v); }}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<IconWarning color={C.amb} />}
+                            iconBg={C.ambBg} iconBd={C.ambBd}
+                            title={t("settings.anomalyAlerts")}
+                            subtitle={t("settings.anomalyAlertsSub")}
+                            toggle toggleVal={anomalyAlerts}
+                            onToggle={(v) => { setAnomalyAlerts(v); updateNotificationPref?.('anomalyAlerts', v); }}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<IconMapPin color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.locationOnScan")}
+                            subtitle={t("settings.locationOnScanSub")}
+                            toggle toggleVal={locationEnabled}
+                            onToggle={(v) => { setLocation(v); updateLocationConsent?.(v); }}
+                            isLast
+                        />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Security ── */}
-                    <Animated.View entering={FadeInDown.delay(200).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.security")} accent={C.purp} />
-                        <SettingsCard C={C}>
-                            <BiometricRow isLast />
-                        </SettingsCard>
-                    </Animated.View>
+                {/* ── Appearance ── */}
+                <Animated.View entering={FadeInDown.delay(260).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.appearance")} accent={C.tx3} />
+                    <SettingsCard C={C}>
+                        <Row
+                            C={C}
+                            iconEl={<IconGlobe color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.language")}
+                            subtitle={`${currentLang.native} · ${currentLang.label}`}
+                            onPress={() => setLangModal(true)}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<IconMoon color={C.tx3} />}
+                            iconBg={C.s4} iconBd={C.bd2}
+                            title={t("settings.theme")}
+                            subtitle={t("settings.themeSub")}
+                            noChevron
+                            right={<ThemeSegment />}
+                            isLast
+                        />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Notifications ── */}
-                    <Animated.View entering={FadeInDown.delay(230).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.notifications")} accent={C.ok} />
-                        <SettingsCard C={C}>
-                            <Row
-                                C={C}
-                                iconEl={<IconBell color={C.ok} />}
-                                iconBg={C.okBg} iconBd={C.okBd}
-                                title={t("settings.scanAlerts")}
-                                subtitle={t("settings.scanAlertsSub")}
-                                toggle toggleVal={scanAlerts}
-                                onToggle={(v) => { setScanAlerts(v); updateNotificationPref?.('scanAlerts', v); }}
-                                size="compact"
-                            />
-                            <Row
-                                C={C}
-                                iconEl={<IconWarning color={C.amb} />}
-                                iconBg={C.ambBg} iconBd={C.ambBd}
-                                title={t("settings.anomalyAlerts")}
-                                subtitle={t("settings.anomalyAlertsSub")}
-                                toggle toggleVal={anomalyAlerts}
-                                onToggle={(v) => { setAnomalyAlerts(v); updateNotificationPref?.('anomalyAlerts', v); }}
-                                size="compact"
-                            />
-                            <Row
-                                C={C}
-                                iconEl={<IconMapPin color={C.blue} />}
-                                iconBg={C.blueBg} iconBd={C.blueBd}
-                                title={t("settings.locationOnScan")}
-                                subtitle={t("settings.locationOnScanSub")}
-                                toggle toggleVal={locationEnabled}
-                                onToggle={(v) => { setLocation(v); updateLocationConsent?.(v); }}
-                                isLast
-                            />
-                            <CardDivider label="WEEKLY DIGEST" />
-                            <Row
-                                iconEl={<Ic.Calendar c={T.purp} s={16} />}
-                                iconBg={T.purpBg} iconBd={T.purpBd}
-                                title="Activity Digest"
-                                subtitle="Weekly scan summary sent to your phone"
-                                toggle toggleVal={digestOn}
-                                onToggle={(v) => { setDigestOn(v); updateNotificationPref?.('weeklyDigest', v); }}
-                                size="compact"
-                            />
-                            {digestOn && (
-                                <>
-                                    <View style={s.dayPickerLabel}>
-                                        <Text style={s.dayPickerText}>SEND DIGEST ON</Text>
-                                    </View>
-                                    <DigestDayPicker
-                                        value={digestDay}
-                                        onChange={(d) => { setDigestDay(d); updateNotificationPref?.('digestDay', d); }}
-                                    />
-                                </>
-                            )}
-                        </SettingsCard>
-                    </Animated.View>
+                {/* ── Account ── */}
+                <Animated.View entering={FadeInDown.delay(290).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.account")} accent={C.tx3} />
+                    <SettingsCard C={C}>
+                        <Row
+                            C={C}
+                            iconEl={<IconPhone color={C.amb} />}
+                            iconBg={C.ambBg} iconBd={C.ambBd}
+                            title={t("settings.changePhone")}
+                            subtitle={t("settings.changePhoneSub")}
+                            onPress={() => router.push("/(app)/change-phone")}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<IconInfo color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.support")}
+                            onPress={() => router.push("/(app)/support")}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<LogOut c={C.red} s={16} />}
+                            iconBg={C.redBg} iconBd={C.redBd}
+                            title={t("settings.logout")}
+                            onPress={handleLogout}
+                            danger
+                            isLast
+                        />
+                    </SettingsCard>
+                </Animated.View>
 
-                    {/* ── Appearance ── */}
-                    <Animated.View entering={FadeInDown.delay(260).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.appearance")} accent={C.tx3} />
-                        <SettingsCard C={C}>
-                            <Row
-                                C={C}
-                                iconEl={<IconGlobe color={C.blue} />}
-                                iconBg={C.blueBg} iconBd={C.blueBd}
-                                title={t("settings.language")}
-                                subtitle={`${currentLang.native} · ${currentLang.label}`}
-                                onPress={() => setLangModal(true)}
-                                size="compact"
-                            />
-                            <Row
-                                C={C}
-                                iconEl={<IconMoon color={C.tx3} />}
-                                iconBg={C.s4} iconBd={C.bd2}
-                                title={t("settings.theme")}
-                                subtitle={t("settings.themeSub")}
-                                noChevron
-                                right={<ThemeSegment />}  // reads context directly — no props needed
-                                isLast
-                            />
-                        </SettingsCard>
-                    </Animated.View>
+                {/* ── Footer ── */}
+                <Animated.View entering={FadeInDown.delay(320).duration(350)} style={s.footer}>
+                    <View style={[s.footerDivider, { backgroundColor: C.bd2 }]} />
+                    <Text style={[s.footerApp, { color: C.tx3 }]}>RESQID · v1.0.0</Text>
+                    <Text style={[s.footerSub, { color: C.tx3 }]}>Emergency ID Card Platform</Text>
+                </Animated.View>
+            </ScrollView>
+        </Screen>
+    );
+}
 
-                    {/* ── Account ── */}
-                    <Animated.View entering={FadeInDown.delay(290).duration(350)} style={s.group}>
-                        <SectionLabel label={t("settings.account")} accent={C.tx3} />
-                        <SettingsCard C={C}>
-                            <Row
-                                C={C}
-                                iconEl={<IconPhone color={C.amb} />}
-                                iconBg={C.ambBg} iconBd={C.ambBd}
-                                title={t("settings.changePhone")}
-                                subtitle={t("settings.changePhoneSub")}
-                                onPress={() => router.push("/(app)/change-phone")}
-                            />
-                            <Row
-                                C={C}
-                                iconEl={<IconInfo color={C.blue} />}
-                                iconBg={C.blueBg} iconBd={C.blueBd}
-                                title={t("settings.support")}
-                                onPress={() => router.push("/(app)/support")}
-                            />
-                            <Row
-                                C={C}
-                                iconEl={<LogOut c={C.red} s={16} />}
-                                iconBg={C.redBg} iconBd={C.redBd}
-                                title={t("settings.logout")}
-                                onPress={handleLogout}
-                                danger
-                                isLast
-                            />
-                        </SettingsCard>
-                    </Animated.View>
-
-                    {/* ── Footer ── */}
-                    <Animated.View entering={FadeInDown.delay(320).duration(350)} style={s.footer}>
-                        <View style={[s.footerDivider, { backgroundColor: C.bd2 }]} />
-                        <Text style={[s.footerApp, { color: C.tx3 }]}>RESQID · v1.0.0</Text>
-                        <Text style={[s.footerSub, { color: C.tx3 }]}>Emergency ID Card Platform</Text>
-                    </Animated.View>
-                </ScrollView>
-            </Screen >
-        );
-    }
-
-    const s = StyleSheet.create({
-        scroll: {
-            paddingHorizontal: spacing.screenH,
-            paddingTop: spacing[5],
-            paddingBottom: spacing[12],
-        },
-        header: {
-            flexDirection: "row",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            paddingBottom: spacing[1],
-        },
-        pageTitle: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
-        pageSub: { fontSize: 12.5, marginTop: 3 },
-        statusPill: {
-            flexDirection: "row", alignItems: "center", gap: 5,
-            paddingHorizontal: 10, paddingVertical: 5,
-            borderRadius: 8, borderWidth: 1, marginTop: 4,
-        },
-        statusDot: { width: 5, height: 5, borderRadius: 3 },
-        statusText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
-        group: { gap: 8 },
-        footer: { alignItems: "center", gap: 4, paddingTop: spacing[2] },
-        footerDivider: { width: 32, height: 1, borderRadius: 1, marginBottom: 8 },
-        footerApp: { fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
-        footerSub: { fontSize: 11 },
-    });
-};
+// FIX: StyleSheet is now OUTSIDE the component — previously it was after the
+// return statement inside the function body, making s undefined at render time
+const s = StyleSheet.create({
+    scroll: {
+        paddingHorizontal: spacing.screenH,
+        paddingTop: spacing[5],
+        paddingBottom: spacing[12],
+    },
+    header: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        paddingBottom: spacing[1],
+    },
+    pageTitle: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
+    pageSub: { fontSize: 12.5, marginTop: 3 },
+    statusPill: {
+        flexDirection: "row", alignItems: "center", gap: 5,
+        paddingHorizontal: 10, paddingVertical: 5,
+        borderRadius: 8, borderWidth: 1, marginTop: 4,
+    },
+    statusDot: { width: 5, height: 5, borderRadius: 3 },
+    statusText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+    group: { gap: 8 },
+    footer: { alignItems: "center", gap: 4, paddingTop: spacing[2] },
+    footerDivider: { width: 32, height: 1, borderRadius: 1, marginBottom: 8 },
+    footerApp: { fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+    footerSub: { fontSize: 11 },
+});
