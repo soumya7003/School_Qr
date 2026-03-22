@@ -25,20 +25,6 @@ import LanguageModal from "@/components/settings/LanguageModal";
 import PendingUpdatesBanner from "@/components/settings/PendingUpdatesBanner";
 import ScanHistoryPreview from "@/components/settings/ScanHistoryPreview";
 import ThemeSegment from "@/components/settings/ThemeSegment";
-<<<<<<< HEAD
-import { LANGUAGES } from '@/constants/constants';
-import { useAuthStore } from '@/features/auth/auth.store';
-import { useProfileStore } from '@/features/profile/profile.store';
-// ✅ FIX: use the hook directly — it manages its own state via AsyncStorage.
-// No provider needed. Avoids the crash from useThemeContext() when
-// ThemeProvider is not in the tree.
-import { useColorScheme } from '@/hooks/useTheme';
-import { spacing } from '@/theme';
-import { visibilityLabel } from '@/utils/helpers';
-import { useRouter } from 'expo-router';
-import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
-=======
 import { LANGUAGES } from "@/constants/constants";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useProfileStore } from "@/features/profile/profile.store";
@@ -48,7 +34,6 @@ import { visibilityLabel } from "@/utils/helpers";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
->>>>>>> 72372568f0fb59760047844887ef17d5d0a9f81d
 import {
     Alert,
     ScrollView,
@@ -233,22 +218,12 @@ export default function SettingsScreen() {
         updateNotificationPref, notificationPrefs,
     } = useProfileStore();
 
-<<<<<<< HEAD
-    // ✅ FIX: useColorScheme() is self-contained — reads/writes AsyncStorage
-    // internally and manages its own useState. No context provider required.
-    const { theme, setTheme } = useColorScheme();
-
-    // ✅ FIX: i18n.language is always fresh because LanguageModal calls
-    // changeLanguage() which triggers a re-render via react-i18next.
-    const currentLang = LANGUAGES.find(l => l.code === i18n.language) ?? LANGUAGES[0];
-=======
     // ── Theme ─────────────────────────────────────────────────────────────────
     const { colors: C } = useThemeContext() ?? {};
 
     // ── Language ──────────────────────────────────────────────────────────────
     const currentLang = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0];
     const [langModalOpen, setLangModal] = useState(false);
->>>>>>> 72372568f0fb59760047844887ef17d5d0a9f81d
 
     // ── Notification / location toggles ───────────────────────────────────────
     const [scanAlerts, setScanAlerts] = useState(notificationPrefs?.scanAlerts ?? true);
@@ -443,13 +418,7 @@ export default function SettingsScreen() {
                             title={t("settings.theme")}
                             subtitle={t("settings.themeSub")}
                             noChevron
-<<<<<<< HEAD
-                            // ✅ FIX: theme and setTheme now come from useThemeContext()
-                            // so ThemeSegment and ThemeProvider stay in sync.
-                            right={<ThemeSegment value={theme} onChange={setTheme} />}
-=======
                             right={<ThemeSegment />}  // reads context directly — no props needed
->>>>>>> 72372568f0fb59760047844887ef17d5d0a9f81d
                             isLast
                         />
                     </SettingsCard>
