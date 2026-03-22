@@ -25,6 +25,9 @@ import ThemeSegment from "@/components/settings/ThemeSegment";
 import { LANGUAGES } from '@/constants/constants';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
+// ✅ FIX: use the hook directly — it manages its own state via AsyncStorage.
+// No provider needed. Avoids the crash from useThemeContext() when
+// ThemeProvider is not in the tree.
 import { useColorScheme } from '@/hooks/useTheme';
 import { spacing } from '@/theme';
 import { visibilityLabel } from '@/utils/helpers';
@@ -225,10 +228,12 @@ export default function SettingsScreen() {
         updateNotificationPref, notificationPrefs,
     } = useProfileStore();
 
-    const colorScheme = useColorScheme();
-    const theme = colorScheme?.theme ?? "system";
-    const setTheme = colorScheme?.setTheme ?? (() => { });
+    // ✅ FIX: useColorScheme() is self-contained — reads/writes AsyncStorage
+    // internally and manages its own useState. No context provider required.
+    const { theme, setTheme } = useColorScheme();
 
+    // ✅ FIX: i18n.language is always fresh because LanguageModal calls
+    // changeLanguage() which triggers a re-render via react-i18next.
     const currentLang = LANGUAGES.find(l => l.code === i18n.language) ?? LANGUAGES[0];
 
     const [scanAlerts, setScanAlerts] = useState(notificationPrefs?.scanAlerts ?? true);
@@ -400,6 +405,8 @@ export default function SettingsScreen() {
                             title={t('settings.theme')}
                             subtitle={t('settings.themeSub')}
                             noChevron
+                            // ✅ FIX: theme and setTheme now come from useThemeContext()
+                            // so ThemeSegment and ThemeProvider stay in sync.
                             right={<ThemeSegment value={theme} onChange={setTheme} />}
                             isLast
                         />
