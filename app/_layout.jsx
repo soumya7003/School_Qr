@@ -9,11 +9,12 @@ import { setLogoutHandler } from "@/lib/api/apiClient";
 import { isDeviceRooted } from "@/lib/security/deviceSecurity";
 import { checkAppIntegrity } from "@/lib/security/integrityCheck";
 import AuthProvider from "@/providers/AuthProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { Component, useEffect, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, LogBox, StyleSheet, Text, View } from "react-native";
-import { I18nextProvider } from "react-i18next"; // ← ADD
+import { I18nextProvider } from "react-i18next";
 
 LogBox.ignoreLogs([
     "expo-router/babel is deprecated",
@@ -144,17 +145,18 @@ export default function RootLayout() {
 
     return (
         <RootErrorBoundary>
-            {/* I18nextProvider makes useTranslation() reactive to changeLanguage() */}
-            <I18nextProvider i18n={i18n}>
-                <AuthProvider>
-                    <Stack screenOptions={{ headerShown: false }}>
-                        <Stack.Screen name="index" options={{ headerShown: false }} />
-                        <Stack.Screen name="(auth)" />
-                        <Stack.Screen name="(app)" />
-                        <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
-                    </Stack>
-                </AuthProvider>
-            </I18nextProvider>
+            <ThemeProvider>
+                <I18nextProvider i18n={i18n}>
+                    <AuthProvider>
+                        <Stack screenOptions={{ headerShown: false }}>
+                            <Stack.Screen name="index" options={{ headerShown: false }} />
+                            <Stack.Screen name="(auth)" />
+                            <Stack.Screen name="(app)" />
+                            <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
+                        </Stack>
+                    </AuthProvider>
+                </I18nextProvider>
+            </ThemeProvider>
         </RootErrorBoundary>
     );
 }
