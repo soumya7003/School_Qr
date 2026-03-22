@@ -1,7 +1,6 @@
 /**
  * Settings Screen — Professional dark UI
- * Aesthetic: "Command Center" — same dark design language as emergency.jsx / updates.jsx
- * All functionality preserved, zero childish elements.
+ * Fully wired to i18n via useTranslation()
  */
 
 import Screen from '@/components/common/Screen';
@@ -30,6 +29,7 @@ import { useColorScheme } from '@/hooks/useTheme';
 import { spacing } from '@/theme';
 import { visibilityLabel } from '@/utils/helpers';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import {
     Alert,
@@ -43,7 +43,7 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
-// ─── Design tokens (matches updates.jsx / emergency.jsx) ─────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
     bg: "#07070A",
     s1: "#0C0C10",
@@ -73,21 +73,11 @@ const T = {
     purpBd: "rgba(139,92,246,0.22)",
 };
 
-// ─── Inline SVG icons (for rows that need custom ones) ───────────────────────
+// ─── Inline SVG icons ─────────────────────────────────────────────────────────
 const Ic = {
     ChevronRight: ({ c = T.tx3, s = 14 }) => (
         <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
             <Path d="M9 18l6-6-6-6" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
-    ),
-    Shield: ({ c = T.ok, s = 16 }) => (
-        <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-            <Path d="M12 2L4 6v7c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V6L12 2z" stroke={c} strokeWidth={1.7} strokeLinejoin="round" />
-        </Svg>
-    ),
-    Check: ({ c = T.ok, s = 12 }) => (
-        <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-            <Path d="M20 6L9 17l-5-5" stroke={c} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
     ),
     AlertTriangle: ({ c = T.amb, s = 16 }) => (
@@ -118,7 +108,7 @@ const sl = StyleSheet.create({
     text: { fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
 });
 
-// ─── Settings Card (container for rows) ──────────────────────────────────────
+// ─── Settings Card ────────────────────────────────────────────────────────────
 function SettingsCard({ children }) {
     return <View style={card.wrap}>{children}</View>;
 }
@@ -133,42 +123,18 @@ const card = StyleSheet.create({
 });
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
-function Row({
-    iconEl,
-    iconBg = T.s4,
-    iconBd = T.bd2,
-    title,
-    subtitle,
-    onPress,
-    toggle,
-    toggleVal,
-    onToggle,
-    danger,
-    isLast,
-    right,         // custom right element
-    noChevron,
-}) {
+function Row({ iconEl, iconBg = T.s4, iconBd = T.bd2, title, subtitle, onPress, toggle, toggleVal, onToggle, danger, isLast, right, noChevron }) {
     const isInteractive = !!onPress || !!toggle;
     const Wrapper = isInteractive && !toggle ? TouchableOpacity : View;
-
     return (
-        <Wrapper
-            style={[r.row, !isLast && r.rowBorder]}
-            onPress={onPress}
-            activeOpacity={0.65}
-        >
-            {/* Icon */}
+        <Wrapper style={[r.row, !isLast && r.rowBorder]} onPress={onPress} activeOpacity={0.65}>
             <View style={[r.iconWrap, { backgroundColor: iconBg, borderColor: iconBd }]}>
                 {iconEl}
             </View>
-
-            {/* Text */}
             <View style={r.body}>
                 <Text style={[r.title, danger && r.titleDanger]}>{title}</Text>
                 {subtitle && <Text style={r.sub}>{subtitle}</Text>}
             </View>
-
-            {/* Right */}
             {toggle ? (
                 <Switch
                     value={toggleVal}
@@ -177,9 +143,8 @@ function Row({
                     thumbColor={toggleVal ? T.ok : T.tx3}
                     ios_backgroundColor={T.s5}
                 />
-            ) : right ? (
-                right
-            ) : onPress && !noChevron ? (
+            ) : right ? right
+            : onPress && !noChevron ? (
                 <View style={r.chevronWrap}>
                     <Ic.ChevronRight c={T.tx3} s={13} />
                 </View>
@@ -187,107 +152,57 @@ function Row({
         </Wrapper>
     );
 }
-
 const r = StyleSheet.create({
-    row: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 14,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-    rowBorder: {
-        borderBottomWidth: 1,
-        borderBottomColor: T.bd,
-    },
-    iconWrap: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        borderWidth: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-    },
+    row: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
+    rowBorder: { borderBottomWidth: 1, borderBottomColor: T.bd },
+    iconWrap: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", flexShrink: 0 },
     body: { flex: 1, gap: 2 },
     title: { fontSize: 14, fontWeight: "600", color: T.tx },
     titleDanger: { color: T.red },
     sub: { fontSize: 12, color: T.tx3, lineHeight: 16 },
-    chevronWrap: {
-        width: 24,
-        height: 24,
-        alignItems: "center",
-        justifyContent: "center",
-    },
+    chevronWrap: { width: 24, height: 24, alignItems: "center", justifyContent: "center" },
 });
 
 // ─── Parent Identity Card ─────────────────────────────────────────────────────
 function ParentCard({ parentUser }) {
+    const { t } = useTranslation();
     const initial = parentUser?.phone?.[0] ?? "P";
     const lastFour = parentUser?.phone?.slice(-4) ?? "••••";
     const verified = parentUser?.is_phone_verified;
 
     return (
         <View style={pc.card}>
-            {/* Left accent stripe */}
             <View style={[pc.stripe, { backgroundColor: verified ? T.ok : T.amb }]} />
-
             <View style={pc.avatar}>
                 <Text style={pc.avatarText}>{initial.toUpperCase()}</Text>
             </View>
-
             <View style={{ flex: 1 }}>
                 <Text style={pc.phone}>{parentUser?.phone ?? "—"}</Text>
                 <View style={pc.statusRow}>
                     {verified ? (
                         <>
                             <View style={pc.dot} />
-                            <Text style={pc.statusText}>Verified account</Text>
+                            <Text style={pc.statusText}>{t('settings.verifiedAccount')}</Text>
                         </>
                     ) : (
                         <>
                             <Ic.AlertTriangle c={T.amb} s={11} />
-                            <Text style={[pc.statusText, { color: T.amb }]}>Phone not verified</Text>
+                            <Text style={[pc.statusText, { color: T.amb }]}>{t('settings.phoneNotVerified')}</Text>
                         </>
                     )}
                 </View>
             </View>
-
             <View style={pc.endingWrap}>
-                <Text style={pc.endingLabel}>ENDS IN</Text>
+                <Text style={pc.endingLabel}>{t('settings.endsIn')}</Text>
                 <Text style={pc.ending}>{lastFour}</Text>
             </View>
         </View>
     );
 }
-
 const pc = StyleSheet.create({
-    card: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 14,
-        backgroundColor: T.s2,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: T.bd,
-        paddingVertical: 16,
-        paddingRight: 16,
-        paddingLeft: 0,
-        overflow: "hidden",
-    },
+    card: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: T.s2, borderRadius: 16, borderWidth: 1, borderColor: T.bd, paddingVertical: 16, paddingRight: 16, paddingLeft: 0, overflow: "hidden" },
     stripe: { width: 3, alignSelf: "stretch", borderRadius: 0, marginRight: -2 },
-    avatar: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
-        backgroundColor: T.redBg,
-        borderWidth: 1.5,
-        borderColor: T.redBd,
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        marginLeft: 14,
-    },
+    avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: T.redBg, borderWidth: 1.5, borderColor: T.redBd, alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 14 },
     avatarText: { fontSize: 18, fontWeight: "900", color: T.red },
     phone: { fontSize: 15, fontWeight: "700", color: T.tx, letterSpacing: 0.2 },
     statusRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
@@ -301,6 +216,7 @@ const pc = StyleSheet.create({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
     const { parentUser, logout } = useAuthStore();
     const {
         student, token, card, emergencyProfile,
@@ -309,25 +225,27 @@ export default function SettingsScreen() {
         updateNotificationPref, notificationPrefs,
     } = useProfileStore();
 
-    const { theme, setTheme } = useColorScheme?.() ?? { theme: "system", setTheme: () => { } };
+    const colorScheme = useColorScheme();
+    const theme = colorScheme?.theme ?? "system";
+    const setTheme = colorScheme?.setTheme ?? (() => { });
+
+    const currentLang = LANGUAGES.find(l => l.code === i18n.language) ?? LANGUAGES[0];
 
     const [scanAlerts, setScanAlerts] = useState(notificationPrefs?.scanAlerts ?? true);
     const [anomalyAlerts, setAnomalyAlerts] = useState(notificationPrefs?.anomalyAlerts ?? true);
     const [locationEnabled, setLocation] = useState(locationConsent?.enabled ?? false);
-    const [lang, setLang] = useState("en");
     const [langModalOpen, setLangModal] = useState(false);
 
     const unresolvedAnomalies = (anomalies ?? []).filter(a => !a.resolved);
-    const currentLang = LANGUAGES.find(l => l.code === lang);
 
     const handleLogout = () => {
         Alert.alert(
-            "Log Out",
+            t('common.logout'),
             "Are you sure you want to log out?",
             [
-                { text: "Cancel", style: "cancel" },
+                { text: t('common.cancel'), style: "cancel" },
                 {
-                    text: "Log Out", style: "destructive",
+                    text: t('common.logout'), style: "destructive",
                     onPress: async () => { await logout(); router.replace("/(auth)/login"); },
                 },
             ]
@@ -338,42 +256,26 @@ export default function SettingsScreen() {
         <Screen bg={T.bg} edges={["top", "left", "right"]}>
             <LanguageModal
                 visible={langModalOpen}
-                current={lang}
-                onSelect={setLang}
                 onClose={() => setLangModal(false)}
             />
 
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scroll}
-            >
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+
                 {/* ── Page header ── */}
                 <Animated.View entering={FadeInDown.delay(40).duration(350)} style={styles.header}>
                     <View>
-                        <Text style={styles.pageTitle}>Settings</Text>
+                        <Text style={styles.pageTitle}>{t('settings.title')}</Text>
                         <Text style={styles.pageSub}>
                             {student?.first_name
                                 ? `${student.first_name}'s emergency card`
-                                : "Manage your emergency card"}
+                                : t('settings.subtitle')}
                         </Text>
                     </View>
-                    {/* Card status pill */}
                     {token?.status && (
-                        <View style={[
-                            styles.statusPill,
-                            token.status === "ACTIVE"
-                                ? styles.statusPillActive
-                                : styles.statusPillInactive,
-                        ]}>
-                            <View style={[
-                                styles.statusPillDot,
-                                { backgroundColor: token.status === "ACTIVE" ? T.ok : T.amb },
-                            ]} />
-                            <Text style={[
-                                styles.statusPillText,
-                                { color: token.status === "ACTIVE" ? T.ok : T.amb },
-                            ]}>
-                                {token.status === "ACTIVE" ? "Card Live" : token.status}
+                        <View style={[styles.statusPill, token.status === "ACTIVE" ? styles.statusPillActive : styles.statusPillInactive]}>
+                            <View style={[styles.statusPillDot, { backgroundColor: token.status === "ACTIVE" ? T.ok : T.amb }]} />
+                            <Text style={[styles.statusPillText, { color: token.status === "ACTIVE" ? T.ok : T.amb }]}>
+                                {token.status === "ACTIVE" ? t('settings.cardLive') : token.status}
                             </Text>
                         </View>
                     )}
@@ -384,7 +286,7 @@ export default function SettingsScreen() {
                     <ParentCard parentUser={parentUser} />
                 </Animated.View>
 
-                {/* ── Pending updates banner ── */}
+                {/* ── Pending updates ── */}
                 {(updateRequests?.length ?? 0) > 0 && (
                     <Animated.View entering={FadeInDown.delay(90).duration(350)}>
                         <PendingUpdatesBanner requests={updateRequests} />
@@ -393,14 +295,14 @@ export default function SettingsScreen() {
 
                 {/* ── Physical Card ── */}
                 <Animated.View entering={FadeInDown.delay(110).duration(350)} style={styles.group}>
-                    <SectionLabel label="Physical Card" accent={T.blue} />
+                    <SectionLabel label={t('settings.physicalCard')} accent={T.blue} />
                     <SettingsCard>
                         <CardStatusBlock token={token} card={card} />
                         <Row
                             iconEl={<IconScan color={T.red} />}
                             iconBg={T.redBg} iconBd={T.redBd}
-                            title="Deactivate / Replace Card"
-                            subtitle="Lost or damaged? Lock it instantly"
+                            title={t('settings.deactivateCard')}
+                            subtitle={t('settings.deactivateCardSub')}
                             onPress={() => router.push("/(app)/qr")}
                             isLast
                         />
@@ -409,7 +311,7 @@ export default function SettingsScreen() {
 
                 {/* ── Scan History ── */}
                 <Animated.View entering={FadeInDown.delay(140).duration(350)} style={styles.group}>
-                    <SectionLabel label="Scan Activity" accent={T.blue} />
+                    <SectionLabel label={t('settings.scanActivity')} accent={T.blue} />
                     <SettingsCard>
                         <ScanHistoryPreview
                             scans={recentScans ?? []}
@@ -421,20 +323,20 @@ export default function SettingsScreen() {
 
                 {/* ── Emergency Profile ── */}
                 <Animated.View entering={FadeInDown.delay(170).duration(350)} style={styles.group}>
-                    <SectionLabel label="Emergency Profile" accent={T.red} />
+                    <SectionLabel label={t('settings.emergencyProfile')} accent={T.red} />
                     <SettingsCard>
                         <Row
                             iconEl={<IconEye color={T.blue} />}
                             iconBg={T.blueBg} iconBd={T.blueBd}
-                            title="Visibility Controls"
+                            title={t('settings.visibilityControls')}
                             subtitle={visibilityLabel(emergencyProfile?.visibility)}
                             onPress={() => router.push("/(app)/visibility")}
                         />
                         <Row
                             iconEl={<IconShield color={T.red} />}
                             iconBg={T.redBg} iconBd={T.redBd}
-                            title="Emergency Info"
-                            subtitle={`Blood group, allergies, contacts · ${student?.first_name ?? "child"}'s card`}
+                            title={t('settings.emergencyInfo')}
+                            subtitle={`${t('settings.emergencyInfoSub')} · ${student?.first_name ?? "child"}'s card`}
                             onPress={() => router.push("/(app)/updates")}
                             isLast
                         />
@@ -443,7 +345,7 @@ export default function SettingsScreen() {
 
                 {/* ── Security ── */}
                 <Animated.View entering={FadeInDown.delay(200).duration(350)} style={styles.group}>
-                    <SectionLabel label="Security" accent={T.purp} />
+                    <SectionLabel label={t('settings.security')} accent={T.purp} />
                     <SettingsCard>
                         <BiometricRow isLast />
                     </SettingsCard>
@@ -451,29 +353,29 @@ export default function SettingsScreen() {
 
                 {/* ── Notifications ── */}
                 <Animated.View entering={FadeInDown.delay(230).duration(350)} style={styles.group}>
-                    <SectionLabel label="Notifications" accent={T.ok} />
+                    <SectionLabel label={t('settings.notifications')} accent={T.ok} />
                     <SettingsCard>
                         <Row
                             iconEl={<IconBell color={T.ok} />}
                             iconBg={T.okBg} iconBd={T.okBd}
-                            title="Scan Alerts"
-                            subtitle="Notify when card is scanned"
+                            title={t('settings.scanAlerts')}
+                            subtitle={t('settings.scanAlertsSub')}
                             toggle toggleVal={scanAlerts}
                             onToggle={(v) => { setScanAlerts(v); updateNotificationPref?.("scanAlerts", v); }}
                         />
                         <Row
                             iconEl={<IconWarning color={T.amb} />}
                             iconBg={T.ambBg} iconBd={T.ambBd}
-                            title="Anomaly Alerts"
-                            subtitle="Suspicious scan activity warnings"
+                            title={t('settings.anomalyAlerts')}
+                            subtitle={t('settings.anomalyAlertsSub')}
                             toggle toggleVal={anomalyAlerts}
                             onToggle={(v) => { setAnomalyAlerts(v); updateNotificationPref?.("anomalyAlerts", v); }}
                         />
                         <Row
                             iconEl={<IconMapPin color={T.blue} />}
                             iconBg={T.blueBg} iconBd={T.blueBd}
-                            title="Location on Scan"
-                            subtitle="Capture GPS coordinates when card is scanned"
+                            title={t('settings.locationOnScan')}
+                            subtitle={t('settings.locationOnScanSub')}
                             toggle toggleVal={locationEnabled}
                             onToggle={(v) => { setLocation(v); updateLocationConsent?.(v); }}
                             isLast
@@ -483,21 +385,20 @@ export default function SettingsScreen() {
 
                 {/* ── Appearance ── */}
                 <Animated.View entering={FadeInDown.delay(260).duration(350)} style={styles.group}>
-                    <SectionLabel label="Appearance" accent={T.tx3} />
+                    <SectionLabel label={t('settings.appearance')} accent={T.tx3} />
                     <SettingsCard>
                         <Row
                             iconEl={<IconGlobe color={T.blue} />}
                             iconBg={T.blueBg} iconBd={T.blueBd}
-                            title="Language"
-                            subtitle={currentLang ? `${currentLang.native} · ${currentLang.label}` : "English"}
+                            title={t('settings.language')}
+                            subtitle={`${currentLang.native} · ${currentLang.label}`}
                             onPress={() => setLangModal(true)}
                         />
-                        {/* Theme inline — no chevron, custom right */}
                         <Row
                             iconEl={<IconMoon color={T.tx3} />}
                             iconBg={T.s4} iconBd={T.bd2}
-                            title="Theme"
-                            subtitle="System, Light, or Dark"
+                            title={t('settings.theme')}
+                            subtitle={t('settings.themeSub')}
                             noChevron
                             right={<ThemeSegment value={theme} onChange={setTheme} />}
                             isLast
@@ -507,25 +408,25 @@ export default function SettingsScreen() {
 
                 {/* ── Account ── */}
                 <Animated.View entering={FadeInDown.delay(290).duration(350)} style={styles.group}>
-                    <SectionLabel label="Account" accent={T.tx3} />
+                    <SectionLabel label={t('settings.account')} accent={T.tx3} />
                     <SettingsCard>
                         <Row
                             iconEl={<IconPhone color={T.amb} />}
                             iconBg={T.ambBg} iconBd={T.ambBd}
-                            title="Change Phone Number"
-                            subtitle="OTP verification required"
-                            onPress={() => Alert.alert("Coming Soon", "Phone number change will be available in a future update.")}
+                            title={t('settings.changePhone')}
+                            subtitle={t('settings.changePhoneSub')}
+                            onPress={() => router.push("/(app)/change-phone")}
                         />
                         <Row
                             iconEl={<IconInfo color={T.blue} />}
                             iconBg={T.blueBg} iconBd={T.blueBd}
-                            title="Help & Support"
+                            title={t('settings.support')}
                             onPress={() => router.push("/(app)/support")}
                         />
                         <Row
                             iconEl={<Ic.LogOut c={T.red} s={16} />}
                             iconBg={T.redBg} iconBd={T.redBd}
-                            title="Log Out"
+                            title={t('settings.logout')}
                             onPress={handleLogout}
                             danger
                             isLast
@@ -545,60 +446,19 @@ export default function SettingsScreen() {
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    scroll: {
-        paddingHorizontal: spacing.screenH,
-        paddingTop: spacing[5],
-        paddingBottom: spacing[12],
-        gap: spacing[4],
-    },
-
-    // Header
-    header: {
-        flexDirection: "row",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        paddingBottom: spacing[1],
-    },
-    pageTitle: {
-        fontSize: 26,
-        fontWeight: "800",
-        color: T.tx,
-        letterSpacing: -0.5,
-    },
-    pageSub: {
-        fontSize: 12.5,
-        color: T.tx3,
-        marginTop: 3,
-    },
-    statusPill: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8,
-        borderWidth: 1,
-        marginTop: 4,
-    },
+    scroll: { paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[12], gap: spacing[4] },
+    header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingBottom: spacing[1] },
+    pageTitle: { fontSize: 26, fontWeight: "800", color: T.tx, letterSpacing: -0.5 },
+    pageSub: { fontSize: 12.5, color: T.tx3, marginTop: 3 },
+    statusPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, marginTop: 4 },
     statusPillActive: { backgroundColor: T.okBg, borderColor: T.okBd },
     statusPillInactive: { backgroundColor: T.ambBg, borderColor: T.ambBd },
     statusPillDot: { width: 5, height: 5, borderRadius: 3 },
     statusPillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
-
-    // Groups
     group: { gap: 8 },
-
-    // Footer
     footer: { alignItems: "center", gap: 4, paddingTop: spacing[2] },
-    footerDivider: {
-        width: 32,
-        height: 1,
-        backgroundColor: T.bd2,
-        borderRadius: 1,
-        marginBottom: 8,
-    },
+    footerDivider: { width: 32, height: 1, backgroundColor: T.bd2, borderRadius: 1, marginBottom: 8 },
     footerApp: { fontSize: 11, fontWeight: "800", color: T.tx3, letterSpacing: 1.2 },
     footerSub: { fontSize: 11, color: T.tx3 },
 });
