@@ -1,10 +1,7 @@
 /**
  * @file app/(app)/home.jsx
  * @description Home Screen — RESQID Parent Dashboard
- *              REDESIGNED: Trust-first, premium dark UI
- *              All original functionality preserved 100%
- *              New: HeroCard, ShieldStatus ring, animated completeness arc,
- *                   richer contact cards, contextual micro-copy
+ *              i18n-wired: all strings use t() from useTranslation()
  */
 
 import Screen from '@/components/common/Screen';
@@ -25,10 +22,9 @@ import {
   View,
 } from 'react-native';
 import Animated2, { FadeInDown } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-// Extends existing theme — all colors reference colors.* from theme
-// These are LOCAL overrides only to allow the new design to work standalone
 const C = {
   bg: '#08080A',
   surface: '#111116',
@@ -53,7 +49,7 @@ const C = {
   tx3: 'rgba(242,242,245,0.34)',
 };
 
-// ─── PulseDot — unchanged from original ───────────────────────────────────────
+// ─── PulseDot ─────────────────────────────────────────────────────────────────
 function PulseDot({ color = C.green, size = 7 }) {
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -69,7 +65,7 @@ function PulseDot({ color = C.green, size = 7 }) {
   );
 }
 
-// ─── Animated ring glow for shield status ────────────────────────────────────
+// ─── Ring Glow ────────────────────────────────────────────────────────────────
 function RingGlow({ color = C.green }) {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0.5)).current;
@@ -98,29 +94,30 @@ function RingGlow({ color = C.green }) {
   );
 }
 
-// ─── Helpers — identical to original ─────────────────────────────────────────
-function tokenMeta(status) {
+// ─── tokenMeta — labels now come from t() passed in as prop ──────────────────
+// (called inside components that have access to t)
+function tokenMeta(status, t) {
   switch (status) {
-    case 'ACTIVE': return { label: 'Active', color: C.green, bg: C.greenBg, bd: C.greenBd, pulse: true };
-    case 'INACTIVE': return { label: 'Inactive', color: C.tx3, bg: C.surface3, bd: C.border, pulse: false };
-    case 'ISSUED': return { label: 'Issued', color: C.amber, bg: C.amberBg, bd: C.amberBd, pulse: true };
-    case 'REVOKED': return { label: 'Revoked', color: C.red, bg: C.redBg, bd: C.redBd, pulse: false };
-    case 'EXPIRED': return { label: 'Expired', color: C.red, bg: C.redBg, bd: C.redBd, pulse: false };
-    case 'UNASSIGNED': return { label: 'Not Set Up', color: C.amber, bg: C.amberBg, bd: C.amberBd, pulse: false };
-    default: return { label: 'Unknown', color: C.tx3, bg: C.surface3, bd: C.border, pulse: false };
+    case 'ACTIVE':    return { label: t('home.statusActive'),    color: C.green, bg: C.greenBg,  bd: C.greenBd,  pulse: true  };
+    case 'INACTIVE':  return { label: t('home.statusInactive'),  color: C.tx3,   bg: C.surface3, bd: C.border,   pulse: false };
+    case 'ISSUED':    return { label: t('home.statusIssued'),    color: C.amber, bg: C.amberBg,  bd: C.amberBd,  pulse: true  };
+    case 'REVOKED':   return { label: t('home.statusRevoked'),   color: C.red,   bg: C.redBg,    bd: C.redBd,    pulse: false };
+    case 'EXPIRED':   return { label: t('home.statusExpired'),   color: C.red,   bg: C.redBg,    bd: C.redBd,    pulse: false };
+    case 'UNASSIGNED':return { label: t('home.statusNotSetUp'),  color: C.amber, bg: C.amberBg,  bd: C.amberBd,  pulse: false };
+    default:          return { label: t('home.statusUnknown'),   color: C.tx3,   bg: C.surface3, bd: C.border,   pulse: false };
   }
 }
 
-function fmtRelTime(iso) {
+function fmtRelTime(iso, t) {
   if (!iso) return null;
   const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
+  const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(mins / 60);
-  const days = Math.floor(hours / 24);
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (mins > 0) return `${mins}m ago`;
-  return 'Just now';
+  const days  = Math.floor(hours / 24);
+  if (days  > 0) return t('home.daysAgo',  { count: days  });
+  if (hours > 0) return t('home.hoursAgo', { count: hours });
+  if (mins  > 0) return t('home.minsAgo',  { count: mins  });
+  return t('home.justNow');
 }
 
 function fmtDate(iso) {
@@ -133,24 +130,16 @@ function profileCompleteness(ep, contacts) {
   return Math.round(fields.filter(Boolean).length / fields.length * 100);
 }
 
-function missingFields(ep, contacts) {
+function missingFields(ep, contacts, t) {
   const m = [];
-  if (!ep?.blood_group) m.push('Blood group');
-  if (!ep?.allergies) m.push('Allergies');
-  if (!ep?.doctor_phone) m.push('Doctor phone');
-  if (!contacts?.length) m.push('Emergency contact');
+  if (!ep?.blood_group)   m.push(t('updates.bloodGroup'));
+  if (!ep?.allergies)     m.push(t('updates.allergies'));
+  if (!ep?.doctor_phone)  m.push(t('home.missingDoctorPhone'));
+  if (!contacts?.length)  m.push(t('home.missingContact'));
   return m;
 }
 
-// ─── Greeting ─────────────────────────────────────────────────────────────────
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-// ─── Section wrapper with consistent header ───────────────────────────────────
+// ─── Section Card ─────────────────────────────────────────────────────────────
 function SectionCard({ title, icon, actionLabel, onAction, children, style }) {
   return (
     <View style={[s.sectionCard, style]}>
@@ -171,34 +160,31 @@ function SectionCard({ title, icon, actionLabel, onAction, children, style }) {
   );
 }
 
-// ─── Hero Card — student identity + shield status ────────────────────────────
+// ─── Hero Card ────────────────────────────────────────────────────────────────
 function HeroCard({ student, school, token, card, onPressCard, delay }) {
-  const meta = tokenMeta(token?.status);
+  const { t } = useTranslation();
+  const meta = tokenMeta(token?.status, t);
   const isActive = token?.status === 'ACTIVE';
   const initials = [student?.first_name?.[0], student?.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
 
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(500)}>
       <TouchableOpacity style={s.heroCard} onPress={onPressCard} activeOpacity={0.88}>
-        {/* Top red accent bar */}
         <View style={[s.heroAccent, { backgroundColor: meta.color }]} />
 
         <View style={s.heroInner}>
-          {/* Left — avatar + shield glow */}
           <View style={s.heroAvatarCol}>
             <View style={s.heroAvatarRing}>
               {isActive && <RingGlow color={C.green} />}
               <View style={[s.heroAvatar, { borderColor: meta.color + '55' }]}>
                 <Text style={s.heroAvatarInitials}>{initials}</Text>
               </View>
-              {/* verified tick */}
               <View style={[s.verifiedBadge, { backgroundColor: isActive ? C.green : meta.color }]}>
                 <Feather name={isActive ? 'check' : 'minus'} size={8} color="#fff" />
               </View>
             </View>
           </View>
 
-          {/* Middle — name + meta */}
           <View style={s.heroMeta}>
             <Text style={s.heroName} numberOfLines={1}>
               {student?.first_name ?? '—'} {student?.last_name ?? ''}
@@ -217,14 +203,12 @@ function HeroCard({ student, school, token, card, onPressCard, delay }) {
                 </View>
               )}
             </View>
-            {/* Card number row */}
             <View style={s.heroCardNumRow}>
               <MaterialCommunityIcons name="qrcode" size={11} color={C.tx3} />
-              <Text style={s.heroCardNum}>{card?.card_number ?? 'Not assigned'}</Text>
+              <Text style={s.heroCardNum}>{card?.card_number ?? t('home.notAssigned')}</Text>
             </View>
           </View>
 
-          {/* Right — status badge + QR button */}
           <View style={s.heroRight}>
             <View style={[s.statusPill, { backgroundColor: meta.bg, borderColor: meta.bd }]}>
               {meta.pulse && <PulseDot color={meta.color} size={6} />}
@@ -236,17 +220,16 @@ function HeroCard({ student, school, token, card, onPressCard, delay }) {
           </View>
         </View>
 
-        {/* Bottom — card validity strip */}
         {token?.expires_at && (
           <View style={s.heroFooter}>
             <Feather name="clock" size={11} color={C.tx3} />
             <Text style={s.heroFooterTx}>
-              Valid until {fmtDate(token.expires_at)}
+              {t('home.validUntil', { date: fmtDate(token.expires_at) })}
             </Text>
             <View style={s.heroDivider} />
             <Feather name="shield" size={11} color={isActive ? C.green : C.tx3} />
             <Text style={[s.heroFooterTx, { color: isActive ? C.green : C.tx3 }]}>
-              {isActive ? 'Protected' : 'Inactive'}
+              {isActive ? t('home.protected') : t('home.statusInactive')}
             </Text>
           </View>
         )}
@@ -255,14 +238,15 @@ function HeroCard({ student, school, token, card, onPressCard, delay }) {
   );
 }
 
-// ─── Anomaly Alert — redesigned with stronger urgency ─────────────────────────
+// ─── Anomaly Alert ────────────────────────────────────────────────────────────
 function AnomalyAlert({ anomaly, onPress, delay }) {
+  const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 0.7, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,   duration: 700, useNativeDriver: true }),
       ])
     ).start();
   }, []);
@@ -276,7 +260,7 @@ function AnomalyAlert({ anomaly, onPress, delay }) {
           </Animated.View>
         </View>
         <View style={s.anomalyBody}>
-          <Text style={s.anomalyTitle}>Suspicious scan detected</Text>
+          <Text style={s.anomalyTitle}>{t('home.suspiciousScan')}</Text>
           <Text style={s.anomalyDesc} numberOfLines={2}>{anomaly.reason}</Text>
         </View>
         <View style={s.anomalyArrow}>
@@ -287,27 +271,29 @@ function AnomalyAlert({ anomaly, onPress, delay }) {
   );
 }
 
-// ─── Quick Actions — larger, clearer with labels ───────────────────────────────
+// ─── Quick Actions ────────────────────────────────────────────────────────────
 function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay }) {
+  const { t } = useTranslation();
+
   const actions = [
     {
-      label: 'Show QR',
-      sub: 'Emergency access',
-      icon: <MaterialCommunityIcons name="qrcode-scan" size={22} color={C.red} />,
+      label: t('home.showQR'),
+      sub:   t('home.emergencyAccess'),
+      icon:  <MaterialCommunityIcons name="qrcode-scan" size={22} color={C.red} />,
       bg: C.redBg, bd: C.redBd,
       onPress: onShowQR,
     },
     {
-      label: 'Edit Profile',
-      sub: 'Medical info',
-      icon: <Feather name="edit-2" size={19} color={C.blue} />,
+      label: t('home.editProfile'),
+      sub:   t('home.medicalInfo'),
+      icon:  <Feather name="edit-2" size={19} color={C.blue} />,
       bg: C.blueBg, bd: C.blueBd,
       onPress: onEditProfile,
     },
     {
-      label: 'Scan Logs',
-      sub: 'Activity history',
-      icon: <Feather name="activity" size={19} color={C.tx2} />,
+      label: t('home.scanLogs'),
+      sub:   t('home.activityHistory'),
+      icon:  <Feather name="activity" size={19} color={C.tx2} />,
       bg: C.surface3, bd: C.border,
       onPress: onScanHistory,
     },
@@ -328,9 +314,9 @@ function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay }) {
   );
 }
 
-// ─── Completeness Arc — visual ring (simplified, CSS-like) ────────────────────
+// ─── Completeness Ring ────────────────────────────────────────────────────────
 function CompletenessRing({ pct, isComplete }) {
-  // Animated bar approach (native-compatible, no SVG needed)
+  const { t } = useTranslation();
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, { toValue: pct / 100, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
@@ -340,14 +326,11 @@ function CompletenessRing({ pct, isComplete }) {
 
   return (
     <View style={s.ringWrap}>
-      {/* Outer ring track */}
       <View style={[s.ringTrack, { borderColor: color + '22' }]} />
-      {/* Progress as colored stroke segment approximation */}
       <View style={s.ringCenter}>
         <Text style={[s.ringPct, { color }]}>{pct}<Text style={s.ringPctSign}>%</Text></Text>
-        <Text style={s.ringLabel}>{isComplete ? 'Complete' : 'Done'}</Text>
+        <Text style={s.ringLabel}>{isComplete ? t('home.complete') : t('home.done')}</Text>
       </View>
-      {/* Animated fill bar under ring */}
       <View style={s.ringBarBg}>
         <Animated.View
           style={[
@@ -363,10 +346,11 @@ function CompletenessRing({ pct, isComplete }) {
   );
 }
 
-// ─── Emergency Profile Card — richest card on screen ─────────────────────────
+// ─── Emergency Profile Card ───────────────────────────────────────────────────
 function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
+  const { t } = useTranslation();
   const completeness = profileCompleteness(ep, contacts);
-  const missing = missingFields(ep, contacts);
+  const missing = missingFields(ep, contacts, t);
   const isComplete = completeness === 100;
   const topContacts = [...(contacts ?? [])].sort((a, b) => a.priority - b.priority).slice(0, 2);
   const avatarColors = [C.red, C.blue];
@@ -374,9 +358,9 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
       <SectionCard
-        title="Emergency Profile"
+        title={t('home.emergencyProfile')}
         icon={<Feather name="heart" size={13} color={C.red} />}
-        actionLabel="Edit"
+        actionLabel={t('common.edit')}
         onAction={onEdit}
       >
         {/* Completeness row */}
@@ -384,16 +368,16 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
           <CompletenessRing pct={completeness} isComplete={isComplete} />
           <View style={s.completeRight}>
             <Text style={s.completeHeadline}>
-              {isComplete ? '✓ Profile is ready' : 'Profile incomplete'}
+              {isComplete ? t('home.profileReady') : t('home.profileIncomplete')}
             </Text>
             <Text style={s.completeBody}>
               {isComplete
-                ? 'First responders will see full info when your card is scanned.'
-                : `${missing.length} field${missing.length > 1 ? 's' : ''} missing — add them so help arrives faster.`}
+                ? t('home.profileReadyDesc')
+                : t('home.profileIncompleteDesc', { count: missing.length })}
             </Text>
             {!isComplete && (
               <TouchableOpacity style={s.completeBtn} onPress={onEdit} activeOpacity={0.8}>
-                <Text style={s.completeBtnTx}>Complete now</Text>
+                <Text style={s.completeBtnTx}>{t('home.completeNow')}</Text>
                 <Feather name="arrow-right" size={12} color={C.amber} />
               </TouchableOpacity>
             )}
@@ -405,20 +389,20 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
           <TouchableOpacity style={s.missingStrip} onPress={onEdit} activeOpacity={0.8}>
             <Feather name="alert-circle" size={13} color={C.amber} />
             <Text style={s.missingTx}>
-              Missing: {missing.slice(0, 3).join(' · ')}{missing.length > 3 ? ` +${missing.length - 3}` : ''}
+              {t('home.missing')}: {missing.slice(0, 3).join(' · ')}{missing.length > 3 ? ` +${missing.length - 3}` : ''}
             </Text>
             <Feather name="chevron-right" size={12} color={C.amber} />
           </TouchableOpacity>
         )}
 
-        {/* Blood group + allergy highlight */}
+        {/* Blood group */}
         {ep?.blood_group && (
           <View style={s.bloodStrip}>
             <View style={s.bloodIconBox}>
               <Text style={{ fontSize: 18 }}>🩸</Text>
             </View>
             <View style={s.bloodInfo}>
-              <Text style={s.bloodLbl}>Blood Group</Text>
+              <Text style={s.bloodLbl}>{t('updates.bloodGroup')}</Text>
               <Text style={s.bloodVal}>{ep.blood_group}</Text>
             </View>
             {ep?.allergies && (
@@ -432,7 +416,6 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
           </View>
         )}
 
-        {/* Divider */}
         {topContacts.length > 0 && <View style={s.hdivider} />}
 
         {/* Emergency contacts */}
@@ -441,12 +424,7 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
             key={c.id ?? i}
             style={[s.contactRow, i < topContacts.length - 1 && s.contactRowBd]}
           >
-            <View
-              style={[
-                s.contactAv,
-                { backgroundColor: avatarColors[i] + '18', borderColor: avatarColors[i] + '35' },
-              ]}
-            >
+            <View style={[s.contactAv, { backgroundColor: avatarColors[i] + '18', borderColor: avatarColors[i] + '35' }]}>
               <Text style={[s.contactAvTx, { color: avatarColors[i] }]}>
                 {c.name?.[0]?.toUpperCase() ?? '?'}
               </Text>
@@ -454,8 +432,8 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
             <View style={{ flex: 1 }}>
               <Text style={s.contactName}>{c.name}</Text>
               <Text style={s.contactRel}>
-                {c.relationship ?? 'Guardian'}
-                {c.priority === 1 ? '  ·  Primary' : ''}
+                {c.relationship ?? t('home.guardian')}
+                {c.priority === 1 ? `  ·  ${t('home.primary')}` : ''}
               </Text>
             </View>
             <TouchableOpacity
@@ -471,7 +449,7 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
         {topContacts.length === 0 && (
           <TouchableOpacity style={s.addContactNudge} onPress={onEdit} activeOpacity={0.8}>
             <Feather name="user-plus" size={14} color={C.red} />
-            <Text style={s.addContactTx}>Add an emergency contact — required for card to work</Text>
+            <Text style={s.addContactTx}>{t('home.addContactNudge')}</Text>
           </TouchableOpacity>
         )}
       </SectionCard>
@@ -481,6 +459,7 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
 
 // ─── Last Scan Card ───────────────────────────────────────────────────────────
 function LastScanCard({ scan, totalScans, onPress, delay }) {
+  const { t } = useTranslation();
   const isEmergency = scan?.scan_purpose === 'EMERGENCY';
   const location = [scan?.ip_city, scan?.ip_region].filter(Boolean).join(', ');
   const isSuccess = scan?.result === 'SUCCESS';
@@ -488,9 +467,9 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
       <SectionCard
-        title="Last Scan"
+        title={t('home.lastScan')}
         icon={<Feather name="radio" size={13} color={C.tx3} />}
-        actionLabel={`View all ${totalScans}`}
+        actionLabel={t('home.viewAll', { count: totalScans })}
         onAction={onPress}
       >
         {!scan ? (
@@ -498,15 +477,15 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
             <View style={s.noScanIconBox}>
               <Feather name="maximize-2" size={20} color={C.tx3} />
             </View>
-            <Text style={s.noScanTitle}>No scans yet</Text>
-            <Text style={s.noScanBody}>When someone scans your card, it'll show up here.</Text>
+            <Text style={s.noScanTitle}>{t('home.noScansYet')}</Text>
+            <Text style={s.noScanBody}>{t('home.noScansBody')}</Text>
           </View>
         ) : (
           <TouchableOpacity style={s.scanRow} onPress={onPress} activeOpacity={0.85}>
             <View style={[s.scanTypeDot, { backgroundColor: isEmergency ? C.red : C.green }]} />
             <View style={{ flex: 1 }}>
               <Text style={s.scanTypeLabel}>
-                {isEmergency ? '🆘 Emergency Scan' : '👁 General Scan'}
+                {isEmergency ? `🆘 ${t('home.emergencyScan')}` : `👁 ${t('home.generalScan')}`}
               </Text>
               <View style={s.scanMeta}>
                 {location ? (
@@ -516,7 +495,7 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
                     <Text style={s.scanMetaDot}>·</Text>
                   </>
                 ) : null}
-                <Text style={s.scanMetaTx}>{fmtRelTime(scan.created_at)}</Text>
+                <Text style={s.scanMetaTx}>{fmtRelTime(scan.created_at, t)}</Text>
               </View>
             </View>
             <View style={[s.scanResultBadge, { backgroundColor: isSuccess ? C.greenBg : C.redBg, borderColor: isSuccess ? C.greenBd : C.redBd }]}>
@@ -533,40 +512,47 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
 
 // ─── Safety Tip ───────────────────────────────────────────────────────────────
 function SafetyTip({ delay }) {
+  const { t } = useTranslation();
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
       <View style={s.safetyTip}>
         <View style={s.safetyIconWrap}>
           <Feather name="shield" size={16} color={C.green} />
         </View>
-        <Text style={s.safetyTx}>
-          Keep your child's medical info up to date — it's what first responders see in an emergency.
-        </Text>
+        <Text style={s.safetyTx}>{t('home.safetyTip')}</Text>
       </View>
     </Animated2.View>
   );
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-
 export default function HomeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { parentUser } = useAuthStore();
   const activeStudent = useProfileStore(
     (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null
   );
 
-  const school = activeStudent?.school ?? null;
-  const token = activeStudent?.token ?? null;
-  const card = token?.card_number ? { card_number: token.card_number } : null;
+  const school          = activeStudent?.school ?? null;
+  const token           = activeStudent?.token ?? null;
+  const card            = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = activeStudent?.emergency ?? null;
-  const contacts = activeStudent?.emergency?.contacts ?? [];
-  const recentScans = useProfileStore((s) => s.recentScans) ?? [];
-  const anomalies = useProfileStore((s) => s.anomalies) ?? [];
+  const contacts        = activeStudent?.emergency?.contacts ?? [];
+  const recentScans     = useProfileStore((s) => s.recentScans) ?? [];
+  const anomalies       = useProfileStore((s) => s.anomalies) ?? [];
 
-  const lastScan = recentScans?.[0] ?? null;
-  const totalScans = recentScans?.length ?? 0;
-  const unresolvedAnomaly = anomalies.find((a) => !a.resolved);
+  const lastScan           = recentScans?.[0] ?? null;
+  const totalScans         = recentScans?.length ?? 0;
+  const unresolvedAnomaly  = anomalies.find((a) => !a.resolved);
+
+  // Time-of-day greeting
+  const greetingText = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return t('home.greetingMorning');
+    if (h < 17) return t('home.greetingAfternoon');
+    return t('home.greetingEvening');
+  })();
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
@@ -578,15 +564,14 @@ export default function HomeScreen() {
         <Animated2.View entering={FadeInDown.delay(0).duration(400)} style={s.greetWrap}>
           <View>
             <Text style={s.greetLine}>
-              {greeting()}{parentUser?.phone ? ' 👋' : ''}
+              {greetingText}{parentUser?.phone ? ' 👋' : ''}
             </Text>
             <Text style={s.greetSub}>
               {activeStudent?.first_name
-                ? `Here's ${activeStudent.first_name}'s card status`
-                : "Here's your child's card status"}
+                ? t('home.subtitleNamed', { name: activeStudent.first_name })
+                : t('home.subtitle')}
             </Text>
           </View>
-          {/* Notification bell */}
           <TouchableOpacity
             style={s.notifBtn}
             onPress={() => router.push('/(app)/scan-history')}
@@ -597,7 +582,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated2.View>
 
-        {/* ── Hero Card (student + card status combined) ── */}
+        {/* ── Hero Card ── */}
         <HeroCard
           student={activeStudent}
           school={school}
@@ -642,380 +627,128 @@ export default function HomeScreen() {
 
         {/* ── Safety Tip ── */}
         <SafetyTip delay={260} />
-
       </ScrollView>
     </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
-
   scroll: {
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 12 : 16,
     paddingBottom: 48,
     gap: 14,
   },
-
-  // ── Greeting
   greetWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingVertical: 4,
   },
-  greetLine: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: C.tx,
-    letterSpacing: -0.3,
-  },
-  greetSub: {
-    fontSize: 13,
-    color: C.tx3,
-    marginTop: 2,
-    fontWeight: '500',
-  },
+  greetLine: { fontSize: 22, fontWeight: '800', color: C.tx, letterSpacing: -0.3 },
+  greetSub:  { fontSize: 13, color: C.tx3, marginTop: 2, fontWeight: '500' },
   notifBtn: {
-    width: 40, height: 40,
-    borderRadius: 12,
-    backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center',
-    position: 'relative',
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center', position: 'relative',
   },
   notifDot: {
     position: 'absolute', top: 9, right: 10,
     width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: C.amber,
-    borderWidth: 1.5, borderColor: C.bg,
+    backgroundColor: C.amber, borderWidth: 1.5, borderColor: C.bg,
   },
-
-  // ── Hero Card
   heroCard: {
-    backgroundColor: C.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: C.border,
-    overflow: 'hidden',
+    backgroundColor: C.surface, borderRadius: 20,
+    borderWidth: 1, borderColor: C.border, overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
       android: { elevation: 8 },
     }),
   },
   heroAccent: { height: 3, width: '100%' },
-  heroInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  heroAvatarCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  heroAvatarRing: {
-    width: 64, height: 64,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  heroAvatar: {
-    width: 58, height: 58, borderRadius: 999,
-    backgroundColor: C.redBg,
-    borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  heroAvatarInitials: {
-    fontSize: 22, fontWeight: '900',
-    color: C.red, letterSpacing: -0.5,
-  },
-  verifiedBadge: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 18, height: 18, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: C.surface,
-  },
+  heroInner:  { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
+  heroAvatarCol: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  heroAvatarRing: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  heroAvatar: { width: 58, height: 58, borderRadius: 999, backgroundColor: C.redBg, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  heroAvatarInitials: { fontSize: 22, fontWeight: '900', color: C.red, letterSpacing: -0.5 },
+  verifiedBadge: { position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.surface },
   heroMeta: { flex: 1, gap: 4 },
-  heroName: {
-    fontSize: 17, fontWeight: '800',
-    color: C.tx, letterSpacing: -0.2,
-  },
-  heroChipRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 5,
-  },
-  chip: {
-    backgroundColor: 'rgba(245,158,11,0.1)',
-    borderRadius: 99,
-    borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)',
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  chipBlue: {
-    backgroundColor: C.blueBg, borderColor: C.blueBd,
-  },
-  chipTx: {
-    fontSize: 10.5, fontWeight: '700',
-    color: C.amber, letterSpacing: 0.1,
-  },
-  heroCardNumRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    marginTop: 2,
-  },
-  heroCardNum: {
-    fontSize: 11, fontWeight: '500',
-    color: C.tx3, letterSpacing: 0.5,
-    fontVariant: ['tabular-nums'],
-  },
-  heroRight: {
-    alignItems: 'center', gap: 8, flexShrink: 0,
-  },
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: 99, borderWidth: 1,
-    paddingHorizontal: 9, paddingVertical: 4,
-  },
+  heroName: { fontSize: 17, fontWeight: '800', color: C.tx, letterSpacing: -0.2 },
+  heroChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  chip: { backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 99, borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)', paddingHorizontal: 8, paddingVertical: 2 },
+  chipBlue: { backgroundColor: C.blueBg, borderColor: C.blueBd },
+  chipTx: { fontSize: 10.5, fontWeight: '700', color: C.amber, letterSpacing: 0.1 },
+  heroCardNumRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  heroCardNum: { fontSize: 11, fontWeight: '500', color: C.tx3, letterSpacing: 0.5, fontVariant: ['tabular-nums'] },
+  heroRight: { alignItems: 'center', gap: 8, flexShrink: 0 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4 },
   statusPillTx: { fontSize: 11, fontWeight: '800', letterSpacing: 0.1 },
-  heroQrBtn: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: C.surface2,
-    borderWidth: 1, borderColor: C.border2,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  heroFooter: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderTopWidth: 1, borderTopColor: C.border,
-    paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: C.surface2,
-  },
-  heroFooterTx: {
-    fontSize: 11.5, color: C.tx3, fontWeight: '500',
-  },
-  heroDivider: {
-    width: 1, height: 12, backgroundColor: C.border, marginHorizontal: 4,
-  },
-
-  // ── Anomaly Alert
-  anomalyCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.amberBg,
-    borderRadius: 14, borderWidth: 1, borderColor: C.amberBd,
-    padding: 14, gap: 12,
-  },
-  anomalyIconWrap: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
+  heroQrBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border2, alignItems: 'center', justifyContent: 'center' },
+  heroFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: C.surface2 },
+  heroFooterTx: { fontSize: 11.5, color: C.tx3, fontWeight: '500' },
+  heroDivider: { width: 1, height: 12, backgroundColor: C.border, marginHorizontal: 4 },
+  anomalyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.amberBg, borderRadius: 14, borderWidth: 1, borderColor: C.amberBd, padding: 14, gap: 12 },
+  anomalyIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   anomalyBody: { flex: 1 },
   anomalyTitle: { fontSize: 13.5, fontWeight: '800', color: C.amber },
-  anomalyDesc: { fontSize: 12, color: C.amber, opacity: 0.75, marginTop: 3, lineHeight: 16 },
-  anomalyArrow: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
-
-  // ── Quick Actions
+  anomalyDesc:  { fontSize: 12, color: C.amber, opacity: 0.75, marginTop: 3, lineHeight: 16 },
+  anomalyArrow: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   quickRow: { flexDirection: 'row', gap: 10 },
-  quickCard: {
-    flex: 1, alignItems: 'center', gap: 7,
-    backgroundColor: C.surface,
-    borderRadius: 16, borderWidth: 1, borderColor: C.border,
-    paddingVertical: 16, paddingHorizontal: 6,
-  },
-  quickIconWrap: {
-    width: 46, height: 46, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1,
-  },
-  quickLabel: {
-    fontSize: 12.5, fontWeight: '700',
-    color: C.tx, textAlign: 'center',
-  },
-  quickSub: {
-    fontSize: 10, fontWeight: '500',
-    color: C.tx3, textAlign: 'center',
-  },
-
-  // ── Section Card
-  sectionCard: {
-    backgroundColor: C.surface,
-    borderRadius: 18, borderWidth: 1, borderColor: C.border,
-    overflow: 'hidden',
-  },
-  sectionHead: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 13,
-    borderBottomWidth: 1, borderBottomColor: C.border,
-  },
-  sectionHeadLeft: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-  },
-  sectionTitle: {
-    fontSize: 11, fontWeight: '800',
-    color: C.tx3, letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  sectionAction: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-  },
-  sectionActionText: {
-    fontSize: 12.5, fontWeight: '700', color: C.red,
-  },
-
-  // ── Completeness ring
-  completeRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 16, gap: 14,
-    borderBottomWidth: 1, borderBottomColor: C.border,
-  },
-  ringWrap: {
-    width: 68, height: 68, flexShrink: 0,
-    alignItems: 'center', justifyContent: 'center',
-    position: 'relative',
-  },
-  ringTrack: {
-    position: 'absolute', inset: 0,
-    borderRadius: 999, borderWidth: 4,
-  },
-  ringCenter: {
-    alignItems: 'center', justifyContent: 'center',
-    zIndex: 1,
-  },
+  quickCard: { flex: 1, alignItems: 'center', gap: 7, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.border, paddingVertical: 16, paddingHorizontal: 6 },
+  quickIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  quickLabel: { fontSize: 12.5, fontWeight: '700', color: C.tx, textAlign: 'center' },
+  quickSub:   { fontSize: 10,   fontWeight: '500', color: C.tx3, textAlign: 'center' },
+  sectionCard: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border },
+  sectionHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: C.tx3, letterSpacing: 0.8, textTransform: 'uppercase' },
+  sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  sectionActionText: { fontSize: 12.5, fontWeight: '700', color: C.red },
+  completeRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, borderBottomWidth: 1, borderBottomColor: C.border },
+  ringWrap: { width: 68, height: 68, flexShrink: 0, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  ringTrack: { position: 'absolute', inset: 0, borderRadius: 999, borderWidth: 4 },
+  ringCenter: { alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   ringPct: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
   ringPctSign: { fontSize: 11, fontWeight: '700' },
   ringLabel: { fontSize: 9, color: C.tx3, fontWeight: '600', letterSpacing: 0.3 },
-  ringBarBg: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 3, backgroundColor: C.surface3, borderRadius: 2,
-    overflow: 'hidden',
-  },
+  ringBarBg: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: C.surface3, borderRadius: 2, overflow: 'hidden' },
   ringBarFill: { height: '100%', borderRadius: 2 },
-
   completeRight: { flex: 1, gap: 5 },
   completeHeadline: { fontSize: 14, fontWeight: '800', color: C.tx },
   completeBody: { fontSize: 12.5, color: C.tx3, lineHeight: 17 },
-  completeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    marginTop: 2,
-  },
+  completeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   completeBtnTx: { fontSize: 12, fontWeight: '700', color: C.amber },
-
-  // ── Missing strip
-  missingStrip: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.amberBg,
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: C.amberBd,
-  },
+  missingStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.amberBg, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.amberBd },
   missingTx: { fontSize: 12, color: C.amber, flex: 1, fontWeight: '600' },
-
-  // ── Blood group strip
-  bloodStrip: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: C.border,
-  },
-  bloodIconBox: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: C.redBg,
-    borderWidth: 1, borderColor: C.redBd,
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
+  bloodStrip: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  bloodIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.redBg, borderWidth: 1, borderColor: C.redBd, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   bloodInfo: { gap: 2 },
   bloodLbl: { fontSize: 10, color: C.tx3, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: '700' },
   bloodVal: { fontSize: 22, fontWeight: '900', color: C.red, lineHeight: 26 },
-  allergyPill: {
-    marginLeft: 'auto',
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: C.amberBg,
-    borderRadius: 99, borderWidth: 1, borderColor: C.amberBd,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
+  allergyPill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.amberBg, borderRadius: 99, borderWidth: 1, borderColor: C.amberBd, paddingHorizontal: 8, paddingVertical: 4 },
   allergyTx: { fontSize: 11, color: C.amber, fontWeight: '700', maxWidth: 90 },
-
   hdivider: { height: 1, backgroundColor: C.border },
-
-  // ── Contacts
-  contactRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
   contactRowBd: { borderBottomWidth: 1, borderBottomColor: C.border },
-  contactAv: {
-    width: 40, height: 40, borderRadius: 12,
-    borderWidth: 1, alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
+  contactAv: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   contactAvTx: { fontSize: 15, fontWeight: '900' },
   contactName: { fontSize: 14, fontWeight: '700', color: C.tx },
-  contactRel: { fontSize: 11.5, color: C.tx3, marginTop: 2 },
-  callBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: C.greenBg,
-    borderWidth: 1, borderColor: C.greenBd,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  addContactNudge: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    padding: 16,
-  },
+  contactRel:  { fontSize: 11.5, color: C.tx3, marginTop: 2 },
+  callBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.greenBg, borderWidth: 1, borderColor: C.greenBd, alignItems: 'center', justifyContent: 'center' },
+  addContactNudge: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
   addContactTx: { fontSize: 13, color: C.red, fontWeight: '700', flex: 1 },
-
-  // ── Last Scan
-  noScanWrap: {
-    alignItems: 'center', padding: 28, gap: 8,
-  },
-  noScanIconBox: {
-    width: 52, height: 52, borderRadius: 999,
-    backgroundColor: C.surface2,
-    borderWidth: 1, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 4,
-  },
+  noScanWrap: { alignItems: 'center', padding: 28, gap: 8 },
+  noScanIconBox: { width: 52, height: 52, borderRadius: 999, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   noScanTitle: { fontSize: 14, fontWeight: '800', color: C.tx2 },
-  noScanBody: { fontSize: 12.5, color: C.tx3, textAlign: 'center', lineHeight: 17 },
-  scanRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 16,
-  },
+  noScanBody:  { fontSize: 12.5, color: C.tx3, textAlign: 'center', lineHeight: 17 },
+  scanRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   scanTypeDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   scanTypeLabel: { fontSize: 14, fontWeight: '700', color: C.tx },
   scanMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  scanMetaTx: { fontSize: 11.5, color: C.tx3 },
+  scanMetaTx:  { fontSize: 11.5, color: C.tx3 },
   scanMetaDot: { fontSize: 10, color: C.tx3 },
-  scanResultBadge: {
-    borderRadius: 99, borderWidth: 1,
-    paddingHorizontal: 9, paddingVertical: 3,
-  },
-  scanResultTx: {
-    fontSize: 10, fontWeight: '800',
-    textTransform: 'uppercase', letterSpacing: 0.4,
-  },
-
-  // ── Safety Tip
-  safetyTip: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    backgroundColor: C.greenBg,
-    borderRadius: 14, borderWidth: 1, borderColor: C.greenBd,
-    padding: 14,
-  },
-  safetyIconWrap: {
-    width: 32, height: 32, borderRadius: 10,
-    backgroundColor: 'rgba(18,161,80,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
-  safetyTx: {
-    fontSize: 12.5, color: C.tx2, flex: 1,
-    lineHeight: 18, fontWeight: '500',
-    paddingTop: 6,
-  },
+  scanResultBadge: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 3 },
+  scanResultTx: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  safetyTip: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: C.greenBg, borderRadius: 14, borderWidth: 1, borderColor: C.greenBd, padding: 14 },
+  safetyIconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(18,161,80,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  safetyTx: { fontSize: 12.5, color: C.tx2, flex: 1, lineHeight: 18, fontWeight: '500', paddingTop: 6 },
 });
