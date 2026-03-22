@@ -1,4 +1,5 @@
 /**
+<<<<<<< HEAD
  * SettingsScreen.jsx — RESQID Parent PWA
  * Fully redesigned — Command Center aesthetic
  *
@@ -17,9 +18,16 @@
  *  C. Activity Digest    — weekly summary toggle + day-of-week picker
  *  D. Danger Zone        — consolidated destructive actions
  *  E. Export Data banner — promoted to top, not buried
+=======
+ * app/(app)/settings.jsx
+ * Settings Screen — theme-aware, i18n-wired, SaaS-ready.
+ *
+ * Colors come from ThemeContext (never hardcoded).
+ * Language re-renders reactively via I18nextProvider + useTranslation().
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
  */
 
-import Screen from '@/components/common/Screen';
+import Screen from "@/components/common/Screen";
 import {
     IconBell,
     IconEye,
@@ -31,6 +39,7 @@ import {
     IconScan,
     IconShield,
     IconWarning,
+<<<<<<< HEAD
 } from '@/components/icon/AllIcon';
 import BiometricRow from '@/components/settings/BiometricRow';
 import LanguageModal from '@/components/settings/LanguageModal';
@@ -45,6 +54,24 @@ import { spacing } from '@/theme';
 import { visibilityLabel } from '@/utils/helpers';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
+=======
+} from "@/components/icon/AllIcon";
+import BiometricRow from "@/components/settings/BiometricRow";
+import CardStatusBlock from "@/components/settings/CardStatusBlock";
+import LanguageModal from "@/components/settings/LanguageModal";
+import PendingUpdatesBanner from "@/components/settings/PendingUpdatesBanner";
+import ScanHistoryPreview from "@/components/settings/ScanHistoryPreview";
+import ThemeSegment from "@/components/settings/ThemeSegment";
+import { LANGUAGES } from "@/constants/constants";
+import { useAuthStore } from "@/features/auth/auth.store";
+import { useProfileStore } from "@/features/profile/profile.store";
+import { useThemeContext } from "@/providers/ThemeProvider";
+import { spacing } from "@/theme";
+import { visibilityLabel } from "@/utils/helpers";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
 import {
     Alert,
     Modal,
@@ -56,6 +83,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+<<<<<<< HEAD
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -170,6 +198,35 @@ const Ic = {
 // ─── Section Label — primary / secondary tiers ─────────────────────────────────
 function SectionLabel({ label, accent = T.tx3, tier = 'secondary' }) {
     const isPrimary = tier === 'primary';
+=======
+} from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import Svg, { Path } from "react-native-svg";
+
+// ─── Inline SVG icons ─────────────────────────────────────────────────────────
+const ChevronRight = ({ c, s = 14 }) => (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path d="M9 18l6-6-6-6" stroke={c} strokeWidth={1.8}
+            strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+const AlertTriangle = ({ c, s = 16 }) => (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            stroke={c} strokeWidth={1.7} strokeLinejoin="round" />
+        <Path d="M12 9v4M12 17h.01" stroke={c} strokeWidth={1.7} strokeLinecap="round" />
+    </Svg>
+);
+const LogOut = ({ c, s = 16 }) => (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+        <Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
+            stroke={c} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+
+// ─── Section header ───────────────────────────────────────────────────────────
+function SectionLabel({ label, accent }) {
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
     return (
         <View style={sl.wrap}>
             <View style={[sl.line, { backgroundColor: accent, height: isPrimary ? 14 : 10 }]} />
@@ -185,6 +242,7 @@ const sl = StyleSheet.create({
     text: { fontWeight: '800' },
 });
 
+<<<<<<< HEAD
 // ─── Settings Card ─────────────────────────────────────────────────────────────
 function SettingsCard({ children, borderColor = T.bd }) {
     return <View style={[scard.wrap, { borderColor }]}>{children}</View>;
@@ -228,25 +286,71 @@ function Row({ iconEl, iconBg = T.s4, iconBd = T.bd2, title, subtitle, onPress, 
                     )}
                 </View>
                 {subtitle ? <Text style={rw.sub}>{subtitle}</Text> : null}
+=======
+// ─── Card container ───────────────────────────────────────────────────────────
+function SettingsCard({ children, C }) {
+    return (
+        <View style={[card.wrap, { backgroundColor: C.s2, borderColor: C.bd }]}>
+            {children}
+        </View>
+    );
+}
+const card = StyleSheet.create({
+    wrap: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+});
+
+// ─── Settings row ─────────────────────────────────────────────────────────────
+function Row({
+    C,
+    iconEl, iconBg, iconBd,
+    title, subtitle,
+    onPress, toggle, toggleVal, onToggle,
+    danger, isLast, right, noChevron,
+}) {
+    const Wrapper = (onPress && !toggle) ? TouchableOpacity : View;
+    return (
+        <Wrapper
+            style={[
+                r.row,
+                !isLast && { borderBottomWidth: 1, borderBottomColor: C.bd },
+            ]}
+            onPress={onPress}
+            activeOpacity={0.65}
+        >
+            <View style={[r.iconWrap, { backgroundColor: iconBg, borderColor: iconBd }]}>
+                {iconEl}
+            </View>
+            <View style={r.body}>
+                <Text style={[r.title, { color: danger ? C.red : C.tx }]}>{title}</Text>
+                {subtitle ? <Text style={[r.sub, { color: C.tx3 }]}>{subtitle}</Text> : null}
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
             </View>
             {toggle ? (
                 <Switch
                     value={toggleVal}
                     onValueChange={onToggle}
-                    trackColor={{ false: T.s5, true: `${T.ok}80` }}
-                    thumbColor={toggleVal ? T.ok : T.tx3}
-                    ios_backgroundColor={T.s5}
+                    trackColor={{ false: C.s5, true: `${C.ok}80` }}
+                    thumbColor={toggleVal ? C.ok : C.tx3}
+                    ios_backgroundColor={C.s5}
                 />
+<<<<<<< HEAD
             ) : right ? (
                 right
             ) : onPress && !noChevron ? (
                 <View style={rw.chevron}>
                     <Ic.ChevronRight c={danger ? `${T.red}80` : T.tx3} s={13} />
+=======
+            ) : right ? right
+            : (onPress && !noChevron) ? (
+                <View style={r.chevron}>
+                    <ChevronRight c={C.tx3} s={13} />
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                 </View>
             ) : null}
         </Wrapper>
     );
 }
+<<<<<<< HEAD
 const rw = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
     border: { borderBottomWidth: 1, borderBottomColor: T.bd },
@@ -297,18 +401,65 @@ function ParentCard({ parentUser }) {
                         <><View style={pc.dot} /><Text style={pc.statusText}>Verified account</Text></>
                     ) : (
                         <><Ic.AlertTriangle c={T.amb} s={11} /><Text style={[pc.statusText, { color: T.amb }]}>Phone not verified</Text></>
+=======
+const r = StyleSheet.create({
+    row: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
+    iconWrap: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+    body: { flex: 1, gap: 2 },
+    title: { fontSize: 14, fontWeight: "600" },
+    sub: { fontSize: 12, lineHeight: 16 },
+    chevron: { width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+});
+
+// ─── Parent identity card ─────────────────────────────────────────────────────
+function ParentCard({ parentUser, C }) {
+    const { t } = useTranslation();
+    const initial = parentUser?.phone?.[0] ?? "P";
+    const lastFour = parentUser?.phone?.slice(-4) ?? "••••";
+    const verified = parentUser?.is_phone_verified;
+
+    return (
+        <View style={[pc.card, { backgroundColor: C.s2, borderColor: C.bd }]}>
+            <View style={[pc.stripe, { backgroundColor: verified ? C.ok : C.amb }]} />
+            <View style={[pc.avatar, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
+                <Text style={[pc.avatarText, { color: C.red }]}>{initial.toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[pc.phone, { color: C.tx }]}>{parentUser?.phone ?? "—"}</Text>
+                <View style={pc.statusRow}>
+                    {verified ? (
+                        <>
+                            <View style={[pc.dot, { backgroundColor: C.ok }]} />
+                            <Text style={[pc.statusText, { color: C.ok }]}>
+                                {t("settings.verifiedAccount")}
+                            </Text>
+                        </>
+                    ) : (
+                        <>
+                            <AlertTriangle c={C.amb} s={11} />
+                            <Text style={[pc.statusText, { color: C.amb }]}>
+                                {t("settings.phoneNotVerified")}
+                            </Text>
+                        </>
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                     )}
                 </View>
             </View>
             <View style={pc.ending}>
+<<<<<<< HEAD
                 <Text style={pc.endingLabel}>ENDS IN</Text>
                 <Text style={pc.endingVal}>{lastFour}</Text>
+=======
+                <Text style={[pc.endingLabel, { color: C.tx3 }]}>{t("settings.endsIn")}</Text>
+                <Text style={[pc.endingNum, { color: C.tx2 }]}>{lastFour}</Text>
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
             </View>
         </View>
     );
 }
 const pc = StyleSheet.create({
     card: {
+<<<<<<< HEAD
         flexDirection: 'row', alignItems: 'center', gap: 14,
         backgroundColor: T.s2, borderRadius: 16, borderWidth: 1, borderColor: T.bd,
         paddingVertical: 16, paddingRight: 16, paddingLeft: 0, overflow: 'hidden',
@@ -697,8 +848,31 @@ const edb = StyleSheet.create({
 });
 
 // ─── Main Screen ───────────────────────────────────────────────────────────────
+=======
+        flexDirection: "row", alignItems: "center", gap: 14,
+        borderRadius: 16, borderWidth: 1,
+        paddingVertical: 16, paddingRight: 16, paddingLeft: 0, overflow: "hidden",
+    },
+    stripe: { width: 3, alignSelf: "stretch", marginRight: -2 },
+    avatar: {
+        width: 46, height: 46, borderRadius: 23, borderWidth: 1.5,
+        alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 14,
+    },
+    avatarText: { fontSize: 18, fontWeight: "900" },
+    phone: { fontSize: 15, fontWeight: "700", letterSpacing: 0.2 },
+    statusRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+    dot: { width: 5, height: 5, borderRadius: 3 },
+    statusText: { fontSize: 11.5, fontWeight: "600" },
+    ending: { alignItems: "flex-end" },
+    endingLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+    endingNum: { fontSize: 15, fontWeight: "800", letterSpacing: 1, marginTop: 2 },
+});
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
 export default function SettingsScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
     const { parentUser, logout } = useAuthStore();
     const {
         student, token, card, emergencyProfile,
@@ -708,10 +882,21 @@ export default function SettingsScreen() {
         updateNotificationPref, notificationPrefs,
     } = useProfileStore();
 
+<<<<<<< HEAD
     const { theme, setTheme } = useColorScheme?.() ?? { theme: 'system', setTheme: () => { } };
+=======
+    // ── Theme ─────────────────────────────────────────────────────────────────
+    const { colors: C } = useThemeContext() ?? {};
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
 
+    // ── Language ──────────────────────────────────────────────────────────────
+    const currentLang = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0];
+    const [langModalOpen, setLangModal] = useState(false);
+
+    // ── Notification / location toggles ───────────────────────────────────────
     const [scanAlerts, setScanAlerts] = useState(notificationPrefs?.scanAlerts ?? true);
     const [anomalyAlerts, setAnomalyAlerts] = useState(notificationPrefs?.anomalyAlerts ?? true);
+<<<<<<< HEAD
     const [locationOn, setLocationOn] = useState(locationConsent?.enabled ?? false);
     const [digestOn, setDigestOn] = useState(notificationPrefs?.weeklyDigest ?? true);
     const [digestDay, setDigestDay] = useState(notificationPrefs?.digestDay ?? 'Mon');
@@ -743,12 +928,38 @@ export default function SettingsScreen() {
             'Delete Account',
             'This will permanently erase all data — scan history, emergency profile, and all linked cards. This cannot be undone.',
             [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { } }]
+=======
+    const [locationEnabled, setLocation] = useState(locationConsent?.enabled ?? false);
+
+    const unresolvedAnomalies = (anomalies ?? []).filter((a) => !a.resolved);
+
+    // ── Logout ────────────────────────────────────────────────────────────────
+    const handleLogout = () => {
+        Alert.alert(
+            t("common.logout"),
+            "Are you sure you want to log out?",
+            [
+                { text: t("common.cancel"), style: "cancel" },
+                {
+                    text: t("common.logout"),
+                    style: "destructive",
+                    onPress: async () => {
+                        await logout();
+                        router.replace("/(auth)/login");
+                    },
+                },
+            ],
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
         );
 
     const handleExport = () =>
         Alert.alert('Export Data', 'A download link will be sent to your registered phone number within a few minutes.');
 
+    // Guard: wait for theme to be ready
+    if (!C) return null;
+
     return (
+<<<<<<< HEAD
         <Screen bg={T.bg} edges={['top', 'left', 'right']}>
 
             <LockCardModal
@@ -778,6 +989,39 @@ export default function SettingsScreen() {
                             <View style={[s.pillDot, { backgroundColor: token.status === 'ACTIVE' ? T.ok : T.amb }]} />
                             <Text style={[s.pillText, { color: token.status === 'ACTIVE' ? T.ok : T.amb }]}>
                                 {token.status === 'ACTIVE' ? 'Card Live' : token.status}
+=======
+        <Screen bg={C.bg} edges={["top", "left", "right"]}>
+            <LanguageModal visible={langModalOpen} onClose={() => setLangModal(false)} />
+
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[s.scroll, { gap: spacing[4] }]}
+            >
+                {/* ── Page header ── */}
+                <Animated.View entering={FadeInDown.delay(40).duration(350)} style={s.header}>
+                    <View>
+                        <Text style={[s.pageTitle, { color: C.tx }]}>{t("settings.title")}</Text>
+                        <Text style={[s.pageSub, { color: C.tx3 }]}>
+                            {student?.first_name
+                                ? `${student.first_name}'s emergency card`
+                                : t("settings.subtitle")}
+                        </Text>
+                    </View>
+                    {token?.status && (
+                        <View style={[
+                            s.statusPill,
+                            token.status === "ACTIVE"
+                                ? { backgroundColor: C.okBg, borderColor: C.okBd }
+                                : { backgroundColor: C.ambBg, borderColor: C.ambBd },
+                        ]}>
+                            <View style={[s.statusDot, {
+                                backgroundColor: token.status === "ACTIVE" ? C.ok : C.amb,
+                            }]} />
+                            <Text style={[s.statusText, {
+                                color: token.status === "ACTIVE" ? C.ok : C.amb,
+                            }]}>
+                                {token.status === "ACTIVE" ? t("settings.cardLive") : token.status}
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                             </Text>
                         </View>
                     )}
@@ -785,16 +1029,21 @@ export default function SettingsScreen() {
 
                 {/* Parent identity */}
                 <Animated.View entering={FadeInDown.delay(70).duration(350)}>
-                    <ParentCard parentUser={parentUser} />
+                    <ParentCard parentUser={parentUser} C={C} />
                 </Animated.View>
 
+<<<<<<< HEAD
                 {/* Pending update requests */}
+=======
+                {/* ── Pending updates ── */}
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                 {(updateRequests?.length ?? 0) > 0 && (
                     <Animated.View entering={FadeInDown.delay(85).duration(350)}>
                         <PendingUpdatesBanner requests={updateRequests} />
                     </Animated.View>
                 )}
 
+<<<<<<< HEAD
                 {/* Export data banner */}
                 <Animated.View entering={FadeInDown.delay(95).duration(350)}>
                     <ExportDataBanner onPress={handleExport} />
@@ -826,20 +1075,68 @@ export default function SettingsScreen() {
                             size="critical"
                             badge={{ label: 'CRITICAL', color: T.red, bg: T.redBg }}
                         />
+=======
+                {/* ── Physical card ── */}
+                <Animated.View entering={FadeInDown.delay(110).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.physicalCard")} accent={C.blue} />
+                    <SettingsCard C={C}>
+                        <CardStatusBlock token={token} card={card} />
                         <Row
-                            iconEl={<IconEye color={T.blue} />}
-                            iconBg={T.blueBg} iconBd={T.blueBd}
-                            title="Visibility Controls"
-                            subtitle={visibilityLabel(emergencyProfile?.visibility)}
-                            onPress={() => router.push('/(app)/visibility')}
-                        />
-                        <TrustedContactsPreview
-                            contacts={trustedContacts ?? []}
-                            onManage={() => router.push('/(app)/trusted-contacts')}
+                            C={C}
+                            iconEl={<IconScan color={C.red} />}
+                            iconBg={C.redBg} iconBd={C.redBd}
+                            title={t("settings.deactivateCard")}
+                            subtitle={t("settings.deactivateCardSub")}
+                            onPress={() => router.push("/(app)/qr")}
+                            isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
+                {/* ── Scan history ── */}
+                <Animated.View entering={FadeInDown.delay(140).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.scanActivity")} accent={C.blue} />
+                    <SettingsCard C={C}>
+                        <ScanHistoryPreview
+                            scans={recentScans ?? []}
+                            anomalyCount={unresolvedAnomalies.length}
+                            onViewAll={() => router.push("/(app)/scan-history")}
+                        />
+                    </SettingsCard>
+                </Animated.View>
+
+                {/* ── Emergency profile ── */}
+                <Animated.View entering={FadeInDown.delay(170).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.emergencyProfile")} accent={C.red} />
+                    <SettingsCard C={C}>
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
+                        <Row
+                            C={C}
+                            iconEl={<IconEye color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.visibilityControls")}
+                            subtitle={visibilityLabel(emergencyProfile?.visibility)}
+                            onPress={() => router.push('/(app)/visibility')}
+                        />
+<<<<<<< HEAD
+                        <TrustedContactsPreview
+                            contacts={trustedContacts ?? []}
+                            onManage={() => router.push('/(app)/trusted-contacts')}
+=======
+                        <Row
+                            C={C}
+                            iconEl={<IconShield color={C.red} />}
+                            iconBg={C.redBg} iconBd={C.redBd}
+                            title={t("settings.emergencyInfo")}
+                            subtitle={`${t("settings.emergencyInfoSub")} · ${student?.first_name ?? "child"}'s card`}
+                            onPress={() => router.push("/(app)/updates")}
+                            isLast
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
+                        />
+                    </SettingsCard>
+                </Animated.View>
+
+<<<<<<< HEAD
                 {/* C: Scan Activity */}
                 <Animated.View entering={FadeInDown.delay(170).duration(350)} style={s.group}>
                     <SectionLabel label="Scan Activity" accent={T.blue} />
@@ -881,33 +1178,49 @@ export default function SettingsScreen() {
                 <Animated.View entering={FadeInDown.delay(200).duration(350)} style={s.group}>
                     <SectionLabel label="Security" accent={T.purp} />
                     <SettingsCard>
+=======
+                {/* ── Security ── */}
+                <Animated.View entering={FadeInDown.delay(200).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.security")} accent={C.purp} />
+                    <SettingsCard C={C}>
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                         <BiometricRow isLast />
                     </SettingsCard>
                 </Animated.View>
 
+<<<<<<< HEAD
                 {/* E: Notifications + Activity Digest */}
                 <Animated.View entering={FadeInDown.delay(230).duration(350)} style={s.group}>
                     <SectionLabel label="Notifications" accent={T.ok} />
                     <SettingsCard>
+=======
+                {/* ── Notifications ── */}
+                <Animated.View entering={FadeInDown.delay(230).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.notifications")} accent={C.ok} />
+                    <SettingsCard C={C}>
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                         <Row
-                            iconEl={<IconBell color={T.ok} />}
-                            iconBg={T.okBg} iconBd={T.okBd}
-                            title="Scan Alerts"
-                            subtitle="Notify when card is scanned"
+                            C={C}
+                            iconEl={<IconBell color={C.ok} />}
+                            iconBg={C.okBg} iconBd={C.okBd}
+                            title={t("settings.scanAlerts")}
+                            subtitle={t("settings.scanAlertsSub")}
                             toggle toggleVal={scanAlerts}
                             onToggle={(v) => { setScanAlerts(v); updateNotificationPref?.('scanAlerts', v); }}
                             size="compact"
                         />
                         <Row
-                            iconEl={<IconWarning color={T.amb} />}
-                            iconBg={T.ambBg} iconBd={T.ambBd}
-                            title="Anomaly Alerts"
-                            subtitle="Suspicious scan activity warnings"
+                            C={C}
+                            iconEl={<IconWarning color={C.amb} />}
+                            iconBg={C.ambBg} iconBd={C.ambBd}
+                            title={t("settings.anomalyAlerts")}
+                            subtitle={t("settings.anomalyAlertsSub")}
                             toggle toggleVal={anomalyAlerts}
                             onToggle={(v) => { setAnomalyAlerts(v); updateNotificationPref?.('anomalyAlerts', v); }}
                             size="compact"
                         />
                         <Row
+<<<<<<< HEAD
                             iconEl={<IconMapPin color={T.blue} />}
                             iconBg={T.blueBg} iconBd={T.blueBd}
                             title="Location on Scan"
@@ -915,6 +1228,16 @@ export default function SettingsScreen() {
                             toggle toggleVal={locationOn}
                             onToggle={(v) => { setLocationOn(v); updateLocationConsent?.(v); }}
                             size="compact"
+=======
+                            C={C}
+                            iconEl={<IconMapPin color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.locationOnScan")}
+                            subtitle={t("settings.locationOnScanSub")}
+                            toggle toggleVal={locationEnabled}
+                            onToggle={(v) => { setLocation(v); updateLocationConsent?.(v); }}
+                            isLast
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                         />
                         <CardDivider label="WEEKLY DIGEST" />
                         <Row
@@ -940,6 +1263,7 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
+<<<<<<< HEAD
                 {/* F: Appearance */}
                 <Animated.View entering={FadeInDown.delay(260).duration(350)} style={s.group}>
                     <SectionLabel label="Appearance" accent={T.tx3} />
@@ -949,22 +1273,40 @@ export default function SettingsScreen() {
                             iconBg={T.blueBg} iconBd={T.blueBd}
                             title="Language"
                             subtitle={currentLang ? `${currentLang.native} · ${currentLang.label}` : 'English'}
+=======
+                {/* ── Appearance ── */}
+                <Animated.View entering={FadeInDown.delay(260).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.appearance")} accent={C.tx3} />
+                    <SettingsCard C={C}>
+                        <Row
+                            C={C}
+                            iconEl={<IconGlobe color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.language")}
+                            subtitle={`${currentLang.native} · ${currentLang.label}`}
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                             onPress={() => setLangModal(true)}
                             size="compact"
                         />
                         <Row
-                            iconEl={<IconMoon color={T.tx3} />}
-                            iconBg={T.s4} iconBd={T.bd2}
-                            title="Theme"
-                            subtitle="System, Light, or Dark"
+                            C={C}
+                            iconEl={<IconMoon color={C.tx3} />}
+                            iconBg={C.s4} iconBd={C.bd2}
+                            title={t("settings.theme")}
+                            subtitle={t("settings.themeSub")}
                             noChevron
+<<<<<<< HEAD
                             right={<ThemeSegment value={theme} onChange={setTheme} />}
                             size="compact"
+=======
+                            right={<ThemeSegment />}  // reads context directly — no props needed
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                             isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
+<<<<<<< HEAD
                 {/* G: Account */}
                 <Animated.View entering={FadeInDown.delay(290).duration(350)} style={s.group}>
                     <SectionLabel label="Account" accent={T.tx3} />
@@ -983,11 +1325,40 @@ export default function SettingsScreen() {
                             title="Help & Support"
                             onPress={() => router.push('/(app)/support')}
                             size="compact"
+=======
+                {/* ── Account ── */}
+                <Animated.View entering={FadeInDown.delay(290).duration(350)} style={s.group}>
+                    <SectionLabel label={t("settings.account")} accent={C.tx3} />
+                    <SettingsCard C={C}>
+                        <Row
+                            C={C}
+                            iconEl={<IconPhone color={C.amb} />}
+                            iconBg={C.ambBg} iconBd={C.ambBd}
+                            title={t("settings.changePhone")}
+                            subtitle={t("settings.changePhoneSub")}
+                            onPress={() => router.push("/(app)/change-phone")}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<IconInfo color={C.blue} />}
+                            iconBg={C.blueBg} iconBd={C.blueBd}
+                            title={t("settings.support")}
+                            onPress={() => router.push("/(app)/support")}
+                        />
+                        <Row
+                            C={C}
+                            iconEl={<LogOut c={C.red} s={16} />}
+                            iconBg={C.redBg} iconBd={C.redBd}
+                            title={t("settings.logout")}
+                            onPress={handleLogout}
+                            danger
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                             isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
+<<<<<<< HEAD
                 {/* H: Danger Zone */}
                 <Animated.View entering={FadeInDown.delay(320).duration(350)} style={s.group}>
                     <SectionLabel label="Danger Zone" accent={T.red} />
@@ -1017,21 +1388,30 @@ export default function SettingsScreen() {
                     <Text style={s.footerApp}>RESQID · v1.0.0</Text>
                     <Text style={s.footerSub}>coreZ Technologies Pvt. Ltd.</Text>
                     <Text style={s.footerSub2}>Emergency ID Card Platform for Indian Schools</Text>
+=======
+                {/* ── Footer ── */}
+                <Animated.View entering={FadeInDown.delay(320).duration(350)} style={s.footer}>
+                    <View style={[s.footerDivider, { backgroundColor: C.bd2 }]} />
+                    <Text style={[s.footerApp, { color: C.tx3 }]}>RESQID · v1.0.0</Text>
+                    <Text style={[s.footerSub, { color: C.tx3 }]}>Emergency ID Card Platform</Text>
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
                 </Animated.View>
-
             </ScrollView>
         </Screen>
     );
 }
 
+<<<<<<< HEAD
 // ─── Styles ────────────────────────────────────────────────────────────────────
+=======
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
 const s = StyleSheet.create({
     scroll: {
         paddingHorizontal: spacing.screenH,
         paddingTop: spacing[5],
         paddingBottom: spacing[12],
-        gap: spacing[4],
     },
+<<<<<<< HEAD
     header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingBottom: spacing[1] },
     pageTitle: { fontSize: 26, fontWeight: '800', color: T.tx, letterSpacing: -0.5 },
     pageSub: { fontSize: 12.5, color: T.tx3, marginTop: 3 },
@@ -1048,4 +1428,26 @@ const s = StyleSheet.create({
     footerApp: { fontSize: 11, fontWeight: '800', color: T.tx3, letterSpacing: 1.2 },
     footerSub: { fontSize: 11, color: T.tx3 },
     footerSub2: { fontSize: 10, color: T.tx4, marginTop: 1 },
+=======
+    header: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        paddingBottom: spacing[1],
+    },
+    pageTitle: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
+    pageSub: { fontSize: 12.5, marginTop: 3 },
+    statusPill: {
+        flexDirection: "row", alignItems: "center", gap: 5,
+        paddingHorizontal: 10, paddingVertical: 5,
+        borderRadius: 8, borderWidth: 1, marginTop: 4,
+    },
+    statusDot: { width: 5, height: 5, borderRadius: 3 },
+    statusText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+    group: { gap: 8 },
+    footer: { alignItems: "center", gap: 4, paddingTop: spacing[2] },
+    footerDivider: { width: 32, height: 1, borderRadius: 1, marginBottom: 8 },
+    footerApp: { fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+    footerSub: { fontSize: 11 },
+>>>>>>> e44d5af02045e2ba776895ae6b70b3a08e61d6c9
 });

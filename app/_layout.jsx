@@ -4,15 +4,17 @@
 
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useProfileStore } from "@/features/profile/profile.store";
-import { initI18n } from "@/i18n";
+import i18n, { initI18n } from "@/i18n";
 import { setLogoutHandler } from "@/lib/api/apiClient";
 import { isDeviceRooted } from "@/lib/security/deviceSecurity";
 import { checkAppIntegrity } from "@/lib/security/integrityCheck";
 import AuthProvider from "@/providers/AuthProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { Component, useEffect, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, LogBox, StyleSheet, Text, View } from "react-native";
+import { I18nextProvider } from "react-i18next";
 
 LogBox.ignoreLogs([
     "expo-router/babel is deprecated",
@@ -67,10 +69,9 @@ export default function RootLayout() {
     const hydrateAuth = useAuthStore((s) => s.hydrate);
     const hydrateProfile = useProfileStore((s) => s.hydrate);
 
-    // ── Security checks — runs once on every cold start ───────────────────────
+    // ── Security checks ───────────────────────────────────────────────────────
     useEffect(() => {
         const runSecurityChecks = async () => {
-            // Run both checks in parallel for speed
             const [rooted, integrityOk] = await Promise.all([
                 isDeviceRooted(),
                 Promise.resolve(checkAppIntegrity()),
@@ -83,7 +84,7 @@ export default function RootLayout() {
                     [{ text: 'OK', onPress: () => BackHandler.exitApp() }],
                     { cancelable: false }
                 );
-                return; // stop — don't check integrity if already blocking
+                return;
             }
 
             if (!integrityOk) {
@@ -99,12 +100,12 @@ export default function RootLayout() {
         runSecurityChecks();
     }, []);
 
-    // ── Hydration — runs immediately, not blocked by Stack ────────────────────
+    // ── Hydration ─────────────────────────────────────────────────────────────
     useEffect(() => {
         Promise.all([hydrateAuth(), hydrateProfile()]);
     }, []);
 
-    // ── Wire logout handler once ──────────────────────────────────────────────
+    // ── Wire logout handler ───────────────────────────────────────────────────
     useEffect(() => {
         if (logoutWired.current) return;
         logoutWired.current = true;
@@ -139,19 +140,23 @@ export default function RootLayout() {
         return () => sub.remove();
     }, [isAuthenticated]);
 
-    // ── Block Stack until BOTH i18n AND hydration are done ────────────────────
+    // ── Block until ready ─────────────────────────────────────────────────────
     if (!i18nReady || !isHydrated) return <View style={s.loadingContainer} />;
 
     return (
         <RootErrorBoundary>
-            <AuthProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="index" options={{ headerShown: false }} />
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(app)" />
-                    <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
-                </Stack>
-            </AuthProvider>
+            <ThemeProvider>
+                <I18nextProvider i18n={i18n}>
+                    <AuthProvider>
+                        <Stack screenOptions={{ headerShown: false }}>
+                            <Stack.Screen name="index" options={{ headerShown: false }} />
+                            <Stack.Screen name="(auth)" />
+                            <Stack.Screen name="(app)" />
+                            <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
+                        </Stack>
+                    </AuthProvider>
+                </I18nextProvider>
+            </ThemeProvider>
         </RootErrorBoundary>
     );
 }
