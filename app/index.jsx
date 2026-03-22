@@ -1,27 +1,26 @@
 /**
  * @file app/index.jsx
- * @description Entry / Welcome screen — SchoolQR Guardian
- * REDESIGNED: Premium cinematic UI with geometric patterns, staggered reveals,
- *             diagonal layout, floating cards, and refined micro-interactions.
+ * @description Entry / Welcome screen — RESQID
  *
- * All original fixes preserved:
- *  [F1]  router.replace — prevents back-nav from login to welcome
- *  [F2]  Auth/hydration guard
- *  [F3]  PulseRing useEffect deps
- *  [F4]  StatusDot intentional empty deps
- *  [F5]  mode param validated with allowlist
- *  [F6]  useWindowDimensions hook
- *  [F7]  StatusDot inside fixed container
- *  [F8]  Pressable with style callback
- *  [F9]  allowFontScaling={false} on all Text
- *  [F10] pointerEvents in style
- *  [F11] Trust badge copy as constant
+ * Refactored: Replaced all custom SVG icon components with @expo/vector-icons
+ *             (MaterialCommunityIcons + Feather) to reduce boilerplate.
+ *             Custom SVGs kept only for GeometricPattern (decorative background).
+ *             Product rebranded to RESQID.
+ *
+ * All original fixes preserved: [F1]–[F12]
  */
 
-import { useAuthStore } from '@/features/auth/auth.store';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import {
+  C,
+  FEATURE_PILLS,
+  TRUST_BADGE_TEXT,
+  VALID_MODES,
+} from "@/constants/constants";
+import { useAuthStore } from "@/features/auth/auth.store";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import { useCallback, useEffect } from "react";
 import {
   Platform,
   Pressable,
@@ -30,7 +29,7 @@ import {
   Text,
   useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Easing,
   FadeIn,
@@ -43,372 +42,690 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Circle, Defs, Path, Rect, Stop, Svg, LinearGradient as SvgGradient } from 'react-native-svg';
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Circle, Path, Svg } from "react-native-svg";
 
-// ─── Design Tokens ──────────────────────────────────────────────────────────────
+// ─── Responsive scale helpers ─────────────────────────────────────────────────
+const BASE_W = 390;
+const BASE_H = 844;
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
-const C = {
-  bg: '#0D0D0F',
-  bgDeep: '#120909',
-  bgCard: '#161618',
-  bgCard2: '#1A1A1D',
-  red: '#FF3B30',
-  redDark: '#C8211A',
-  redGlow: 'rgba(255,59,48,0.18)',
-  redGlowSoft: 'rgba(255,59,48,0.08)',
-  white: '#FFFFFF',
-  white90: 'rgba(255,255,255,0.90)',
-  white60: 'rgba(255,255,255,0.60)',
-  white35: 'rgba(255,255,255,0.35)',
-  white15: 'rgba(255,255,255,0.15)',
-  white08: 'rgba(255,255,255,0.08)',
-  white04: 'rgba(255,255,255,0.04)',
-  green: '#2ECC71',
-  greenGlow: 'rgba(46,204,113,0.5)',
-  border: 'rgba(255,255,255,0.07)',
-  borderRed: 'rgba(255,59,48,0.25)',
+// ─── Geometric Background (kept as SVG — purely decorative) ──────────────────
+
+const GeometricPattern = ({ width, height }) => {
+  const cx = width / 2;
+  const cy = height * 0.36;
+  return (
+    <Svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={StyleSheet.absoluteFillObject}
+      pointerEvents="none"
+    >
+      {/* Diagonal grid lines */}
+      {Array.from({ length: 16 }).map((_, i) => (
+        <Path
+          key={`dl-${i}`}
+          d={`M${-120 + i * 70} 0 L${i * 70 + 160} ${height}`}
+          stroke="rgba(255,255,255,0.013)"
+          strokeWidth="1"
+        />
+      ))}
+      {/* Horizontal scan lines */}
+      {Array.from({ length: 10 }).map((_, i) => (
+        <Path
+          key={`hl-${i}`}
+          d={`M0 ${80 + i * 80} L${width} ${80 + i * 80}`}
+          stroke="rgba(255,255,255,0.012)"
+          strokeWidth="1"
+        />
+      ))}
+
+      {/* Corner bracket — top-right */}
+      <Path
+        d={`M${width - 32} 20 L${width - 20} 20 L${width - 20} 32`}
+        stroke="rgba(255,59,48,0.35)"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      {/* Corner bracket — bottom-left */}
+      <Path
+        d={`M20 ${height - 32} L20 ${height - 20} L32 ${height - 20}`}
+        stroke="rgba(255,59,48,0.25)"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      {/* Corner bracket — top-left */}
+      <Path
+        d={`M32 20 L20 20 L20 32`}
+        stroke="rgba(255,255,255,0.06)"
+        strokeWidth="1"
+        fill="none"
+      />
+      {/* Corner bracket — bottom-right */}
+      <Path
+        d={`M${width - 32} ${height - 20} L${width - 20} ${height - 20} L${width - 20} ${height - 32}`}
+        stroke="rgba(255,255,255,0.06)"
+        strokeWidth="1"
+        fill="none"
+      />
+
+      {/* Crosshair circle around hero center */}
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={118}
+        stroke="rgba(255,59,48,0.055)"
+        strokeWidth="1"
+        fill="none"
+        strokeDasharray="3 7"
+      />
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={88}
+        stroke="rgba(255,255,255,0.025)"
+        strokeWidth="1"
+        fill="none"
+        strokeDasharray="2 12"
+      />
+
+      {/* Cross-hair tick marks */}
+      <Path d={`M${cx - 128} ${cy} L${cx - 112} ${cy}`} stroke="rgba(255,59,48,0.22)" strokeWidth="1" />
+      <Path d={`M${cx + 112} ${cy} L${cx + 128} ${cy}`} stroke="rgba(255,59,48,0.22)" strokeWidth="1" />
+      <Path d={`M${cx} ${cy - 128} L${cx} ${cy - 112}`} stroke="rgba(255,59,48,0.22)" strokeWidth="1" />
+      <Path d={`M${cx} ${cy + 112} L${cx} ${cy + 128}`} stroke="rgba(255,59,48,0.22)" strokeWidth="1" />
+
+      {/* Dot matrix — top-right cluster */}
+      {Array.from({ length: 6 }).map((_, row) =>
+        Array.from({ length: 6 }).map((_, col) => (
+          <Circle
+            key={`dot-${row}-${col}`}
+            cx={width - 52 + col * 10}
+            cy={96 + row * 10}
+            r="1"
+            fill="rgba(255,255,255,0.10)"
+          />
+        ))
+      )}
+
+      {/* Dot matrix — bottom-left cluster */}
+      {Array.from({ length: 4 }).map((_, row) =>
+        Array.from({ length: 4 }).map((_, col) => (
+          <Circle
+            key={`dot2-${row}-${col}`}
+            cx={32 + col * 10}
+            cy={height - 80 + row * 10}
+            r="0.8"
+            fill="rgba(255,255,255,0.07)"
+          />
+        ))
+      )}
+
+      {/* Horizontal rule with ticks — below hero */}
+      <Path
+        d={`M${cx - 60} ${cy + 140} L${cx + 60} ${cy + 140}`}
+        stroke="rgba(255,255,255,0.07)"
+        strokeWidth="1"
+      />
+      <Path d={`M${cx - 60} ${cy + 136} L${cx - 60} ${cy + 144}`} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <Path d={`M${cx + 60} ${cy + 136} L${cx + 60} ${cy + 144}`} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <Path d={`M${cx} ${cy + 136} L${cx} ${cy + 144}`} stroke="rgba(255,59,48,0.25)" strokeWidth="1" />
+
+      {/* Vertical side accent lines */}
+      <Path
+        d={`M8 ${height * 0.28} L8 ${height * 0.58}`}
+        stroke="rgba(255,59,48,0.12)"
+        strokeWidth="1"
+      />
+      <Path
+        d={`M${width - 8} ${height * 0.32} L${width - 8} ${height * 0.62}`}
+        stroke="rgba(255,59,48,0.09)"
+        strokeWidth="1"
+      />
+    </Svg>
+  );
 };
 
-const VALID_MODES = ['register', 'login'];
-const TRUST_BADGE_TEXT = 'Trusted by 2,400+ parents across India';
-
-// ─── SVG Components ────────────────────────────────────────────────────────────
-
-const ShieldIcon = ({ size = 52 }) => (
-  <Svg width={size} height={size} viewBox="0 0 52 52" fill="none">
-    <Defs>
-      <SvgGradient id="sg" x1="0" y1="0" x2="1" y2="1">
-        <Stop offset="0" stopColor="#FF3B30" />
-        <Stop offset="1" stopColor="#C8211A" />
-      </SvgGradient>
-    </Defs>
-    <Path
-      d="M26 3L7 11v14.5c0 11.8 8.5 22.8 19.5 25.7C37.5 48.3 45 37.3 45 25.5V11L26 3z"
-      stroke="url(#sg)"
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-      fill="rgba(255,59,48,0.06)"
-    />
-    <Path
-      d="M17 26l7 7 12-12"
-      stroke={C.red}
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Svg>
-);
-
-const QrIcon = ({ size = 22 }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Rect x="3" y="3" width="7" height="7" rx="1" stroke={C.white60} strokeWidth="1.5" />
-    <Rect x="14" y="3" width="7" height="7" rx="1" stroke={C.white60} strokeWidth="1.5" />
-    <Rect x="3" y="14" width="7" height="7" rx="1" stroke={C.white60} strokeWidth="1.5" />
-    <Rect x="5" y="5" width="3" height="3" rx="0.5" fill={C.white60} />
-    <Rect x="16" y="5" width="3" height="3" rx="0.5" fill={C.white60} />
-    <Rect x="5" y="16" width="3" height="3" rx="0.5" fill={C.white60} />
-    <Path d="M14 14h2v2h-2zM18 14h3M18 18h3M14 18v3M14 21h3" stroke={C.white60} strokeWidth="1.5" strokeLinecap="round" />
-  </Svg>
-);
-
-const LockIcon = ({ size = 20 }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Rect x="5" y="11" width="14" height="10" rx="2" stroke={C.white60} strokeWidth="1.5" />
-    <Path d="M8 11V7a4 4 0 018 0v4" stroke={C.white60} strokeWidth="1.5" strokeLinecap="round" />
-    <Circle cx="12" cy="16" r="1.5" fill={C.white60} />
-  </Svg>
-);
-
-const ArrowRight = ({ size = 18 }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path d="M5 12h14M13 6l6 6-6 6" stroke={C.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const CheckIcon = ({ size = 13 }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path d="M5 12l5 5 9-9" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-// ─── Geometric Background Pattern ─────────────────────────────────────────────
-
-const GeometricPattern = ({ width, height }) => (
-  <Svg
-    width={width}
-    height={height}
-    viewBox={`0 0 ${width} ${height}`}
-    style={StyleSheet.absoluteFillObject}
-    pointerEvents="none"
-  >
-    {/* Large diagonal line grid */}
-    {Array.from({ length: 12 }).map((_, i) => (
-      <Path
-        key={`dl-${i}`}
-        d={`M${-100 + i * 80} 0 L${i * 80 + 200} ${height}`}
-        stroke="rgba(255,255,255,0.018)"
-        strokeWidth="1"
-      />
-    ))}
-    {/* Horizontal thin lines */}
-    {Array.from({ length: 8 }).map((_, i) => (
-      <Path
-        key={`hl-${i}`}
-        d={`M0 ${100 + i * 90} L${width} ${100 + i * 90}`}
-        stroke="rgba(255,255,255,0.015)"
-        strokeWidth="1"
-      />
-    ))}
-    {/* Corner accent — top right */}
-    <Path
-      d={`M${width - 80} 0 L${width} 0 L${width} 80`}
-      stroke="rgba(255,59,48,0.20)"
-      strokeWidth="1"
-      fill="none"
-    />
-    {/* Corner accent — bottom left */}
-    <Path
-      d={`M0 ${height - 80} L0 ${height} L80 ${height}`}
-      stroke="rgba(255,59,48,0.15)"
-      strokeWidth="1"
-      fill="none"
-    />
-    {/* Dot grid cluster — top right area */}
-    {Array.from({ length: 5 }).map((_, row) =>
-      Array.from({ length: 5 }).map((_, col) => (
-        <Circle
-          key={`dot-${row}-${col}`}
-          cx={width - 60 + col * 12}
-          cy={120 + row * 12}
-          r="1"
-          fill="rgba(255,255,255,0.12)"
-        />
-      ))
-    )}
-  </Svg>
-);
-
-// ─── Animated Pulse Rings ──────────────────────────────────────────────────────
+// ─── Animated Pulse Ring ──────────────────────────────────────────────────────
 
 const PulseRing = ({ size, delay, baseOpacity }) => {
   const scale = useSharedValue(0.88);
   const opacity = useSharedValue(baseOpacity);
+  const border = useSharedValue(1);
 
   useEffect(() => {
-    const D = 2400;
+    const D = 2600;
     scale.value = withDelay(delay, withRepeat(
       withSequence(
-        withTiming(1.3, { duration: D, easing: Easing.out(Easing.quad) }),
-        withTiming(0.88, { duration: D, easing: Easing.in(Easing.quad) })
-      ), -1, false
+        withTiming(1.32, { duration: D, easing: Easing.out(Easing.cubic) }),
+        withTiming(0.88, { duration: D, easing: Easing.in(Easing.cubic) }),
+      ), -1, false,
     ));
     opacity.value = withDelay(delay, withRepeat(
       withSequence(
-        withTiming(0, { duration: D }),
-        withTiming(baseOpacity, { duration: D })
-      ), -1, false
+        withTiming(0, { duration: D, easing: Easing.out(Easing.exp) }),
+        withTiming(baseOpacity, { duration: D, easing: Easing.in(Easing.exp) }),
+      ), -1, false,
     ));
-  }, [delay, baseOpacity]);
+    border.value = withDelay(delay, withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: D }),
+        withTiming(1.8, { duration: D }),
+      ), -1, false,
+    ));
+  }, [delay, baseOpacity]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+    borderWidth: border.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[styles.ring, { width: size, height: size, borderRadius: size / 2 }, animStyle]}
+    />
+  );
+};
+
+// ─── Corner Bracket Overlay (engineering frame around icon) ──────────────────
+
+const CornerBrackets = ({ size, color = "rgba(255,59,48,0.55)", thickness = 1.5, arm = 14 }) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox={`0 0 ${size} ${size}`}
+    style={StyleSheet.absoluteFillObject}
+    pointerEvents="none"
+  >
+    {/* Top-left */}
+    <Path d={`M${arm} 0 L0 0 L0 ${arm}`} stroke={color} strokeWidth={thickness} fill="none" />
+    {/* Top-right */}
+    <Path d={`M${size - arm} 0 L${size} 0 L${size} ${arm}`} stroke={color} strokeWidth={thickness} fill="none" />
+    {/* Bottom-left */}
+    <Path d={`M0 ${size - arm} L0 ${size} L${arm} ${size}`} stroke={color} strokeWidth={thickness} fill="none" />
+    {/* Bottom-right */}
+    <Path d={`M${size} ${size - arm} L${size} ${size} L${size - arm} ${size}`} stroke={color} strokeWidth={thickness} fill="none" />
+  </Svg>
+);
+
+// ─── Blinking Status Dot ──────────────────────────────────────────────────────
+
+const StatusDot = () => {
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.2, { duration: 850, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: 850, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    );
+    // Heartbeat double-pump then rest
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.4, { duration: 160, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 160, easing: Easing.in(Easing.quad) }),
+        withTiming(1.22, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 110, easing: Easing.in(Easing.quad) }),
+        withTiming(1, { duration: 1400 }),
+      ), -1, false,
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return <Animated.View style={[styles.statusDot, animStyle]} />;
+};
+
+// ─── Feature Pill ─────────────────────────────────────────────────────────────
+
+const FeaturePill = ({ lib, icon, label, delay }) => (
+  <Animated.View
+    entering={FadeInLeft.duration(500).delay(delay)}
+    style={styles.featurePill}
+  >
+    <View style={styles.featurePillIcon}>
+      {lib === "feather" ? (
+        <Feather name={icon} size={12} color={C.white60} />
+      ) : (
+        <MaterialCommunityIcons name={icon} size={13} color={C.white60} />
+      )}
+    </View>
+    <Text style={styles.featurePillText} allowFontScaling={false}>
+      {label}
+    </Text>
+  </Animated.View>
+);
+
+// ─── Floating Icon Wrapper (bob + micro-tilt) ─────────────────────────────────
+
+const FloatingIcon = ({ children }) => {
+  const translateY = useSharedValue(0);
+  const rotate = useSharedValue(0);
+
+  useEffect(() => {
+    translateY.value = withRepeat(
+      withSequence(
+        withTiming(-8, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    );
+    rotate.value = withRepeat(
+      withSequence(
+        withTiming(-1.5, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1.5, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: translateY.value },
+      { rotate: `${rotate.value}deg` },
+    ],
+  }));
+
+  return <Animated.View style={animStyle}>{children}</Animated.View>;
+};
+
+// ─── Scan-Line Sweep ──────────────────────────────────────────────────────────
+
+const ScanLine = ({ iconHalfHeight = 54 }) => {
+  const half = iconHalfHeight;
+  const translateY = useSharedValue(-half);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    const loop = () => {
+      translateY.value = -half;
+      opacity.value = withTiming(0.6, { duration: 180 });
+      translateY.value = withTiming(half, { duration: 820, easing: Easing.linear }, (done) => {
+        if (done) opacity.value = withTiming(0, { duration: 180 });
+      });
+    };
+    const id = setTimeout(() => {
+      loop();
+      setInterval(loop, 3400);
+    }, 1600);
+    return () => clearTimeout(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={[styles.scanLine, animStyle]} />
+  );
+};
+
+// ─── Ambient Breath Glow ─────────────────────────────────────────────────────
+
+const BreathGlow = () => {
+  const scale = useSharedValue(0.85);
+  const opacity = useSharedValue(0.14);
+
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.5, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.85, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    );
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.32, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.10, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 
+  return <Animated.View style={[styles.breathGlow, animStyle]} pointerEvents="none" />;
+};
+
+// ─── Orbiting Particle ────────────────────────────────────────────────────────
+
+const OrbitParticle = ({ radius, duration, delay, startAngle }) => {
+  const angle = useSharedValue(startAngle);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(1, { duration: 600 }));
+    angle.value = withDelay(delay, withRepeat(
+      withTiming(startAngle + 360, { duration, easing: Easing.linear }),
+      -1, false,
+    ));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const animStyle = useAnimatedStyle(() => {
+    const rad = (angle.value * Math.PI) / 180;
+    return {
+      transform: [
+        { translateX: radius * Math.cos(rad) },
+        { translateY: radius * Math.sin(rad) },
+      ],
+      opacity: opacity.value,
+    };
+  });
+
+  return <Animated.View style={[styles.orbitDot, animStyle]} />;
+};
+
+// ─── Data Readout (scanning status text) ─────────────────────────────────────
+
+const DataReadout = () => {
+  const opacity = useSharedValue(0);
+  const LABELS = ["SCANNING...", "ID VERIFIED", "SHIELD ACTIVE", "SYSTEM OK"];
+  const idxRef = { current: 0 };
+
+  // Simple opacity blink cycling through labels isn't possible without state,
+  // so we use a perpetual fade-in/out for a single "SYSTEM ACTIVE" indicator.
+  useEffect(() => {
+    opacity.value = withDelay(1000, withRepeat(
+      withSequence(
+        withTiming(1, { duration: 600, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 1800 }),
+        withTiming(0, { duration: 400, easing: Easing.in(Easing.quad) }),
+        withTiming(0, { duration: 300 }),
+      ), -1, false,
+    ));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
   return (
-    <Animated.View style={[
-      styles.ring,
-      { width: size, height: size, borderRadius: size / 2 },
-      animStyle,
-    ]} />
+    <Animated.View style={[styles.dataReadout, animStyle]} pointerEvents="none">
+      <View style={styles.dataReadoutDot} />
+      <Text style={styles.dataReadoutText} allowFontScaling={false}>
+        SYSTEM ACTIVE
+      </Text>
+    </Animated.View>
   );
 };
 
-// ─── Blinking Status Dot ───────────────────────────────────────────────────────
+// ─── Shimmer Overlay (CTA button) ────────────────────────────────────────────
 
-const StatusDot = () => {
-  const opacity = useSharedValue(1);
+const ShimmerOverlay = () => {
+  const translateX = useSharedValue(-220);
+  const translateX2 = useSharedValue(-320);
+
   useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.2, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
-      ), -1, false
-    );
+    const run1 = () => {
+      translateX.value = -220;
+      translateX.value = withTiming(420, { duration: 860, easing: Easing.out(Easing.quad) });
+    };
+    const run2 = () => {
+      translateX2.value = -320;
+      translateX2.value = withTiming(420, { duration: 1100, easing: Easing.out(Easing.cubic) });
+    };
+    const id = setTimeout(() => {
+      run1();
+      setTimeout(run2, 220);
+      setInterval(() => {
+        run1();
+        setTimeout(run2, 220);
+      }, 4200);
+    }, 1200);
+    return () => clearTimeout(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return <Animated.View style={[styles.statusDot, animStyle]} />;
+
+  const s1 = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { rotate: "18deg" }],
+  }));
+  const s2 = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX2.value }, { rotate: "18deg" }],
+  }));
+
+  return (
+    <>
+      <Animated.View style={[styles.shimmer, s1]} pointerEvents="none" />
+      <Animated.View style={[styles.shimmerThin, s2]} pointerEvents="none" />
+    </>
+  );
 };
 
-// ─── Feature Pill ──────────────────────────────────────────────────────────────
-
-const FeaturePill = ({ icon, label, delay }) => (
-  <Animated.View entering={FadeInLeft.duration(500).delay(delay)} style={styles.featurePill}>
-    <View style={styles.featurePillIcon}>{icon}</View>
-    <Text style={styles.featurePillText} allowFontScaling={false}>{label}</Text>
-  </Animated.View>
-);
-
-// ─── Stats Card ────────────────────────────────────────────────────────────────
-
-const StatCard = ({ value, label, delay }) => (
-  <Animated.View entering={FadeInDown.duration(500).delay(delay)} style={styles.statCard}>
-    <Text style={styles.statValue} allowFontScaling={false}>{value}</Text>
-    <Text style={styles.statLabel} allowFontScaling={false}>{label}</Text>
-  </Animated.View>
-);
-
-// ─── WelcomeScreen ─────────────────────────────────────────────────────────────
+// ─── WelcomeScreen ────────────────────────────────────────────────────────────
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
+  // Responsive ratios
+  const r = clamp(windowWidth / BASE_W, 0.75, 1.25);
+  const rv = clamp(windowHeight / BASE_H, 0.80, 1.20);
+  const s = (px) => Math.round(px * r);
+  const sv = (px) => Math.round(px * rv);
+
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  if (!isHydrated || isAuthenticated) return null;
 
   const navigate = useCallback((mode) => {
-    const safeMode = VALID_MODES.includes(mode) ? mode : 'login';
-    router.replace({ pathname: '/(auth)/login', params: { mode: safeMode } });
+    const safeMode = VALID_MODES.includes(mode) ? mode : "login";
+    router.replace({ pathname: "/(auth)/login", params: { mode: safeMode } });
   }, []);
 
-  const handleGetStarted = useCallback(() => navigate('register'), [navigate]);
-  const handleSignIn = useCallback(() => navigate('login'), [navigate]);
+  const handleGetStarted = useCallback(() => navigate("home"), [navigate]);
+  const handleSignIn = useCallback(() => navigate("login"), [navigate]);
+
+  // [F12] Authenticated redirect via effect — never return null
+  useEffect(() => {
+    if (isHydrated && isAuthenticated) router.replace("/(app)/home");
+  }, [isHydrated, isAuthenticated]);
+
+  if (!isHydrated || isAuthenticated) return <View style={styles.root} />;
+
+  const iconSize = s(112);
 
   return (
     <View style={styles.root}>
       <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
 
-      {/* Deep background gradient */}
+      {/* Deep layered background */}
       <LinearGradient
-        colors={['#0A0A0C', '#130808', '#0D0D0F']}
-        locations={[0, 0.45, 1]}
-        style={[StyleSheet.absoluteFillObject, { pointerEvents: 'none' }]}
+        colors={["#08080A", "#110707", "#0C0C0E", "#080808"]}
+        locations={[0, 0.3, 0.7, 1]}
+        style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" }]}
       />
 
-      {/* Geometric grid pattern */}
       <GeometricPattern width={windowWidth} height={windowHeight} />
 
-      {/* Large ambient glow — top center */}
-      <View style={[styles.glowTop, { pointerEvents: 'none' }]} />
+      {/* Ambient glow blobs */}
+      <View style={[styles.glowTop, { pointerEvents: "none" }]} />
+      <View style={[styles.glowBottom, { pointerEvents: "none" }]} />
+      <View style={[styles.glowRight, { pointerEvents: "none" }]} />
 
-      {/* Secondary glow — bottom left */}
-      <View style={[styles.glowBottom, { pointerEvents: 'none' }]} />
-
-      {/* ── TOP SECTION: Brand + Shield ── */}
-      <View style={[styles.topSection, { paddingTop: insets.top + 16 }]}>
+      {/* ── TOP SECTION ── */}
+      <View style={[styles.topSection, { paddingTop: insets.top + sv(14) }]}>
 
         {/* Brand row */}
-        <Animated.View entering={FadeIn.duration(600).delay(100)} style={styles.brandRow}>
+        <Animated.View entering={FadeIn.duration(700).delay(100)} style={styles.brandRow}>
           <View style={styles.brandBadge}>
-            <Text style={styles.brandBadgeText} allowFontScaling={false}>GUARDIAN</Text>
+            <View style={styles.brandBadgeDot} />
+            <Text style={styles.brandBadgeText} allowFontScaling={false}>
+              RESQID
+            </Text>
           </View>
           <View style={styles.brandDivider} />
-          <Text style={styles.brandTagline} allowFontScaling={false}>School Safety Platform</Text>
+          <Text style={styles.brandTagline} allowFontScaling={false}>
+            School Safety Platform
+          </Text>
+          {/* Version tag */}
+          <View style={styles.versionTag}>
+            <Text style={styles.versionText} allowFontScaling={false}>v2.4</Text>
+          </View>
         </Animated.View>
 
-        {/* Central hero card */}
-        <View style={styles.heroArea}>
-          {/* Pulse rings behind card */}
-          <PulseRing size={240} delay={0} baseOpacity={0.08} />
-          <PulseRing size={190} delay={600} baseOpacity={0.12} />
-          <PulseRing size={148} delay={300} baseOpacity={0.07} />
+        {/* Hero icon area — height must accommodate outermost ring (252px + margin) */}
+        <View style={[styles.heroArea, { height: sv(272) }]}>
+          <PulseRing size={s(252)} delay={0} baseOpacity={0.09} />
+          <PulseRing size={s(196)} delay={700} baseOpacity={0.13} />
+          <PulseRing size={s(150)} delay={350} baseOpacity={0.08} />
+          <BreathGlow />
 
-          {/* Main icon card */}
-          <View style={styles.iconWrapper}>
-            <Animated.View entering={FadeIn.duration(800).delay(200)} style={styles.iconCard}>
-              <LinearGradient
-                colors={['#1E1E24', '#141418']}
-                style={styles.iconCardInner}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                {/* Subtle inner border highlight */}
-                <View style={styles.iconCardHighlight} />
-                <ShieldIcon size={54} />
-              </LinearGradient>
-            </Animated.View>
-            <StatusDot />
+          {/* Orbiting particles — anchor must have explicit size = 2×orbit radius */}
+          <View style={[styles.orbitAnchor, { width: s(144), height: s(144) }]}>
+            <OrbitParticle radius={s(72)} duration={5800} delay={800} startAngle={0} />
+            <OrbitParticle radius={s(72)} duration={5800} delay={800} startAngle={120} />
+            <OrbitParticle radius={s(72)} duration={5800} delay={800} startAngle={240} />
           </View>
 
-          {/* Floating stats — left and right of icon */}
+          <FloatingIcon>
+            <View style={[styles.iconWrapper, { width: iconSize, height: iconSize }]}>
+              {/* Outer glow ring — square to match card shape */}
+              <View style={[styles.iconGlowRing, {
+                width: iconSize + s(18),
+                height: iconSize + s(18),
+                borderRadius: s(34),
+                top: -s(9),
+                left: -s(9),
+              }]} />
+
+              <Animated.View
+                entering={FadeIn.duration(900).delay(200)}
+                style={[styles.iconCard, { width: iconSize, height: iconSize, borderRadius: s(30) }]}
+              >
+                <LinearGradient
+                  colors={["#1C1C22", "#131318", "#0E0E12"]}
+                  locations={[0, 0.5, 1]}
+                  style={styles.iconCardInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.iconCardHighlight} />
+                  <View style={styles.iconCardBottomSheen} />
+                  <MaterialCommunityIcons
+                    name="shield-check"
+                    size={s(56)}
+                    color={C.red}
+                  />
+                  <ScanLine iconHalfHeight={s(56)} />
+                </LinearGradient>
+              </Animated.View>
+
+              {/* Engineering corner brackets */}
+              <CornerBrackets size={iconSize} color="rgba(255,59,48,0.5)" thickness={1.5} arm={s(16)} />
+
+              <StatusDot />
+            </View>
+          </FloatingIcon>
+
+          {/* Floating badge — left (Parents count) */}
           <Animated.View
-            entering={FadeInLeft.duration(600).delay(500)}
+            entering={FadeInLeft.duration(650).delay(550)}
             style={[styles.floatingBadge, styles.floatingBadgeLeft]}
           >
-            <Text style={styles.floatingBadgeNum} allowFontScaling={false}>{'2.4K+'}</Text>
-            <Text style={styles.floatingBadgeLabel} allowFontScaling={false}>{'Parents'}</Text>
+            <Text style={styles.floatingBadgeNum} allowFontScaling={false}>
+              2.4K+
+            </Text>
+            <Text style={styles.floatingBadgeLabel} allowFontScaling={false}>
+              Protected
+            </Text>
+            <View style={styles.floatingBadgeBar} />
           </Animated.View>
 
+          {/* Floating badge — right (Live indicator) */}
           <Animated.View
-            entering={FadeInRight.duration(600).delay(650)}
+            entering={FadeInRight.duration(650).delay(700)}
             style={[styles.floatingBadge, styles.floatingBadgeRight]}
           >
-            <View style={styles.floatingBadgeDot} />
-            <Text style={styles.floatingBadgeLive} allowFontScaling={false}>{'Live'}</Text>
+            <View style={styles.floatingBadgeLiveWrap}>
+              <View style={styles.floatingBadgeDot} />
+              <Text style={styles.floatingBadgeLive} allowFontScaling={false}>
+                LIVE
+              </Text>
+            </View>
+            <Text style={styles.floatingBadgeSubtext} allowFontScaling={false}>
+              Monitoring
+            </Text>
           </Animated.View>
+
+          {/* Data readout below icon */}
+          <DataReadout />
         </View>
 
         {/* Title block */}
-        <Animated.View entering={FadeInDown.duration(600).delay(350)} style={styles.titleBlock}>
-          <Text style={styles.titleEyebrow} allowFontScaling={false}>{'WELCOME TO'}</Text>
+        <Animated.View entering={FadeInDown.duration(650).delay(380)} style={styles.titleBlock}>
+          <Text style={styles.titleEyebrow} allowFontScaling={false}>
+            WELCOME TO
+          </Text>
           <View style={styles.titleRow}>
-            <Text style={styles.titleMain} allowFontScaling={false}>
-              {'School'}
-              <Text style={styles.titleAccent}>{'QR'}</Text>
+            <Text style={[styles.titleMain, { fontSize: s(50), lineHeight: s(54) }]} allowFontScaling={false}>
+              RES<Text style={[styles.titleAccent, { fontSize: s(50) }]}>QID</Text>
             </Text>
           </View>
-          <Text style={styles.titleSub} allowFontScaling={false}>{'Guardian'}</Text>
+          <View style={styles.titleSubRow}>
+            <View style={styles.titleSubDash} />
+            <Text style={styles.titleSub} allowFontScaling={false}>
+              Rescue · ID · Respond
+            </Text>
+            <View style={styles.titleSubDash} />
+          </View>
         </Animated.View>
 
       </View>
 
       {/* ── BOTTOM SECTION ── */}
-      <View style={[styles.bottomSection, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-
-        {/* Divider line with label */}
-        <Animated.View entering={FadeIn.duration(500).delay(500)} style={styles.dividerRow}>
+      <View
+        style={[
+          styles.bottomSection,
+          { paddingBottom: Math.max(insets.bottom, sv(24)) },
+        ]}
+      >
+        {/* Divider */}
+        <Animated.View entering={FadeIn.duration(500).delay(520)} style={styles.dividerRow}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText} allowFontScaling={false}>{'Your child, always safe'}</Text>
+          <Text style={styles.dividerText} allowFontScaling={false}>
+            Every child, identified & safe
+          </Text>
           <View style={styles.dividerLine} />
         </Animated.View>
 
         {/* Feature pills */}
         <View style={styles.featureRow}>
-          <FeaturePill icon={<QrIcon size={14} />} label="Instant QR Scan" delay={550} />
-          <FeaturePill icon={<LockIcon size={14} />} label="Secure & Private" delay={650} />
-          <FeaturePill icon={<CheckIcon size={13} />} label="Real-time Alerts" delay={750} />
+          {FEATURE_PILLS.map((pill) => (
+            <FeaturePill key={pill.label} {...pill} />
+          ))}
         </View>
 
-        {/* CTA Buttons */}
-        <Animated.View
-          entering={FadeInDown.duration(600).delay(700)}
-          style={styles.buttonGroup}
-        >
+        {/* CTA buttons */}
+        <Animated.View entering={FadeInDown.duration(650).delay(720)} style={styles.buttonGroup}>
+
           {/* Primary CTA */}
           <Pressable
             onPress={handleGetStarted}
             style={({ pressed }) => [
               styles.primaryWrapper,
-              pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] },
+              pressed && { opacity: 0.88, transform: [{ scale: 0.982 }] },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Get started — create a new account"
           >
             <LinearGradient
-              colors={[C.red, '#E8302A', C.redDark]}
+              colors={[C.red, "#DC2B25", C.redDark]}
               style={styles.primaryButton}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
+              <ShimmerOverlay />
               <Text style={styles.primaryLabel} allowFontScaling={false}>
-                {'Get Started'}
+                Get Started
               </Text>
               <View style={styles.primaryArrow}>
-                <ArrowRight size={17} />
+                <Feather name="arrow-right" size={s(16)} color={C.white} />
               </View>
             </LinearGradient>
           </Pressable>
@@ -418,25 +735,22 @@ export default function WelcomeScreen() {
             onPress={handleSignIn}
             style={({ pressed }) => [
               styles.secondaryButton,
-              pressed && { opacity: 0.7 },
+              pressed && { opacity: 0.65 },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Sign in to an existing account"
           >
             <Text style={styles.secondaryLabel} allowFontScaling={false}>
-              {'Already have an account? '}
+              Already have an account?{" "}
               <Text style={styles.secondaryLabelAccent} allowFontScaling={false}>
-                {'Sign In'}
+                Sign In
               </Text>
             </Text>
           </Pressable>
         </Animated.View>
 
         {/* Trust badge */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(900)}
-          style={styles.trustRow}
-        >
+        <Animated.View entering={FadeInDown.duration(500).delay(920)} style={styles.trustRow}>
           <View style={styles.trustDotWrap}>
             <View style={styles.trustDotOuter} />
             <View style={styles.trustDotInner} />
@@ -451,357 +765,354 @@ export default function WelcomeScreen() {
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
+  root: { flex: 1, backgroundColor: C.bg },
 
-  // Glows
+  // ── Background glows ──────────────────────────────────────────────────────
   glowTop: {
-    position: 'absolute',
-    top: -60,
-    alignSelf: 'center',
-    width: 340,
-    height: 340,
-    borderRadius: 170,
-    backgroundColor: C.red,
-    opacity: 0.07,
+    position: "absolute", top: -80, alignSelf: "center",
+    width: 380, height: 380, borderRadius: 190,
+    backgroundColor: C.red, opacity: 0.065,
   },
   glowBottom: {
-    position: 'absolute',
-    bottom: 40,
-    left: -60,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: C.red,
-    opacity: 0.05,
+    position: "absolute", bottom: 20, left: -90,
+    width: 280, height: 280, borderRadius: 140,
+    backgroundColor: C.red, opacity: 0.04,
+  },
+  glowRight: {
+    position: "absolute", top: "35%", right: -80,
+    width: 200, height: 200, borderRadius: 100,
+    backgroundColor: C.red, opacity: 0.035,
   },
 
-  // Top section
+  // ── Top section — flex:1 distributes space, justifyContent keeps items together ──
   topSection: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: 24,
+    justifyContent: "center",
+    gap: 4,
   },
 
-  // Brand row
+  // ── Brand row ────────────────────────────────────────────────────────────
   brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 20,
+    flexDirection: "row", alignItems: "center",
+    gap: 10, marginBottom: 4,
   },
   brandBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: C.redGlow,
-    borderWidth: 1,
-    borderColor: C.borderRed,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderWidth: 1, borderColor: C.borderRed,
+    borderRadius: 5,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  brandBadgeDot: {
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: C.red,
   },
   brandBadgeText: {
-    color: C.red,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 2.5,
+    color: C.red, fontSize: 9,
+    fontWeight: "800", letterSpacing: 2.8,
   },
-  brandDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: C.white15,
-  },
+  brandDivider: { width: 1, height: 11, backgroundColor: C.white15 },
   brandTagline: {
-    color: C.white35,
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.5,
+    color: C.white35, fontSize: 11,
+    fontWeight: "500", letterSpacing: 0.4,
+  },
+  versionTag: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2,
+    marginLeft: 2,
+  },
+  versionText: {
+    color: "rgba(255,255,255,0.22)", fontSize: 8,
+    fontWeight: "600", letterSpacing: 1,
   },
 
-  // Hero area
+  // ── Hero area ─────────────────────────────────────────────────────────────
   heroArea: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    height: 200,
-    marginBottom: 16,
+    alignItems: "center", justifyContent: "center",
+    width: "100%", marginBottom: 4,
   },
   ring: {
-    position: 'absolute',
-    borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.18)',
+    position: "absolute",
+    borderColor: "rgba(255,59,48,0.16)",
   },
 
-  // Icon card
-  iconWrapper: {
-    width: 108,
-    height: 108,
+  // ── Icon card ─────────────────────────────────────────────────────────────
+  iconWrapper: { position: "relative" },
+  iconGlowRing: {
+    position: "absolute",
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "rgba(255,59,48,0.12)",
   },
   iconCard: {
-    width: 108,
-    height: 108,
-    borderRadius: 28,
-    overflow: 'hidden',
+    overflow: "hidden",
     shadowColor: C.red,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.45,
-    shadowRadius: 24,
-    elevation: 20,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.50,
+    shadowRadius: 28,
+    elevation: 24,
     borderWidth: 1,
     borderColor: C.borderRed,
   },
-  iconCardInner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  iconCardInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   iconCardHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    position: "absolute", top: 0, left: 0, right: 0, height: 1,
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
+  iconCardBottomSheen: {
+    position: "absolute", bottom: 0, left: 0, right: 0, height: 32,
+    backgroundColor: "rgba(255,59,48,0.04)",
+  },
+
+  // ── Status dot ────────────────────────────────────────────────────────────
   statusDot: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    position: "absolute", top: -4, right: -4,
+    width: 11, height: 11, borderRadius: 5.5,
     backgroundColor: C.green,
     shadowColor: C.green,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 5,
-    borderWidth: 1.5,
-    borderColor: C.bg,
+    shadowOpacity: 1, shadowRadius: 7,
+    elevation: 6,
+    borderWidth: 2, borderColor: C.bg,
   },
 
-  // Floating badges
+  // ── Orbit anchor — absolute, centered in heroArea ────────────────────────
+  orbitAnchor: {
+    position: "absolute",
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orbitDot: {
+    position: "absolute",
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: "rgba(255,59,48,0.55)",
+    shadowColor: C.red,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9, shadowRadius: 4,
+  },
+
+  // ── Floating badges ───────────────────────────────────────────────────────
   floatingBadge: {
-    position: 'absolute',
-    backgroundColor: C.bgCard2,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
+    position: "absolute",
+    backgroundColor: "rgba(18,14,14,0.82)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.09)",
+    borderRadius: 10,
+    paddingHorizontal: 11, paddingVertical: 9,
+    alignItems: "center",
+    // Glass blur effect via shadow layering
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 12,
   },
-  floatingBadgeLeft: {
-    left: 16,
-    top: '30%',
-  },
-  floatingBadgeRight: {
-    right: 16,
-    top: '42%',
-    flexDirection: 'row',
-    gap: 5,
-    alignItems: 'center',
-    paddingVertical: 7,
-  },
+  floatingBadgeLeft: { left: 10, top: "32%" },
+  floatingBadgeRight: { right: 10, top: "46%" },
   floatingBadgeNum: {
-    color: C.white90,
-    fontSize: 15,
-    fontWeight: Platform.select({ ios: '700', android: '700' }),
-    letterSpacing: -0.3,
+    color: C.white90, fontSize: 16,
+    fontWeight: Platform.select({ ios: "800", android: "700" }),
+    letterSpacing: -0.4,
   },
   floatingBadgeLabel: {
-    color: C.white35,
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 1,
+    color: C.white35, fontSize: 9,
+    fontWeight: "600", marginTop: 2,
+    letterSpacing: 0.8, textTransform: "uppercase",
+  },
+  floatingBadgeBar: {
+    width: 20, height: 2, borderRadius: 1,
+    backgroundColor: C.red, marginTop: 6, opacity: 0.7,
+  },
+  floatingBadgeLiveWrap: {
+    flexDirection: "row", alignItems: "center", gap: 5,
   },
   floatingBadgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6, height: 6, borderRadius: 3,
     backgroundColor: C.green,
     shadowColor: C.green,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 4,
+    shadowOpacity: 1, shadowRadius: 4,
   },
   floatingBadgeLive: {
-    color: C.green,
-    fontSize: 12,
-    fontWeight: '600',
+    color: C.green, fontSize: 11,
+    fontWeight: "700", letterSpacing: 1.5,
+  },
+  floatingBadgeSubtext: {
+    color: "rgba(255,255,255,0.28)", fontSize: 8,
+    fontWeight: "500", marginTop: 3,
+    letterSpacing: 0.5, textTransform: "uppercase",
   },
 
-  // Title block
-  titleBlock: {
-    alignItems: 'center',
+  // ── Data readout ──────────────────────────────────────────────────────────
+  dataReadout: {
+    position: "absolute", bottom: 2,
+    flexDirection: "row", alignItems: "center", gap: 5,
   },
+  dataReadoutDot: {
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: C.green,
+    shadowColor: C.green,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 3,
+  },
+  dataReadoutText: {
+    color: "rgba(255,255,255,0.22)",
+    fontSize: 8, fontWeight: "700",
+    letterSpacing: 2.2,
+  },
+
+  // ── Title block ───────────────────────────────────────────────────────────
+  titleBlock: { alignItems: "center" },
   titleEyebrow: {
-    color: C.white35,
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 4,
-    marginBottom: 4,
+    color: "rgba(255,255,255,0.28)",
+    fontSize: 9, fontWeight: "700",
+    letterSpacing: 5, marginBottom: 4,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
+  titleRow: { flexDirection: "row", alignItems: "baseline" },
   titleMain: {
-    fontSize: 48,
-    fontWeight: Platform.select({ ios: '800', android: '700' }),
-    color: C.white,
-    letterSpacing: -1.5,
-    lineHeight: 52,
+    fontWeight: Platform.select({ ios: "800", android: "700" }),
+    color: C.white, letterSpacing: -1.8,
   },
   titleAccent: {
     color: C.red,
-    fontSize: 48,
-    fontWeight: Platform.select({ ios: '800', android: '700' }),
-    letterSpacing: -1.5,
+    fontWeight: Platform.select({ ios: "800", android: "700" }),
+    letterSpacing: -1.8,
+  },
+  titleSubRow: {
+    flexDirection: "row", alignItems: "center",
+    gap: 8, marginTop: 6,
+  },
+  titleSubDash: {
+    width: 18, height: 1,
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
   titleSub: {
-    fontSize: 28,
-    fontWeight: Platform.select({ ios: '300', android: '300' }),
-    color: C.white60,
-    letterSpacing: 6,
-    marginTop: -2,
-    textTransform: 'uppercase',
-  },
-
-  // Bottom section
-  bottomSection: {
-    paddingHorizontal: 22,
-    gap: 14,
-  },
-
-  // Divider
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: C.white08,
-  },
-  dividerText: {
-    color: C.white35,
     fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.3,
+    fontWeight: Platform.select({ ios: "500", android: "500" }),
+    color: "rgba(255,255,255,0.30)",
+    letterSpacing: 3.2,
+    textTransform: "uppercase",
   },
 
-  // Feature pills
+  // ── Bottom section ────────────────────────────────────────────────────────
+  bottomSection: { paddingHorizontal: 20, gap: 12 },
+
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.06)" },
+  dividerText: {
+    color: "rgba(255,255,255,0.30)",
+    fontSize: 10, fontWeight: "600",
+    letterSpacing: 0.4,
+  },
+
+  // ── Feature pills ─────────────────────────────────────────────────────────
   featureRow: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
+    flexDirection: "row", gap: 7,
+    justifyContent: "center", flexWrap: "wrap",
   },
   featurePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: C.white04,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 18,
+    paddingHorizontal: 10, paddingVertical: 5,
   },
-  featurePillIcon: {
-    opacity: 0.8,
-  },
+  featurePillIcon: { opacity: 0.75 },
   featurePillText: {
-    color: C.white60,
-    fontSize: 11,
-    fontWeight: '500',
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 10, fontWeight: "500",
   },
 
-  // Buttons
-  buttonGroup: {
-    gap: 10,
-  },
+  // ── CTA buttons ───────────────────────────────────────────────────────────
+  buttonGroup: { gap: 8 },
   primaryWrapper: {
-    borderRadius: 16,
-    overflow: 'hidden',
+    borderRadius: 14, overflow: "hidden",
     shadowColor: C.red,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.55,
-    shadowRadius: 18,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.60, shadowRadius: 20,
+    elevation: 18,
   },
   primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 8,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 15,
+    borderRadius: 14, gap: 8,
   },
   primaryLabel: {
-    color: C.white,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    color: C.white, fontSize: 15,
+    fontWeight: "700", letterSpacing: 0.4,
   },
   primaryArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButton: {
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryLabel: {
-    color: C.white35,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  secondaryLabelAccent: {
-    color: C.white60,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-    textDecorationColor: C.white35,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.22)",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
   },
 
-  // Trust badge
+  secondaryButton: { paddingVertical: 12, alignItems: "center" },
+  secondaryLabel: {
+    color: "rgba(255,255,255,0.30)",
+    fontSize: 13, fontWeight: "500",
+  },
+  secondaryLabelAccent: {
+    color: "rgba(255,255,255,0.62)",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+    textDecorationColor: "rgba(255,255,255,0.25)",
+  },
+
+  // ── Trust badge ───────────────────────────────────────────────────────────
   trustRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingBottom: 4,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 7, paddingBottom: 2,
   },
   trustDotWrap: {
-    width: 10,
-    height: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 10, height: 10,
+    alignItems: "center", justifyContent: "center",
   },
   trustDotOuter: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    position: "absolute",
+    width: 10, height: 10, borderRadius: 5,
     backgroundColor: C.greenGlow,
   },
   trustDotInner: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
+    width: 5, height: 5, borderRadius: 2.5,
     backgroundColor: C.green,
   },
   trustText: {
-    color: 'rgba(255,255,255,0.28)',
-    fontSize: 12,
-    letterSpacing: 0.2,
+    color: "rgba(255,255,255,0.25)",
+    fontSize: 11, letterSpacing: 0.2,
+  },
+
+  // ── Animation components ──────────────────────────────────────────────────
+  breathGlow: {
+    position: "absolute",
+    width: 130, height: 130, borderRadius: 65,
+    backgroundColor: C.red,
+  },
+  scanLine: {
+    position: "absolute", left: 0, right: 0,
+    height: 1.5, borderRadius: 1,
+    backgroundColor: C.red,
+    shadowColor: C.red,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 7,
+    elevation: 6,
+  },
+  shimmer: {
+    position: "absolute", top: 0, bottom: 0,
+    width: 52,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 4,
+  },
+  shimmerThin: {
+    position: "absolute", top: 0, bottom: 0,
+    width: 22,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 4,
   },
 });
