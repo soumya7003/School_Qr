@@ -161,12 +161,8 @@ const STEPS = [
 // ─── Single API endpoint ─────────────────────────────────────────────────────
 // Consolidated payload sent in one transaction to PATCH /parent/profile/complete
 // This avoids partial saves and race conditions across tabs.
-async function submitAllData(profileStore, payload) {
-  // profileStore.submitCompleteProfile calls:
-  //   PATCH /parent/profile/complete
-  //   Body: { student, emergency, contacts }
-  // Returns updated student + emergencyProfile + contacts
-  return await profileStore.submitCompleteProfile(payload);
+async function submitAllData(patchStudent, studentId, payload) {
+  return await patchStudent(studentId, payload);
 }
 
 // ─── StepBar ─────────────────────────────────────────────────────────────────
@@ -844,14 +840,13 @@ export default function UpdatesScreen() {
   const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
 
   const profileStore = useProfileStore();
-  const {
-    student,
-    emergencyProfile,
-    contacts: rawContacts,
-    addContact,
-    updateContact,
-    deleteContact,
-  } = profileStore;
+  const patchStudent = useProfileStore((s) => s.patchStudent);
+  const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
+  const student = useProfileStore(
+    (s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null
+  );
+  const emergencyProfile = student?.emergency ?? null;
+  const rawContacts = student?.emergency?.contacts ?? [];
 
   // ── Wizard state
   const [step, setStep] = useState(0);
@@ -970,11 +965,12 @@ export default function UpdatesScreen() {
         })),
       };
 
-      await submitAllData(profileStore, payload);
+      await submitAllData(patchStudent, student.id, payload);
 
       setCompleted([0, 1, 2, 3]);
 
       if (isNewUser) {
+        await fetchAndPersist();   // ← gets fresh token status (now ACTIVE)
         await setIsNewUser(false);
         setTimeout(() => router.replace("/(app)/home"), 900);
       } else {

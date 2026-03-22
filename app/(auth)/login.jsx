@@ -359,7 +359,7 @@ function CardNumberTip() {
           {'Printed on the '}
           <Text style={tipS.highlight}>front of your physical card</Text>
           {' as '}
-          <Text style={tipS.code}>RESQID-XXXXXX</Text>
+          <Text style={tipS.code}>RQ-XXXX-XXXXXXXX</Text>
         </Text>
       </View>
     </View>
@@ -420,7 +420,7 @@ export default function LoginScreen() {
   const btnScale = useSharedValue(1);
   const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
 
-  const cardValid = cardNumber.trim().length >= 4 && cardNumber.trim().length <= 64;
+  const cardValid = cardNumber.trim().length === 16;
   const canSubmit = isRegister
     ? mobile.length === 10 && cardValid
     : mobile.length === 10;
@@ -460,8 +460,8 @@ export default function LoginScreen() {
           params: {
             phone,
             mode: 'register',
-            nonce: response.data.nonce,
-            maskedPhone: response.data.masked_phone,
+            nonce: response.nonce,
+            maskedPhone: response.masked_phone,
             cardNumber: cardNumber.trim().toUpperCase(),
           },
         });
@@ -595,7 +595,7 @@ export default function LoginScreen() {
                         );
                         setApiError(null);
                       }}
-                      placeholder="RESQID-A4F9B2"
+                      placeholder="RQ-0042-XXXXXXXX"
                       icon={
                         <Feather
                           name="credit-card"

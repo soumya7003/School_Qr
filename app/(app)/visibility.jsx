@@ -205,8 +205,11 @@ function VisibilityCard({ option, selected, onSelect, delay }) {
 
 export default function VisibilityScreen() {
     const router = useRouter();
-    const { emergencyProfile, updateVisibility } = useProfileStore();
-
+    const emergencyProfile = useProfileStore(
+        (s) => s.students.find((st) => st.id === s.activeStudentId)?.emergency ?? null
+    );
+    const activeStudentId = useProfileStore((s) => s.activeStudentId);
+    const updateVisibility = useProfileStore((s) => s.updateVisibility);
     // EmergencyProfile.visibility — default PUBLIC per schema
     const [selected, setSelected] = useState(emergencyProfile?.visibility ?? 'PUBLIC');
     const [saved, setSaved] = useState(false);
@@ -215,7 +218,7 @@ export default function VisibilityScreen() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await updateVisibility(selected);
+            await updateVisibility(activeStudentId, { visibility: selected, hidden_fields: [] });
             setSaved(true);
             setTimeout(() => {
                 setSaved(false);
