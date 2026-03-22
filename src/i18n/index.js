@@ -3,15 +3,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
+import as_ from "./locales/as.json";
 import bn from "./locales/bn.json";
 import en from "./locales/en.json";
 import gu from "./locales/gu.json";
 import hi from "./locales/hi.json";
 import kn from "./locales/kn.json";
-import ml from "./locales/ml.json"; // ← added
+import ml from "./locales/ml.json";
 import mr from "./locales/mr.json";
+import or_ from "./locales/or.json";
+import pa from "./locales/pa.json";
 import ta from "./locales/ta.json";
 import te from "./locales/te.json";
+import ur from "./locales/ur.json";
 
 const LANG_KEY = "app_language";
 
@@ -27,7 +31,24 @@ export async function initI18n() {
     const savedLang = await getStoredLanguage();
 
     await i18n.use(initReactI18next).init({
-        resources: { en, hi, bn, te, mr, ta, gu, kn, ml }, // ← ml added
+        // ✅ Each locale MUST be wrapped in { translation: ... }
+        // Without this, i18next treats "common", "settings" etc. as
+        // namespace names — and t("settings.scanAlerts") finds nothing.
+        resources: {
+            en:  { translation: en  },
+            hi:  { translation: hi  },
+            bn:  { translation: bn  },
+            te:  { translation: te  },
+            mr:  { translation: mr  },
+            ta:  { translation: ta  },
+            gu:  { translation: gu  },
+            kn:  { translation: kn  },
+            ml:  { translation: ml  },
+            as:  { translation: as_ },
+            or:  { translation: or_ },
+            pa:  { translation: pa  },
+            ur:  { translation: ur  },
+        },
         lng: savedLang,
         fallbackLng: "en",
         interpolation: { escapeValue: false },
