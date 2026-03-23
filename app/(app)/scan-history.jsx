@@ -1,20 +1,25 @@
 /**
- * Scan History Screen — Full ScanLog viewer for parents
- * Schema fields used:
- *   ScanLog:     id, result, scan_purpose, ip_city, ip_region, ip_country,
- *                latitude, longitude, created_at, device
- *   ScanAnomaly: id, reason, resolved, created_at
- *   ScanResult enum: SUCCESS | INVALID | REVOKED | EXPIRED | INACTIVE | RATE_LIMITED | ERROR
+ * app/(app)/scan-history.jsx
+ *
+ * FIXES vs original:
+ *   - Was only showing lastScan (1 item max) from store
+ *   - Now calls profileApi.getScanHistory() paginated API directly
+ *   - Infinite scroll with cursor pagination
+ *   - Filter tabs hit the real API filter param
+ *   - Refresh control re-fetches from page 1
+ *   - All colors from useTheme().colors
  */
 
 import Screen from '@/components/common/Screen';
+import { profileApi } from '@/features/profile/profile.api';
 import { useProfileStore } from '@/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/theme';
+import { useTheme } from '@/providers/ThemeProvider';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    FlatList,
     RefreshControl,
-    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -23,67 +28,27 @@ import {
 import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-// ── Icons ──────────────────────────────────────────────────────────────────────
-
-const BackIcon = () => (
+// ── Icons ─────────────────────────────────────────────────────────────────────
+const BackIcon = ({ color }) => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-        <Path d="M19 12H5M12 5l-7 7 7 7"
-            stroke={colors.textPrimary} strokeWidth={2}
-            strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const ScanIcon = ({ color }) => (
-    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-        <Path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-const LocationIcon = ({ color = colors.textTertiary }) => (
-    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-        <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-        <Circle cx={12} cy={10} r={3} stroke={color} strokeWidth={1.8} />
-    </Svg>
-);
-
-const AlertIcon = ({ color = colors.warning }) => (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-        <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M12 9v4M12 17h.01" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-const CheckCircleIcon = () => (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-        <Circle cx={12} cy={12} r={10} stroke={colors.success} strokeWidth={1.8} />
-        <Path d="M9 12l2 2 4-4" stroke={colors.success} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M19 12H5M12 5l-7 7 7 7" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
 );
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * ScanResult enum → color + label
- */
-function resultMeta(result) {
+function resultMeta(result, C) {
     switch (result) {
-        case 'SUCCESS': return { color: colors.success, bg: colors.successBg, label: 'Success' };
-        case 'INVALID': return { color: colors.primary, bg: colors.primaryBg, label: 'Invalid' };
-        case 'REVOKED': return { color: colors.primary, bg: colors.primaryBg, label: 'Revoked' };
-        case 'EXPIRED': return { color: colors.warning, bg: colors.warningBg, label: 'Expired' };
-        case 'INACTIVE': return { color: colors.textTertiary, bg: colors.surface3, label: 'Inactive' };
-        case 'RATE_LIMITED': return { color: colors.warning, bg: colors.warningBg, label: 'Rate Limited' };
-        case 'ERROR': return { color: colors.primary, bg: colors.primaryBg, label: 'Error' };
-        default: return { color: colors.textTertiary, bg: colors.surface3, label: result ?? '—' };
+        case 'SUCCESS': return { color: C.ok, bg: C.okBg, label: 'Success' };
+        case 'INVALID': return { color: C.primary, bg: C.primaryBg, label: 'Invalid' };
+        case 'REVOKED': return { color: C.red, bg: C.redBg, label: 'Revoked' };
+        case 'EXPIRED': return { color: C.amb, bg: C.ambBg, label: 'Expired' };
+        case 'INACTIVE': return { color: C.tx3, bg: C.s4, label: 'Inactive' };
+        case 'RATE_LIMITED': return { color: C.amb, bg: C.ambBg, label: 'Rate Limited' };
+        case 'ERROR': return { color: C.red, bg: C.redBg, label: 'Error' };
+        default: return { color: C.tx3, bg: C.s4, label: result ?? '—' };
     }
 }
 
-/**
- * scan_purpose → human label + emoji
- */
 function purposeMeta(purpose) {
     if (purpose === 'EMERGENCY') return { label: 'Emergency Scan', emoji: '🆘' };
     if (purpose === 'REGISTRATION') return { label: 'Card Registration', emoji: '🔗' };
@@ -115,624 +80,309 @@ function locationStr(scan) {
     return parts.length > 0 ? parts.join(', ') : 'Location unknown';
 }
 
-// ── Filter tabs ───────────────────────────────────────────────────────────────
+// Filter label → API filter param
+const FILTERS = [
+    { label: 'All', api: 'all' },
+    { label: 'Emergency', api: 'emergency' },
+    { label: 'Success', api: 'success' },
+    { label: 'Flagged', api: 'flagged' },
+];
 
-const FILTERS = ['All', 'Emergency', 'Success', 'Flagged'];
+// ── Anomaly card ──────────────────────────────────────────────────────────────
+function AnomalyCard({ anomaly, C }) {
+    return (
+        <View style={[st.anomalyCard, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
+            <View style={st.anomalyHeader}>
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                    <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke={C.amb} strokeWidth={1.8} strokeLinejoin="round" />
+                    <Path d="M12 9v4M12 17h.01" stroke={C.amb} strokeWidth={1.8} strokeLinecap="round" />
+                </Svg>
+                <Text style={[st.anomalyLabel, { color: C.amb }]}>Suspicious Activity</Text>
+                {anomaly.resolved && (
+                    <View style={[st.resolvedBadge, { backgroundColor: C.okBg }]}>
+                        <Text style={[st.resolvedText, { color: C.ok }]}>Resolved</Text>
+                    </View>
+                )}
+            </View>
+            <Text style={[st.anomalyReason, { color: C.tx2 }]}>{anomaly.reason}</Text>
+            <Text style={[st.anomalyTime, { color: C.tx3 }]}>{fmtFull(anomaly.created_at)}</Text>
+        </View>
+    );
+}
 
-function FilterTab({ label, active, onPress, count }) {
+// ── Filter tab ────────────────────────────────────────────────────────────────
+function FilterTab({ label, active, onPress, C }) {
     return (
         <TouchableOpacity
-            style={[styles.filterTab, active && styles.filterTabActive]}
+            style={[st.filterTab, { backgroundColor: C.s2, borderColor: C.bd }, active && { backgroundColor: C.primary, borderColor: C.primary }]}
             onPress={onPress}
             activeOpacity={0.7}
         >
-            <Text style={[styles.filterTabText, active && styles.filterTabTextActive]}>
-                {label}
-            </Text>
-            {count > 0 && (
-                <View style={[styles.filterBadge, active && styles.filterBadgeActive]}>
-                    <Text style={[styles.filterBadgeText, active && { color: colors.white }]}>
-                        {count}
-                    </Text>
-                </View>
-            )}
+            <Text style={[st.filterTabText, { color: active ? C.white : C.tx2 }]}>{label}</Text>
         </TouchableOpacity>
     );
 }
 
-// ── Anomaly card ──────────────────────────────────────────────────────────────
-
-function AnomalyCard({ anomaly }) {
-    return (
-        <View style={styles.anomalyCard}>
-            <View style={styles.anomalyHeader}>
-                <AlertIcon />
-                <Text style={styles.anomalyLabel}>Suspicious Activity</Text>
-                {anomaly.resolved && (
-                    <View style={styles.resolvedBadge}>
-                        <Text style={styles.resolvedText}>Resolved</Text>
-                    </View>
-                )}
-            </View>
-            <Text style={styles.anomalyReason}>{anomaly.reason}</Text>
-            <Text style={styles.anomalyTime}>{fmtFull(anomaly.created_at)}</Text>
-        </View>
-    );
-}
-
 // ── Scan row ──────────────────────────────────────────────────────────────────
-
-function ScanRow({ scan, index }) {
+function ScanRow({ scan, index, C }) {
     const [expanded, setExpanded] = useState(false);
-    const meta = resultMeta(scan.result);
+    const meta = resultMeta(scan.result, C);
     const purpose = purposeMeta(scan.scan_purpose);
     const loc = locationStr(scan);
 
     return (
-        <Animated.View
-            entering={FadeInDown.delay(index * 40).duration(350)}
-            layout={Layout.springify()}
-        >
+        <Animated.View entering={FadeInDown.delay(index * 30).duration(300)} layout={Layout.springify()}>
             <TouchableOpacity
-                style={[
-                    styles.scanRow,
-                    scan.result !== 'SUCCESS' && styles.scanRowWarning,
-                ]}
-                onPress={() => setExpanded(v => !v)}
+                style={[st.scanRow, { borderBottomColor: C.bd }, scan.result !== 'SUCCESS' && { backgroundColor: C.primaryBg + '50' }]}
+                onPress={() => setExpanded((v) => !v)}
                 activeOpacity={0.75}
             >
-                {/* Left — result dot */}
-                <View style={[styles.resultDot, { backgroundColor: meta.color }]} />
-
-                {/* Middle — main info */}
+                <View style={[st.resultDot, { backgroundColor: meta.color }]} />
                 <View style={{ flex: 1 }}>
-                    <View style={styles.scanRowTop}>
-                        <Text style={styles.scanPurposeText}>
-                            {purpose.emoji}  {purpose.label}
-                        </Text>
-                        <View style={[styles.resultBadge, { backgroundColor: meta.bg }]}>
-                            <Text style={[styles.resultBadgeText, { color: meta.color }]}>
-                                {meta.label}
-                            </Text>
+                    <View style={st.scanRowTop}>
+                        <Text style={[st.scanPurposeText, { color: C.tx }]}>{purpose.emoji}  {purpose.label}</Text>
+                        <View style={[st.resultBadge, { backgroundColor: meta.bg }]}>
+                            <Text style={[st.resultBadgeText, { color: meta.color }]}>{meta.label}</Text>
                         </View>
                     </View>
-                    <View style={styles.scanMetaRow}>
-                        <LocationIcon />
-                        <Text style={styles.scanMetaText}>{loc}</Text>
-                        <Text style={styles.scanMetaDot}>·</Text>
-                        <Text style={styles.scanMetaText}>{fmtRelTime(scan.created_at)}</Text>
+                    <View style={st.scanMetaRow}>
+                        <Text style={[st.scanMetaText, { color: C.tx3 }]}>{loc}</Text>
+                        <Text style={[st.scanMetaDot, { color: C.tx3 }]}>·</Text>
+                        <Text style={[st.scanMetaText, { color: C.tx3 }]}>{fmtRelTime(scan.created_at)}</Text>
                     </View>
                 </View>
-
-                {/* Right — expand chevron */}
-                <Text style={[styles.chevron, expanded && styles.chevronOpen]}>›</Text>
+                <Text style={[st.chevron, { color: C.tx3 }, expanded && st.chevronOpen]}>›</Text>
             </TouchableOpacity>
 
-            {/* Expanded detail */}
             {expanded && (
-                <Animated.View
-                    entering={FadeInDown.duration(250)}
-                    style={styles.scanDetail}
-                >
-                    <View style={styles.detailGrid}>
-                        <DetailCell label="Date & Time" value={fmtFull(scan.created_at)} />
-                        <DetailCell label="Result" value={meta.label} valueColor={meta.color} />
-                        <DetailCell label="Purpose" value={purpose.label} />
-                        <DetailCell label="Location" value={loc} />
-                        {scan.ip_address && (
-                            <DetailCell label="IP Address" value={scan.ip_address} mono />
-                        )}
-                        {scan.device && (
-                            <DetailCell label="Device" value={scan.device} />
-                        )}
+                <Animated.View entering={FadeInDown.duration(220)} style={[st.scanDetail, { backgroundColor: C.s3, borderBottomColor: C.bd }]}>
+                    <View style={st.detailGrid}>
+                        <DetailCell label="Date & Time" value={fmtFull(scan.created_at)} C={C} />
+                        <DetailCell label="Result" value={meta.label} valueColor={meta.color} C={C} />
+                        <DetailCell label="Purpose" value={purpose.label} C={C} />
+                        <DetailCell label="Location" value={loc} C={C} />
                     </View>
-                    {scan.latitude && scan.longitude && (
-                        <View style={styles.coordRow}>
-                            <LocationIcon color={colors.info} />
-                            <Text style={styles.coordText}>
-                                GPS: {scan.latitude.toFixed(4)}, {scan.longitude.toFixed(4)}
-                            </Text>
-                        </View>
-                    )}
                 </Animated.View>
             )}
         </Animated.View>
     );
 }
 
-function DetailCell({ label, value, valueColor, mono }) {
+function DetailCell({ label, value, valueColor, C }) {
     return (
-        <View style={styles.detailCell}>
-            <Text style={styles.detailLabel}>{label}</Text>
-            <Text style={[
-                styles.detailValue,
-                valueColor && { color: valueColor },
-                mono && styles.detailValueMono,
-            ]}>
-                {value}
-            </Text>
+        <View style={st.detailCell}>
+            <Text style={[st.detailLabel, { color: C.tx3 }]}>{label}</Text>
+            <Text style={[st.detailValue, { color: valueColor ?? C.tx2 }]}>{value}</Text>
         </View>
     );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-function EmptyState() {
-    return (
-        <Animated.View entering={FadeInUp.delay(200).duration(400)} style={styles.empty}>
-            <View style={styles.emptyIcon}>
-                <ScanIcon color={colors.textTertiary} />
-            </View>
-            <Text style={styles.emptyTitle}>No scans yet</Text>
-            <Text style={styles.emptyText}>
-                When someone scans your child's card, the activity will appear here.
-            </Text>
-        </Animated.View>
-    );
-}
-
-// ── Main Screen ───────────────────────────────────────────────────────────────
-
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function ScanHistoryScreen() {
     const router = useRouter();
-    const recentScans = useProfileStore((s) => s.lastScan ? [s.lastScan] : []);
-    const anomalies = useProfileStore((s) => s.anomaly ? [s.anomaly] : []);
-    const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
-    const [activeFilter, setActiveFilter] = useState('All');
+    const { colors: C } = useTheme();
+
+    // Anomalies still come from store (already fetched in /me)
+    const anomaly = useProfileStore((s) => s.anomaly);
+    const anomalies = anomaly ? [anomaly] : [];
+    const unresolved = anomalies.filter((a) => !a.resolved);
+
+    // Scan history — loaded from paginated API (NOT from store)
+    const [scans, setScans] = useState([]);
+    const [cursor, setCursor] = useState(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [activeFilter, setActiveFilter] = useState('all');
 
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        try { await fetchIfStale(); } catch { /* ignore */ }
-        finally { setRefreshing(false); }
+    const loadScans = useCallback(async (reset = false, filterOverride) => {
+        const filter = filterOverride ?? activeFilter;
+        if (loading && !reset) return;
+
+        if (reset) setRefreshing(true);
+        else setLoading(true);
+
+        try {
+            const result = await profileApi.getScanHistory({
+                cursor: reset ? undefined : cursor,
+                limit: 20,
+                filter,
+            });
+
+            setScans((prev) => reset ? result.scans : [...prev, ...result.scans]);
+            setCursor(result.nextCursor ?? null);
+            setHasMore(result.hasMore ?? false);
+        } catch {
+            // fail silently — show whatever was loaded
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, [activeFilter, cursor, loading]);
+
+    // Initial load + reload on filter change
+    useEffect(() => {
+        setScans([]);
+        setCursor(null);
+        setHasMore(false);
+        loadScans(true, activeFilter);
+    }, [activeFilter]);
+
+    const handleRefresh = () => loadScans(true);
+    const handleLoadMore = () => { if (hasMore && !loading) loadScans(false); };
+
+    const handleFilterChange = (apiFilter) => {
+        if (apiFilter === activeFilter) return;
+        setActiveFilter(apiFilter);
     };
 
-    const scans = recentScans ?? [];
-    const allAnomalies = anomalies ?? [];
-    const unresolved = allAnomalies.filter(a => !a.resolved);
+    const ListHeader = () => (
+        <>
+            {/* Stats */}
+            <Animated.View entering={FadeInDown.delay(60).duration(360)} style={st.statsRow}>
+                {[
+                    { num: scans.length + (hasMore ? '+' : ''), label: 'Loaded', accent: false },
+                    { num: scans.filter((s) => s.scan_purpose === 'EMERGENCY').length, label: 'Emergency', accent: scans.some((s) => s.scan_purpose === 'EMERGENCY') },
+                    { num: unresolved.length, label: 'Anomalies', accent: unresolved.length > 0 },
+                    { num: scans[0] ? fmtRelTime(scans[0].created_at) : '—', label: 'Last Scan', accent: false },
+                ].map((item) => (
+                    <View key={item.label} style={[st.statCard, { backgroundColor: item.accent ? C.primaryBg : C.s2, borderColor: item.accent ? C.primaryBd : C.bd }]}>
+                        <Text style={[st.statNum, { color: item.accent ? C.primary : C.tx }]}>{item.num}</Text>
+                        <Text style={[st.statLabel, { color: C.tx3 }]}>{item.label}</Text>
+                    </View>
+                ))}
+            </Animated.View>
 
-    // Filter logic
-    const filtered = scans.filter(s => {
-        if (activeFilter === 'All') return true;
-        if (activeFilter === 'Emergency') return s.scan_purpose === 'EMERGENCY';
-        if (activeFilter === 'Success') return s.result === 'SUCCESS';
-        if (activeFilter === 'Flagged') return s.result !== 'SUCCESS';
-        return true;
-    });
+            {/* Anomalies */}
+            {unresolved.length > 0 && (
+                <Animated.View entering={FadeInDown.delay(100).duration(360)} style={{ gap: 8 }}>
+                    <Text style={[st.sectionLabel, { color: C.tx3 }]}>⚠️  Suspicious Activity</Text>
+                    {unresolved.map((a, i) => <AnomalyCard key={a.id ?? i} anomaly={a} C={C} />)}
+                </Animated.View>
+            )}
 
-    // Filter counts
-    const counts = {
-        All: scans.length,
-        Emergency: scans.filter(s => s.scan_purpose === 'EMERGENCY').length,
-        Success: scans.filter(s => s.result === 'SUCCESS').length,
-        Flagged: scans.filter(s => s.result !== 'SUCCESS').length,
-    };
+            {/* Filters */}
+            <Animated.View entering={FadeInDown.delay(130).duration(360)}>
+                <View style={st.filterRow}>
+                    {FILTERS.map((f) => (
+                        <FilterTab key={f.api} label={f.label} active={activeFilter === f.api} onPress={() => handleFilterChange(f.api)} C={C} />
+                    ))}
+                </View>
+            </Animated.View>
+        </>
+    );
 
-    // Stats
-    const totalScans = scans.length;
-    const emergencyScans = counts.Emergency;
-    const lastScan = scans[0];
+    const ListEmpty = () => (
+        <Animated.View entering={FadeInUp.delay(160).duration(360)} style={st.empty}>
+            <View style={[st.emptyIcon, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                    <Path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" stroke={C.tx3} strokeWidth={1.8} strokeLinecap="round" />
+                </Svg>
+            </View>
+            <Text style={[st.emptyTitle, { color: C.tx }]}>No scans yet</Text>
+            <Text style={[st.emptyText, { color: C.tx3 }]}>When someone scans your child's card, it will appear here.</Text>
+        </Animated.View>
+    );
+
+    const ListFooter = () => (
+        <View style={{ paddingVertical: 16 }}>
+            {loading && !refreshing && (
+                <ActivityIndicator size="small" color={C.primary} />
+            )}
+            {!hasMore && scans.length > 0 && (
+                <View style={[st.privacyNote, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                        <Circle cx={12} cy={12} r={10} stroke={C.ok} strokeWidth={1.8} />
+                        <Path d="M9 12l2 2 4-4" stroke={C.ok} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={[st.privacyNoteText, { color: C.tx3 }]}>
+                        All {scans.length} scan{scans.length !== 1 ? 's' : ''} loaded. Logs stored securely for 12 months.
+                    </Text>
+                </View>
+            )}
+        </View>
+    );
 
     return (
-        <Screen bg={colors.screenBg} edges={['top', 'left', 'right']}>
+        <Screen bg={C.bg} edges={['top', 'left', 'right']}>
             {/* Header */}
-            <Animated.View entering={FadeInDown.delay(0).duration(350)} style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-                    <BackIcon />
+            <Animated.View entering={FadeInDown.delay(0).duration(300)} style={[st.header, { borderBottomColor: C.bd }]}>
+                <TouchableOpacity style={[st.backBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => router.back()} activeOpacity={0.7}>
+                    <BackIcon color={C.tx} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.pageTitle}>Scan History</Text>
-                    <Text style={styles.pageSubtitle}>Every time your card was scanned</Text>
+                    <Text style={[st.pageTitle, { color: C.tx }]}>Scan History</Text>
+                    <Text style={[st.pageSubtitle, { color: C.tx3 }]}>Every time your card was scanned</Text>
                 </View>
             </Animated.View>
 
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scroll}
+            <FlatList
+                data={scans}
+                keyExtractor={(item, i) => item.id ?? String(i)}
+                renderItem={({ item, index }) => <ScanRow scan={item} index={index} C={C} />}
+                ListHeaderComponent={<ListHeader />}
+                ListEmptyComponent={!loading && !refreshing ? <ListEmpty /> : null}
+                ListFooterComponent={<ListFooter />}
+                ItemSeparatorComponent={() => null}
+                contentContainerStyle={st.scroll}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.3}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={handleRefresh}
-                        tintColor={colors.primary}
-                        colors={[colors.primary]}
+                        tintColor={C.primary}
+                        colors={[C.primary]}
                     />
                 }
-            >
-                {/* Stats row */}
-                <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statNum}>{totalScans}</Text>
-                        <Text style={styles.statLabel}>Total Scans</Text>
-                    </View>
-                    <View style={[styles.statCard, emergencyScans > 0 && styles.statCardRed]}>
-                        <Text style={[styles.statNum, emergencyScans > 0 && { color: colors.primary }]}>
-                            {emergencyScans}
-                        </Text>
-                        <Text style={styles.statLabel}>Emergency</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statNum}>{unresolved.length}</Text>
-                        <Text style={styles.statLabel}>Anomalies</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statNum}>
-                            {lastScan ? fmtRelTime(lastScan.created_at) : '—'}
-                        </Text>
-                        <Text style={styles.statLabel}>Last Scan</Text>
-                    </View>
-                </Animated.View>
-
-                {/* Unresolved anomalies section */}
-                {unresolved.length > 0 && (
-                    <Animated.View entering={FadeInDown.delay(120).duration(400)}>
-                        <Text style={styles.sectionLabel}>⚠️  Suspicious Activity</Text>
-                        <View style={styles.anomalyList}>
-                            {unresolved.map((a, i) => (
-                                <AnomalyCard key={a.id ?? i} anomaly={a} />
-                            ))}
-                        </View>
-                    </Animated.View>
-                )}
-
-                {/* Filter tabs */}
-                <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.filterRow}
-                    >
-                        {FILTERS.map(f => (
-                            <FilterTab
-                                key={f}
-                                label={f}
-                                active={activeFilter === f}
-                                onPress={() => setActiveFilter(f)}
-                                count={f !== 'All' ? counts[f] : 0}
-                            />
-                        ))}
-                    </ScrollView>
-                </Animated.View>
-
-                {/* Scan list */}
-                {filtered.length === 0 ? (
-                    <EmptyState />
-                ) : (
-                    <View style={styles.scanList}>
-                        {filtered.map((scan, i) => (
-                            <ScanRow key={scan.id ?? i} scan={scan} index={i} />
-                        ))}
-                    </View>
-                )}
-
-                {/* Privacy note */}
-                <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.privacyNote}>
-                    <CheckCircleIcon />
-                    <Text style={styles.privacyNoteText}>
-                        Scan logs are stored securely. IP and device data is used only for anomaly detection, never shared with third parties.
-                    </Text>
-                </Animated.View>
-            </ScrollView>
+                showsVerticalScrollIndicator={false}
+                style={{ backgroundColor: C.bg }}
+            />
         </Screen>
     );
 }
 
-const styles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[3],
-        paddingHorizontal: spacing.screenH,
-        paddingTop: spacing[6],
-        paddingBottom: spacing[3],
-    },
-    backBtn: {
-        width: 38,
-        height: 38,
-        backgroundColor: colors.surface,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    pageTitle: {
-        ...typography.h3,
-        color: colors.textPrimary,
-    },
-    pageSubtitle: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        marginTop: 2,
-    },
-
-    scroll: {
-        paddingHorizontal: spacing.screenH,
-        paddingBottom: spacing[10],
-        gap: spacing[4],
-    },
-
-    // ── Stats ─────────────────────────────────────
-    statsRow: {
-        flexDirection: 'row',
-        gap: spacing[2],
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: colors.surface,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: spacing[3],
-        alignItems: 'center',
-        gap: spacing[1],
-    },
-    statCardRed: {
-        backgroundColor: colors.primaryBg,
-        borderColor: `rgba(232,52,42,0.2)`,
-    },
-    statNum: {
-        ...typography.h4,
-        color: colors.textPrimary,
-        fontWeight: '700',
-    },
-    statLabel: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        textAlign: 'center',
-    },
-
-    // ── Section label ─────────────────────────────
-    sectionLabel: {
-        ...typography.overline,
-        color: colors.textTertiary,
-        marginBottom: spacing[2],
-    },
-
-    // ── Anomaly card ──────────────────────────────
-    anomalyList: {
-        gap: spacing[2],
-    },
-    anomalyCard: {
-        backgroundColor: colors.warningBg,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: `rgba(245,158,11,0.25)`,
-        padding: spacing[3.5],
-        gap: spacing[1.5],
-    },
-    anomalyHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[1.5],
-    },
-    anomalyLabel: {
-        ...typography.labelSm,
-        color: colors.warning,
-        fontWeight: '700',
-        flex: 1,
-    },
-    resolvedBadge: {
-        backgroundColor: colors.successBg,
-        borderRadius: radius.chipFull,
-        paddingHorizontal: spacing[2],
-        paddingVertical: 2,
-    },
-    resolvedText: {
-        ...typography.labelXs,
-        color: colors.success,
-        fontWeight: '700',
-    },
-    anomalyReason: {
-        ...typography.bodySm,
-        color: colors.textSecondary,
-    },
-    anomalyTime: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-    },
-
-    // ── Filter tabs ───────────────────────────────
-    filterRow: {
-        flexDirection: 'row',
-        gap: spacing[2],
-        paddingRight: spacing[2],
-    },
-    filterTab: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[1.5],
-        paddingHorizontal: spacing[3],
-        paddingVertical: spacing[2],
-        backgroundColor: colors.surface,
-        borderRadius: radius.chipFull,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    filterTabActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-    },
-    filterTabText: {
-        ...typography.labelSm,
-        color: colors.textSecondary,
-        fontWeight: '600',
-    },
-    filterTabTextActive: {
-        color: colors.white,
-    },
-    filterBadge: {
-        backgroundColor: colors.surface3,
-        borderRadius: 10,
-        paddingHorizontal: 5,
-        paddingVertical: 1,
-        minWidth: 18,
-        alignItems: 'center',
-    },
-    filterBadgeActive: {
-        backgroundColor: `rgba(255,255,255,0.25)`,
-    },
-    filterBadgeText: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        fontWeight: '700',
-        fontSize: 9,
-    },
-
-    // ── Scan list ─────────────────────────────────
-    scanList: {
-        backgroundColor: colors.surface,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: 'hidden',
-    },
-    scanRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[3],
-        paddingHorizontal: spacing[4],
-        paddingVertical: spacing[3.5],
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    scanRowWarning: {
-        backgroundColor: `rgba(232,52,42,0.03)`,
-    },
-    resultDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        flexShrink: 0,
-    },
-    scanRowTop: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: spacing[1],
-    },
-    scanPurposeText: {
-        ...typography.labelSm,
-        color: colors.textPrimary,
-        fontWeight: '600',
-    },
-    resultBadge: {
-        paddingHorizontal: spacing[1.5],
-        paddingVertical: 2,
-        borderRadius: radius.chipFull,
-    },
-    resultBadgeText: {
-        ...typography.labelXs,
-        fontWeight: '700',
-        fontSize: 9,
-        textTransform: 'uppercase',
-    },
-    scanMetaRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[1.5],
-    },
-    scanMetaText: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-    },
-    scanMetaDot: {
-        color: colors.textTertiary,
-        fontSize: 10,
-    },
-    chevron: {
-        color: colors.textTertiary,
-        fontSize: 18,
-        lineHeight: 20,
-    },
-    chevronOpen: {
-        transform: [{ rotate: '90deg' }],
-    },
-
-    // ── Scan detail (expanded) ────────────────────
-    scanDetail: {
-        backgroundColor: colors.surface3,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        padding: spacing[4],
-        gap: spacing[3],
-    },
-    detailGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing[3],
-    },
-    detailCell: {
-        width: '45%',
-        gap: spacing[0.5],
-    },
-    detailLabel: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
-    },
-    detailValue: {
-        ...typography.labelSm,
-        color: colors.textSecondary,
-        fontWeight: '500',
-    },
-    detailValueMono: {
-        fontFamily: 'monospace',
-        fontSize: 11,
-    },
-    coordRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[1.5],
-    },
-    coordText: {
-        ...typography.labelXs,
-        color: colors.info,
-        fontFamily: 'monospace',
-    },
-
-    // ── Empty ─────────────────────────────────────
-    empty: {
-        alignItems: 'center',
-        paddingVertical: spacing[10],
-        gap: spacing[3],
-    },
-    emptyIcon: {
-        width: 56,
-        height: 56,
-        backgroundColor: colors.surface,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    emptyTitle: {
-        ...typography.h4,
-        color: colors.textPrimary,
-    },
-    emptyText: {
-        ...typography.bodySm,
-        color: colors.textTertiary,
-        textAlign: 'center',
-        maxWidth: 260,
-    },
-
-    // ── Privacy note ──────────────────────────────
-    privacyNote: {
-        flexDirection: 'row',
-        gap: spacing[2],
-        alignItems: 'flex-start',
-        backgroundColor: colors.surface,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: spacing[3.5],
-    },
-    privacyNoteText: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        flex: 1,
-        lineHeight: 16,
-    },
+const st = StyleSheet.create({
+    header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12, borderBottomWidth: 1 },
+    backBtn: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    pageTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+    pageSubtitle: { fontSize: 12, marginTop: 1 },
+    scroll: { paddingHorizontal: 20, paddingBottom: 40, gap: 14, paddingTop: 16 },
+    statsRow: { flexDirection: 'row', gap: 8 },
+    statCard: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 12, alignItems: 'center', gap: 3 },
+    statNum: { fontSize: 16, fontWeight: '800' },
+    statLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+    sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+    anomalyCard: { borderRadius: 13, borderWidth: 1, padding: 13, gap: 6 },
+    anomalyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    anomalyLabel: { fontSize: 13, fontWeight: '700', flex: 1 },
+    resolvedBadge: { borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 },
+    resolvedText: { fontSize: 10, fontWeight: '700' },
+    anomalyReason: { fontSize: 12.5, lineHeight: 17 },
+    anomalyTime: { fontSize: 11 },
+    filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    filterTab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99, borderWidth: 1 },
+    filterTabText: { fontSize: 13, fontWeight: '600' },
+    scanRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1 },
+    resultDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+    scanRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
+    scanPurposeText: { fontSize: 13.5, fontWeight: '600' },
+    resultBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99 },
+    resultBadgeText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
+    scanMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    scanMetaText: { fontSize: 11.5 },
+    scanMetaDot: { fontSize: 10 },
+    chevron: { fontSize: 18, lineHeight: 20 },
+    chevronOpen: { transform: [{ rotate: '90deg' }] },
+    scanDetail: { padding: 16, borderBottomWidth: 1 },
+    detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    detailCell: { width: '45%', gap: 3 },
+    detailLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+    detailValue: { fontSize: 12.5, fontWeight: '500' },
+    empty: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+    emptyIcon: { width: 56, height: 56, borderRadius: 99, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+    emptyTitle: { fontSize: 15, fontWeight: '800' },
+    emptyText: { fontSize: 13, textAlign: 'center', maxWidth: 260, lineHeight: 18 },
+    privacyNote: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderRadius: 13, borderWidth: 1, padding: 13 },
+    privacyNoteText: { fontSize: 11.5, flex: 1, lineHeight: 16 },
 });
