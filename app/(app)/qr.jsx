@@ -121,8 +121,15 @@ function fmtValidThru(iso) {
     return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}`;
 }
 function fmtCardNum(n) {
-    if (!n) return '•••• •••• •••• ••••';
-    return (n.replace(/[-\s]/g, '').match(/.{1,4}/g) ?? [n]).join('  ');
+    if (!n) return 'RQ-0000-XXXXXXXX';
+
+    const parts = n.split('-');
+
+    if (parts.length === 3) {
+        return `${parts[0]}  ${parts[1]}  ${parts[2]}`;
+    }
+
+    return n;
 }
 
 // ─── Pulse dot ────────────────────────────────────────────────────────────────
@@ -288,12 +295,10 @@ function PhysicalCard({ student, token, isFlipped, onFlip }) {
                                     </View>
                                     <View style={[cs.backAvatar, { backgroundColor: pal.accent + '1A', borderColor: pal.accent + '38' }]}><Text style={[cs.backAvatarTx, { color: pal.accent }]}>{initials}</Text></View>
                                     <View><Text style={cs.backMetaLbl}>CARDHOLDER</Text><Text style={cs.backName} numberOfLines={1}>{fullName}</Text>{classLine ? <Text style={cs.backClass} numberOfLines={1}>{classLine}</Text> : null}</View>
-                                    <View><Text style={cs.backMetaLbl}>CARD NO.</Text><Text style={cs.backCardNum} numberOfLines={1}>{cardNumber ?? '—'}</Text></View>
+                                    <View><Text style={cs.backMetaLbl}>CARD NO.</Text><Text style={cs.backCardNum} numberOfLines={1}>
+                                        {fmtCardNum(cardNumber)}
+                                    </Text></View>
                                     <View><Text style={cs.backMetaLbl}>STATUS</Text><Text style={[cs.backStatus, { color: badge.color }]}>{badge.label}</Text></View>
-                                    <View style={[cs.scanInstr, { borderColor: pal.accent + '28' }]}>
-                                        <MaterialCommunityIcons name="qrcode-scan" size={9} color={pal.accent} />
-                                        <Text style={[cs.scanInstrTx, { color: pal.accent }]}>Scan in emergency</Text>
-                                    </View>
                                 </View>
                                 <View style={[cs.qrBox, { borderColor: pal.accent + '40' }]}>
                                     {showBack && <QRCode value={qrValue} size={CARD_H * 0.60} color="#1A1A1E" backgroundColor="#FFFFFF" quietZone={5} ecl="M" />}
@@ -697,7 +702,7 @@ const cs = StyleSheet.create({
     chipBody: { width: 36, height: 28, borderRadius: 5, borderWidth: 1, padding: 5, justifyContent: 'center' },
     chipLine: { height: 1.5, borderRadius: 1, width: '100%' },
     chipDivider: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
-    cardNum: { fontSize: 15.5, fontWeight: '700', letterSpacing: 2.4, color: 'rgba(255,255,255,0.88)', fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
+    cardNum: { fontSize: 15.5, fontWeight: '700', letterSpacing: 1.2, color: 'rgba(255,255,255,0.88)', fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
     metaLbl: { fontSize: 7, fontWeight: '700', color: 'rgba(255,255,255,0.36)', letterSpacing: 1.0 },
     cardHolder: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.90)', letterSpacing: 0.6, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
     cardSub: { fontSize: 8.5, color: 'rgba(255,255,255,0.38)', letterSpacing: 0.3, marginTop: 1 },

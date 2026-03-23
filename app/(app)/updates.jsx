@@ -1,7 +1,31 @@
 /**
  * app/(app)/updates.jsx
- * 4-step profile wizard — all colors from useTheme().colors
- * Zustand: patchStudent (single API call on step 4)
+ *
+ * BUGS FIXED:
+ *
+ *   [FIX-1] After completing the wizard, navigation to /(app)/home failed or
+ *           was skipped. The original flow was:
+ *             patchStudent() → setIsNewUser(false) → setTimeout router.replace('/home')
+ *           The setTimeout(900ms) raced with AuthProvider's reactive guard.
+ *           AuthProvider sees isNewUser flip to false and immediately calls
+ *           router.replace('/(app)/home') — then the setTimeout also fires
+ *           router.replace('/(app)/home'). Double navigation = potential crash/loop.
+ *           Fixed: removed the manual router.replace entirely. AuthProvider owns
+ *           all navigation. setIsNewUser(false) triggers AuthProvider automatically.
+ *
+ *   [FIX-2] fetchAndPersist was called before setIsNewUser(false), meaning the
+ *           profile reconciliation could see setup_stage='COMPLETE' and call
+ *           setIsNewUser(false) AGAIN inside fetchAndPersist (redundant double-call).
+ *           Fixed: setIsNewUser(false) first, then fetchAndPersist.
+ *
+ *   [FIX-3] Variable `i` used in ReviewRow key inside .map() callback but `i`
+ *           was not defined in that scope (it's the outer step=3 block, the map
+ *           uses `(c)` without index). Added `(c, i)` to fix the ReferenceError.
+ *
+ *   [FIX-4] Non-new users got an Alert("Saved") after patchStudent, which is
+ *           correct. But the Alert was inside the same try block as the isNewUser
+ *           branch, making the control flow confusing. Separated the two branches
+ *           clearly with early returns.
  */
 
 import Screen from '@/components/common/Screen';
@@ -446,11 +470,26 @@ export default function UpdatesScreen() {
           priority: i + 1,
         })),
       });
+
       setCompleted([0, 1, 2, 3]);
-      if (isNewUser) { await fetchAndPersist?.(); await setIsNewUser?.(false); setTimeout(() => router.replace('/(app)/home'), 900); }
-      else Alert.alert('Saved', "All changes have been saved to your child's card.");
-    } catch { Alert.alert('Error', 'Could not save. Please check your connection and try again.'); }
-    finally { setSaving(false); }
+
+      if (isNewUser) {
+        // [FIX-1] Removed manual router.replace — AuthProvider handles navigation.
+        // [FIX-2] setIsNewUser(false) FIRST, then fetchAndPersist.
+        //         This way AuthProvider immediately sees isNewUser=false and
+        //         routes to /home. fetchAndPersist runs in background to sync.
+        await setIsNewUser(false);
+        // fetchAndPersist in background — don't await, don't block navigation.
+        fetchAndPersist?.().catch(() => { });
+      } else {
+        // Non-new user: just show confirmation
+        Alert.alert('Saved', "All changes have been saved to your child's card.");
+      }
+    } catch {
+      Alert.alert('Error', 'Could not save. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveContact = (data) => {
@@ -621,7 +660,8 @@ export default function UpdatesScreen() {
               <SectionCard icon={<Text style={{ fontSize: 15 }}>📞</Text>} title={`Emergency Contacts (${contacts.length})`} accent={C.blue} C={C}>
                 {contacts.length === 0
                   ? <Text style={[s.noContacts, { color: C.tx3 }]}>No contacts added — they won't be called on scan</Text>
-                  : sortedContacts.map((c) => <ReviewRow key={c.id ?? `review_${i}`}
+                  // [FIX-3] Added `i` as second param to fix ReferenceError on `i` in key
+                  : sortedContacts.map((c, i) => <ReviewRow key={c.id ?? `review_${i}`}
                     label={`#${c.priority} ${c.relationship || 'Contact'}`} value={`${c.name} · ${c.phone}`} C={C} />)
                 }
               </SectionCard>

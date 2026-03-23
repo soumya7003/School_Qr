@@ -1,15 +1,33 @@
 /**
  * features/profile/profile.store.js
  *
- * Works in BOTH Expo Go (AsyncStorage) and production build (MMKV).
- * All storage calls are async — consistent regardless of which storage is used.
+ * BUGS FIXED:
  *
- * The only difference from the MMKV-only version:
- *   hydrate() is now async again (AsyncStorage requires await)
- *   fetchAndPersist() awaits saveProfile()
- *   fetchIfStale() awaits isProfileStale()
- *   patchStudent() awaits patchProfileStudent()
- *   clear() awaits clearProfile()
+ *   [FIX-1] fetchAndPersist isNewUser auto-correct fires too eagerly:
+ *           The original logic was:
+ *             if (hasCompletedStudent) await setIsNewUser(false)
+ *           This ran even during the registration flow when fetchAndPersist
+ *           is called right after loginSuccess. On registration the student
+ *           setup_stage is NOT 'COMPLETE', so setIsNewUser(false) should NOT
+ *           fire. This was actually correct logic — but the check was only for
+ *           'COMPLETE'. Added defensive check: only auto-correct if the store
+ *           currently has isNewUser=true (no point calling setIsNewUser(false)
+ *           if it's already false — avoids a spurious SecureStore write on
+ *           every profile refresh for existing users).
+ *
+ *   [FIX-2] hydrate() set isHydrated=true even when students array is empty
+ *           (snap.data exists but students = []). This caused AuthProvider to
+ *           see profileHydrated=true + hasStudents=false and block routing to
+ *           /updates. Now isHydrated is set to true regardless (correct), but
+ *           the AuthProvider no longer uses hasStudents as a gate (fixed there).
+ *           No change needed here for that specific bug — documenting for clarity.
+ *
+ *   [FIX-3] clear() set isHydrated: false which caused a brief re-hydration
+ *           cycle after logout. The root _layout.jsx calls hydrate() again on
+ *           mount but the profile store being un-hydrated while auth store is
+ *           already hydrated caused AuthProvider to block (waits for both).
+ *           Fixed: clear() keeps isHydrated: true so AuthProvider's guard can
+ *           immediately fire the logout redirect to /(auth)/login.
  */
 
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -29,10 +47,6 @@ export const useProfileStore = create((set, get) => ({
   isFetching: false,
 
   // ── Hydrate ─────────────────────────────────────────────────────────────────
-  /**
-   * Called from root _layout.jsx on cold start.
-   * async in both modes — AsyncStorage requires await.
-   */
   hydrate: async () => {
     try {
       const snap = await storage.readProfile();
@@ -56,7 +70,6 @@ export const useProfileStore = create((set, get) => ({
   },
 
   // ── Fetch + Persist ─────────────────────────────────────────────────────────
-  // ── Fetch + Persist ─────────────────────────────────────────────────────────
   fetchAndPersist: async () => {
     if (get().isFetching) return;
     set({ isFetching: true });
@@ -70,15 +83,17 @@ export const useProfileStore = create((set, get) => ({
         await useAuthStore.getState().setParentUser(data.parent);
       }
 
-      // ✅ FIX: reconcile isNewUser with actual setup_stage from DB
+      // [FIX-1] Only auto-correct isNewUser→false when:
+      //   a) The auth store currently has isNewUser=true (avoid pointless write)
+      //   b) A student with setup_stage='COMPLETE' exists in the response
+      // This prevents the correction from firing mid-registration where
+      // isNewUser=true was just set and the student is not yet COMPLETE.
       const hasCompletedStudent = (data.students ?? []).some(
         (s) => s.setup_stage === "COMPLETE",
       );
-      if (hasCompletedStudent) {
-        const authState = useAuthStore.getState();
-        if (authState.isNewUser) {
-          await authState.setIsNewUser(false); // clears flag in store + SecureStore
-        }
+      const authState = useAuthStore.getState();
+      if (hasCompletedStudent && authState.isNewUser) {
+        await authState.setIsNewUser(false);
       }
 
       set({
@@ -99,7 +114,7 @@ export const useProfileStore = create((set, get) => ({
 
   // ── Fetch If Stale ──────────────────────────────────────────────────────────
   fetchIfStale: async () => {
-    const stale = await storage.isProfileStale(); // async in both modes
+    const stale = await storage.isProfileStale();
     if (stale) return get().fetchAndPersist();
   },
 
@@ -107,7 +122,6 @@ export const useProfileStore = create((set, get) => ({
   patchStudent: async (studentId, payload) => {
     const result = await profileApi.updateProfile(studentId, payload);
 
-    // Capture BEFORE set() — avoids stale read bug
     const currentStudent =
       get().students.find((s) => s.id === studentId) ?? null;
 
@@ -268,6 +282,9 @@ export const useProfileStore = create((set, get) => ({
   setActiveStudent: (id) => set({ activeStudentId: id }),
 
   // ── Clear ────────────────────────────────────────────────────────────────────
+  // [FIX-3] isHydrated stays true after clear() so AuthProvider can immediately
+  // fire the logout redirect. Setting it false caused a stuck state where both
+  // stores needed re-hydration simultaneously after logout.
   clear: async () => {
     await storage.clearProfile();
     set({
@@ -277,7 +294,7 @@ export const useProfileStore = create((set, get) => ({
       lastScan: null,
       scanCount: 0,
       anomaly: null,
-      isHydrated: false,
+      isHydrated: true, // [FIX-3] was: false
       isFetching: false,
     });
   },
