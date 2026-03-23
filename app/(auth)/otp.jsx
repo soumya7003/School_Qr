@@ -280,8 +280,9 @@ export default function OtpScreen() {
 
         // [FIX-2] useRegistrationSuccess sets isNewUser: true → AuthProvider → /updates
         // [FIX-3] No manual router.replace — AuthProvider handles it
+        console.log("REGISTER RAW RESPONSE:", response);
         await onRegistrationSuccess({
-          parent_id: response.parent?.id,
+          parent_id: response.parent_id,
           accessToken: response.accessToken,
           refreshToken: response.refreshToken,
           expiresAt: response.expiresAt,

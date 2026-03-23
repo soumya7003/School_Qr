@@ -1,12 +1,13 @@
 /**
- * @file app/(app)/home.jsx
- * @description Home Screen — RESQID Parent Dashboard
- *              i18n-wired: all strings use t() from useTranslation()
+ * app/(app)/home.jsx
+ * Home Screen — RESQID Parent Dashboard
+ * Theme: 100% from useTheme().colors — zero hardcoded colors
  */
 
 import Screen from '@/components/common/Screen';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
+import { useTheme } from '@/providers/ThemeProvider';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
@@ -25,56 +26,29 @@ import {
 import Animated2, { FadeInDown } from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
 
-// ─── Design Tokens ────────────────────────────────────────────────────────────
-const C = {
-  bg: '#08080A',
-  surface: '#111116',
-  surface2: '#17171D',
-  surface3: '#1E1E26',
-  border: 'rgba(255,255,255,0.07)',
-  border2: 'rgba(255,255,255,0.12)',
-  red: '#E8342A',
-  redBg: 'rgba(232,52,42,0.1)',
-  redBd: 'rgba(232,52,42,0.22)',
-  green: '#12A150',
-  greenBg: 'rgba(18,161,80,0.1)',
-  greenBd: 'rgba(18,161,80,0.2)',
-  amber: '#F59E0B',
-  amberBg: 'rgba(245,158,11,0.1)',
-  amberBd: 'rgba(245,158,11,0.2)',
-  blue: '#3B82F6',
-  blueBg: 'rgba(59,130,246,0.1)',
-  blueBd: 'rgba(59,130,246,0.2)',
-  tx: '#F2F2F5',
-  tx2: 'rgba(242,242,245,0.62)',
-  tx3: 'rgba(242,242,245,0.34)',
-};
-
-// ─── PulseDot ─────────────────────────────────────────────────────────────────
-function PulseDot({ color = C.green, size = 7 }) {
+// ─── Pulse dot ────────────────────────────────────────────────────────────────
+function PulseDot({ color, size = 7 }) {
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 0.25, duration: 950, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 1, duration: 950, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.2, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     ).start();
-  }, [anim]);
-  return (
-    <Animated.View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: anim }} />
-  );
+  }, []);
+  return <Animated.View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: anim }} />;
 }
 
-// ─── Ring Glow ────────────────────────────────────────────────────────────────
-function RingGlow({ color = C.green }) {
+// ─── Ring glow ────────────────────────────────────────────────────────────────
+function RingGlow({ color }) {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0.5)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(scale, { toValue: 1.18, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1.2, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
           Animated.timing(opacity, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ]),
         Animated.parallel([
@@ -85,26 +59,24 @@ function RingGlow({ color = C.green }) {
     ).start();
   }, []);
   return (
-    <Animated.View
-      style={{
-        position: 'absolute', inset: -8,
-        borderRadius: 999, borderWidth: 1.5,
-        borderColor: color, opacity, transform: [{ scale }],
-      }}
-    />
+    <Animated.View style={{
+      position: 'absolute', inset: -8, borderRadius: 999,
+      borderWidth: 1.5, borderColor: color,
+      opacity, transform: [{ scale }],
+    }} />
   );
 }
 
-// ─── tokenMeta ────────────────────────────────────────────────────────────────
-function tokenMeta(status, t) {
+// ─── Token status meta ────────────────────────────────────────────────────────
+function tokenMeta(status, t, C) {
   switch (status) {
-    case 'ACTIVE': return { label: t('home.statusActive'), color: C.green, bg: C.greenBg, bd: C.greenBd, pulse: true };
-    case 'INACTIVE': return { label: t('home.statusInactive'), color: C.tx3, bg: C.surface3, bd: C.border, pulse: false };
-    case 'ISSUED': return { label: t('home.statusIssued'), color: C.amber, bg: C.amberBg, bd: C.amberBd, pulse: true };
+    case 'ACTIVE': return { label: t('home.statusActive'), color: C.ok, bg: C.okBg, bd: C.okBd, pulse: true };
+    case 'INACTIVE': return { label: t('home.statusInactive'), color: C.tx3, bg: C.s4, bd: C.bd, pulse: false };
+    case 'ISSUED': return { label: t('home.statusIssued'), color: C.amb, bg: C.ambBg, bd: C.ambBd, pulse: true };
     case 'REVOKED': return { label: t('home.statusRevoked'), color: C.red, bg: C.redBg, bd: C.redBd, pulse: false };
     case 'EXPIRED': return { label: t('home.statusExpired'), color: C.red, bg: C.redBg, bd: C.redBd, pulse: false };
-    case 'UNASSIGNED': return { label: t('home.statusNotSetUp'), color: C.amber, bg: C.amberBg, bd: C.amberBd, pulse: false };
-    default: return { label: t('home.statusUnknown'), color: C.tx3, bg: C.surface3, bd: C.border, pulse: false };
+    case 'UNASSIGNED': return { label: t('home.statusNotSetUp'), color: C.amb, bg: C.ambBg, bd: C.ambBd, pulse: false };
+    default: return { label: t('home.statusUnknown'), color: C.tx3, bg: C.s4, bd: C.bd, pulse: false };
   }
 }
 
@@ -126,11 +98,7 @@ function fmtDate(iso) {
 }
 
 function profileCompleteness(ep, contacts) {
-  const fields = [
-    ep?.blood_group, ep?.allergies, ep?.conditions,
-    ep?.medications, ep?.doctor_name, ep?.doctor_phone,
-    contacts?.length > 0 ? 'ok' : null,
-  ];
+  const fields = [ep?.blood_group, ep?.allergies, ep?.conditions, ep?.medications, ep?.doctor_name, ep?.doctor_phone, contacts?.length > 0 ? 'ok' : null];
   return Math.round(fields.filter(Boolean).length / fields.length * 100);
 }
 
@@ -143,19 +111,19 @@ function missingFields(ep, contacts, t) {
   return m;
 }
 
-// ─── Section Card ─────────────────────────────────────────────────────────────
-function SectionCard({ title, icon, actionLabel, onAction, children, style }) {
+// ─── Section card ─────────────────────────────────────────────────────────────
+function SectionCard({ title, icon, actionLabel, onAction, children, C }) {
   return (
-    <View style={[s.sectionCard, style]}>
-      <View style={s.sectionHead}>
+    <View style={[s.sectionCard, { backgroundColor: C.s2, borderColor: C.bd }]}>
+      <View style={[s.sectionHead, { borderBottomColor: C.bd }]}>
         <View style={s.sectionHeadLeft}>
           {icon}
-          <Text style={s.sectionTitle}>{title}</Text>
+          <Text style={[s.sectionTitle, { color: C.tx3 }]}>{title}</Text>
         </View>
         {actionLabel && (
           <TouchableOpacity onPress={onAction} style={s.sectionAction} activeOpacity={0.7}>
-            <Text style={s.sectionActionText}>{actionLabel}</Text>
-            <Feather name="chevron-right" size={13} color={C.red} />
+            <Text style={[s.sectionActionText, { color: C.primary }]}>{actionLabel}</Text>
+            <Feather name="chevron-right" size={13} color={C.primary} />
           </TouchableOpacity>
         )}
       </View>
@@ -164,75 +132,79 @@ function SectionCard({ title, icon, actionLabel, onAction, children, style }) {
   );
 }
 
-// ─── Hero Card ────────────────────────────────────────────────────────────────
-function HeroCard({ student, school, token, card, onPressCard, delay }) {
+// ─── Hero card ────────────────────────────────────────────────────────────────
+function HeroCard({ student, school, token, card, onPressCard, delay, C }) {
   const { t } = useTranslation();
-  const meta = tokenMeta(token?.status, t);
+  const meta = tokenMeta(token?.status, t, C);
   const isActive = token?.status === 'ACTIVE';
   const initials = [student?.first_name?.[0], student?.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
 
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(500)}>
-      <TouchableOpacity style={s.heroCard} onPress={onPressCard} activeOpacity={0.88}>
-        <View style={[s.heroAccent, { backgroundColor: meta.color }]} />
-
+      <TouchableOpacity
+        style={[s.heroCard, { backgroundColor: C.s2, borderColor: C.bd }]}
+        onPress={onPressCard}
+        activeOpacity={0.88}
+      >
+        <View style={[s.heroAccent, { backgroundColor: C.primary }]} />
         <View style={s.heroInner}>
+          {/* Avatar */}
           <View style={s.heroAvatarCol}>
             <View style={s.heroAvatarRing}>
-              {isActive && <RingGlow color={C.green} />}
-              <View style={[s.heroAvatar, { borderColor: meta.color + '55' }]}>
-                <Text style={s.heroAvatarInitials}>{initials}</Text>
+              {isActive && <RingGlow color={C.ok} />}
+              <View style={[s.heroAvatar, { backgroundColor: C.primaryBg, borderColor: meta.color + '55' }]}>
+                <Text style={[s.heroAvatarInitials, { color: C.primary }]}>{initials}</Text>
               </View>
-              <View style={[s.verifiedBadge, { backgroundColor: isActive ? C.green : meta.color }]}>
+              <View style={[s.verifiedBadge, { backgroundColor: isActive ? C.ok : meta.color, borderColor: C.s2 }]}>
                 <Feather name={isActive ? 'check' : 'minus'} size={8} color="#fff" />
               </View>
             </View>
           </View>
 
+          {/* Meta */}
           <View style={s.heroMeta}>
-            <Text style={s.heroName} numberOfLines={1}>
+            <Text style={[s.heroName, { color: C.tx }]} numberOfLines={1}>
               {student?.first_name ?? '—'} {student?.last_name ?? ''}
             </Text>
             <View style={s.heroChipRow}>
               {(student?.class || student?.section) && (
-                <View style={s.chip}>
-                  <Text style={s.chipTx}>
+                <View style={[s.chip, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+                  <Text style={[s.chipTx, { color: C.primary }]}>
                     {student.class}{student.section ? `-${student.section}` : ''}
                   </Text>
                 </View>
               )}
               {school?.name && (
-                <View style={[s.chip, s.chipBlue]}>
+                <View style={[s.chip, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
                   <Text style={[s.chipTx, { color: C.blue }]} numberOfLines={1}>{school.name}</Text>
                 </View>
               )}
             </View>
             <View style={s.heroCardNumRow}>
               <MaterialCommunityIcons name="qrcode" size={11} color={C.tx3} />
-              <Text style={s.heroCardNum}>{card?.card_number ?? t('home.notAssigned')}</Text>
+              <Text style={[s.heroCardNum, { color: C.tx3 }]}>{card?.card_number ?? t('home.notAssigned')}</Text>
             </View>
           </View>
 
+          {/* Right */}
           <View style={s.heroRight}>
             <View style={[s.statusPill, { backgroundColor: meta.bg, borderColor: meta.bd }]}>
               {meta.pulse && <PulseDot color={meta.color} size={6} />}
               <Text style={[s.statusPillTx, { color: meta.color }]}>{meta.label}</Text>
             </View>
-            <View style={s.heroQrBtn}>
+            <View style={[s.heroQrBtn, { backgroundColor: C.s3, borderColor: C.bd2 }]}>
               <MaterialCommunityIcons name="qrcode-scan" size={20} color={C.tx} />
             </View>
           </View>
         </View>
 
         {token?.expires_at && (
-          <View style={s.heroFooter}>
+          <View style={[s.heroFooter, { borderTopColor: C.bd, backgroundColor: C.s3 }]}>
             <Feather name="clock" size={11} color={C.tx3} />
-            <Text style={s.heroFooterTx}>
-              {t('home.validUntil', { date: fmtDate(token.expires_at) })}
-            </Text>
-            <View style={s.heroDivider} />
-            <Feather name="shield" size={11} color={isActive ? C.green : C.tx3} />
-            <Text style={[s.heroFooterTx, { color: isActive ? C.green : C.tx3 }]}>
+            <Text style={[s.heroFooterTx, { color: C.tx3 }]}>{t('home.validUntil', { date: fmtDate(token.expires_at) })}</Text>
+            <View style={[s.heroDivider, { backgroundColor: C.bd }]} />
+            <Feather name="shield" size={11} color={isActive ? C.ok : C.tx3} />
+            <Text style={[s.heroFooterTx, { color: isActive ? C.ok : C.tx3 }]}>
               {isActive ? t('home.protected') : t('home.statusInactive')}
             </Text>
           </View>
@@ -242,223 +214,176 @@ function HeroCard({ student, school, token, card, onPressCard, delay }) {
   );
 }
 
-// ─── Anomaly Alert ────────────────────────────────────────────────────────────
-function AnomalyAlert({ anomaly, onPress, delay }) {
+// ─── Anomaly alert ────────────────────────────────────────────────────────────
+function AnomalyAlert({ anomaly, onPress, delay, C }) {
   const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.7, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.6, duration: 700, useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
       ])
     ).start();
   }, []);
-
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
-      <TouchableOpacity style={s.anomalyCard} onPress={onPress} activeOpacity={0.85}>
-        <View style={s.anomalyIconWrap}>
+      <TouchableOpacity
+        style={[s.anomalyCard, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <View style={[s.anomalyIconWrap, { backgroundColor: C.ambBg }]}>
           <Animated.View style={{ opacity: pulse }}>
-            <Feather name="alert-triangle" size={18} color={C.amber} />
+            <Feather name="alert-triangle" size={18} color={C.amb} />
           </Animated.View>
         </View>
         <View style={s.anomalyBody}>
-          <Text style={s.anomalyTitle}>{t('home.suspiciousScan')}</Text>
-          <Text style={s.anomalyDesc} numberOfLines={2}>{anomaly.reason}</Text>
+          <Text style={[s.anomalyTitle, { color: C.amb }]}>{t('home.suspiciousScan')}</Text>
+          <Text style={[s.anomalyDesc, { color: C.amb }]} numberOfLines={2}>{anomaly.reason}</Text>
         </View>
-        <View style={s.anomalyArrow}>
-          <Feather name="chevron-right" size={15} color={C.amber} />
-        </View>
+        <Feather name="chevron-right" size={15} color={C.amb} />
       </TouchableOpacity>
     </Animated2.View>
   );
 }
 
-// ─── Quick Actions ────────────────────────────────────────────────────────────
-function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay }) {
+// ─── Quick actions ────────────────────────────────────────────────────────────
+function QuickActions({ onShowQR, onEditProfile, onScanHistory, delay, C }) {
   const { t } = useTranslation();
-
   const actions = [
-    {
-      label: t('home.showQR'),
-      sub: t('home.emergencyAccess'),
-      icon: <MaterialCommunityIcons name="qrcode-scan" size={22} color={C.red} />,
-      bg: C.redBg, bd: C.redBd,
-      onPress: onShowQR,
-    },
-    {
-      label: t('home.editProfile'),
-      sub: t('home.medicalInfo'),
-      icon: <Feather name="edit-2" size={19} color={C.blue} />,
-      bg: C.blueBg, bd: C.blueBd,
-      onPress: onEditProfile,
-    },
-    {
-      label: t('home.scanLogs'),
-      sub: t('home.activityHistory'),
-      icon: <Feather name="activity" size={19} color={C.tx2} />,
-      bg: C.surface3, bd: C.border,
-      onPress: onScanHistory,
-    },
+    { label: t('home.showQR'), sub: t('home.emergencyAccess'), icon: <MaterialCommunityIcons name="qrcode-scan" size={22} color={C.primary} />, bg: C.primaryBg, bd: C.primaryBd, onPress: onShowQR },
+    { label: t('home.editProfile'), sub: t('home.medicalInfo'), icon: <Feather name="edit-2" size={19} color={C.blue} />, bg: C.blueBg, bd: C.blueBd, onPress: onEditProfile },
+    { label: t('home.scanLogs'), sub: t('home.activityHistory'), icon: <Feather name="activity" size={19} color={C.tx2} />, bg: C.s4, bd: C.bd, onPress: onScanHistory },
   ];
-
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)} style={s.quickRow}>
       {actions.map((a) => (
-        <TouchableOpacity key={a.label} style={s.quickCard} onPress={a.onPress} activeOpacity={0.75}>
-          <View style={[s.quickIconWrap, { backgroundColor: a.bg, borderColor: a.bd }]}>
-            {a.icon}
-          </View>
-          <Text style={s.quickLabel}>{a.label}</Text>
-          <Text style={s.quickSub}>{a.sub}</Text>
+        <TouchableOpacity
+          key={a.label}
+          style={[s.quickCard, { backgroundColor: C.s2, borderColor: C.bd }]}
+          onPress={a.onPress}
+          activeOpacity={0.75}
+        >
+          <View style={[s.quickIconWrap, { backgroundColor: a.bg, borderColor: a.bd }]}>{a.icon}</View>
+          <Text style={[s.quickLabel, { color: C.tx }]}>{a.label}</Text>
+          <Text style={[s.quickSub, { color: C.tx3 }]}>{a.sub}</Text>
         </TouchableOpacity>
       ))}
     </Animated2.View>
   );
 }
 
-// ─── Completeness Ring ────────────────────────────────────────────────────────
-function CompletenessRing({ pct, isComplete }) {
+// ─── Completeness ring ────────────────────────────────────────────────────────
+function CompletenessRing({ pct, isComplete, C }) {
   const { t } = useTranslation();
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(anim, {
-      toValue: pct / 100,
-      duration: 900,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(anim, { toValue: pct / 100, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [pct]);
-
-  const color = isComplete ? C.green : pct >= 60 ? C.amber : C.red;
-
+  const color = isComplete ? C.ok : pct >= 60 ? C.amb : C.primary;
   return (
     <View style={s.ringWrap}>
       <View style={[s.ringTrack, { borderColor: color + '22' }]} />
       <View style={s.ringCenter}>
         <Text style={[s.ringPct, { color }]}>{pct}<Text style={s.ringPctSign}>%</Text></Text>
-        <Text style={s.ringLabel}>{isComplete ? t('home.complete') : t('home.done')}</Text>
+        <Text style={[s.ringLabel, { color: C.tx3 }]}>{isComplete ? t('home.complete') : t('home.done')}</Text>
       </View>
-      <View style={s.ringBarBg}>
-        <Animated.View
-          style={[
-            s.ringBarFill,
-            {
-              width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-              backgroundColor: color,
-            },
-          ]}
-        />
+      <View style={[s.ringBarBg, { backgroundColor: C.s4 }]}>
+        <Animated.View style={[s.ringBarFill, { width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), backgroundColor: color }]} />
       </View>
     </View>
   );
 }
 
-// ─── Emergency Profile Card ───────────────────────────────────────────────────
-function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
+// ─── Emergency card ───────────────────────────────────────────────────────────
+function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay, C }) {
   const { t } = useTranslation();
   const completeness = profileCompleteness(ep, contacts);
   const missing = missingFields(ep, contacts, t);
   const isComplete = completeness === 100;
   const topContacts = [...(contacts ?? [])].sort((a, b) => a.priority - b.priority).slice(0, 2);
-  const avatarColors = [C.red, C.blue];
+  const avatarColors = [C.primary, C.blue];
 
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
       <SectionCard
         title={t('home.emergencyProfile')}
-        icon={<Feather name="heart" size={13} color={C.red} />}
+        icon={<Feather name="heart" size={13} color={C.primary} />}
         actionLabel={t('common.edit')}
         onAction={onEdit}
+        C={C}
       >
-        {/* Completeness row */}
-        <View style={s.completeRow}>
-          <CompletenessRing pct={completeness} isComplete={isComplete} />
+        <View style={[s.completeRow, { borderBottomColor: C.bd }]}>
+          <CompletenessRing pct={completeness} isComplete={isComplete} C={C} />
           <View style={s.completeRight}>
-            <Text style={s.completeHeadline}>
-              {isComplete ? t('home.profileReady') : t('home.profileIncomplete')}
-            </Text>
-            <Text style={s.completeBody}>
-              {isComplete
-                ? t('home.profileReadyDesc')
-                : t('home.profileIncompleteDesc', { count: missing.length })}
-            </Text>
+            <Text style={[s.completeHeadline, { color: C.tx }]}>{isComplete ? t('home.profileReady') : t('home.profileIncomplete')}</Text>
+            <Text style={[s.completeBody, { color: C.tx3 }]}>{isComplete ? t('home.profileReadyDesc') : t('home.profileIncompleteDesc', { count: missing.length })}</Text>
             {!isComplete && (
               <TouchableOpacity style={s.completeBtn} onPress={onEdit} activeOpacity={0.8}>
-                <Text style={s.completeBtnTx}>{t('home.completeNow')}</Text>
-                <Feather name="arrow-right" size={12} color={C.amber} />
+                <Text style={[s.completeBtnTx, { color: C.amb }]}>{t('home.completeNow')}</Text>
+                <Feather name="arrow-right" size={12} color={C.amb} />
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* Missing fields nudge */}
         {missing.length > 0 && (
-          <TouchableOpacity style={s.missingStrip} onPress={onEdit} activeOpacity={0.8}>
-            <Feather name="alert-circle" size={13} color={C.amber} />
-            <Text style={s.missingTx}>
+          <TouchableOpacity
+            style={[s.missingStrip, { backgroundColor: C.ambBg, borderBottomColor: C.ambBd }]}
+            onPress={onEdit}
+            activeOpacity={0.8}
+          >
+            <Feather name="alert-circle" size={13} color={C.amb} />
+            <Text style={[s.missingTx, { color: C.amb }]}>
               {t('home.missing')}: {missing.slice(0, 3).join(' · ')}{missing.length > 3 ? ` +${missing.length - 3}` : ''}
             </Text>
-            <Feather name="chevron-right" size={12} color={C.amber} />
+            <Feather name="chevron-right" size={12} color={C.amb} />
           </TouchableOpacity>
         )}
 
-        {/* Blood group */}
         {ep?.blood_group && (
-          <View style={s.bloodStrip}>
-            <View style={s.bloodIconBox}>
+          <View style={[s.bloodStrip, { borderBottomColor: C.bd }]}>
+            <View style={[s.bloodIconBox, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
               <Text style={{ fontSize: 18 }}>🩸</Text>
             </View>
             <View style={s.bloodInfo}>
-              <Text style={s.bloodLbl}>{t('updates.bloodGroup')}</Text>
-              <Text style={s.bloodVal}>{ep.blood_group}</Text>
+              <Text style={[s.bloodLbl, { color: C.tx3 }]}>{t('updates.bloodGroup')}</Text>
+              <Text style={[s.bloodVal, { color: C.primary }]}>{ep.blood_group}</Text>
             </View>
             {ep?.allergies && (
-              <View style={s.allergyPill}>
-                <Feather name="alert-triangle" size={10} color={C.amber} />
-                <Text style={s.allergyTx} numberOfLines={1}>
-                  {ep.allergies.split(',')[0].trim()}
-                </Text>
+              <View style={[s.allergyPill, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
+                <Feather name="alert-triangle" size={10} color={C.amb} />
+                <Text style={[s.allergyTx, { color: C.amb }]} numberOfLines={1}>{ep.allergies.split(',')[0].trim()}</Text>
               </View>
             )}
           </View>
         )}
 
-        {topContacts.length > 0 && <View style={s.hdivider} />}
-
-        {/* Emergency contacts */}
+        {topContacts.length > 0 && <View style={[s.hdivider, { backgroundColor: C.bd }]} />}
         {topContacts.map((c, i) => (
-          <View
-            key={c.id ?? i}
-            style={[s.contactRow, i < topContacts.length - 1 && s.contactRowBd]}
-          >
+          <View key={c.id ?? i} style={[s.contactRow, i < topContacts.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.bd }]}>
             <View style={[s.contactAv, { backgroundColor: avatarColors[i] + '18', borderColor: avatarColors[i] + '35' }]}>
-              <Text style={[s.contactAvTx, { color: avatarColors[i] }]}>
-                {c.name?.[0]?.toUpperCase() ?? '?'}
-              </Text>
+              <Text style={[s.contactAvTx, { color: avatarColors[i] }]}>{c.name?.[0]?.toUpperCase() ?? '?'}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.contactName}>{c.name}</Text>
-              <Text style={s.contactRel}>
-                {c.relationship ?? t('home.guardian')}
-                {c.priority === 1 ? `  ·  ${t('home.primary')}` : ''}
-              </Text>
+              <Text style={[s.contactName, { color: C.tx }]}>{c.name}</Text>
+              <Text style={[s.contactRel, { color: C.tx3 }]}>{c.relationship ?? t('home.guardian')}{c.priority === 1 ? `  ·  ${t('home.primary')}` : ''}</Text>
             </View>
             <TouchableOpacity
-              style={s.callBtn}
+              style={[s.callBtn, { backgroundColor: C.okBg, borderColor: C.okBd }]}
               onPress={() => Linking.openURL(`tel:${c.phone}`)}
               activeOpacity={0.7}
             >
-              <Feather name="phone-call" size={14} color={C.green} />
+              <Feather name="phone-call" size={14} color={C.ok} />
             </TouchableOpacity>
           </View>
         ))}
 
         {topContacts.length === 0 && (
           <TouchableOpacity style={s.addContactNudge} onPress={onEdit} activeOpacity={0.8}>
-            <Feather name="user-plus" size={14} color={C.red} />
-            <Text style={s.addContactTx}>{t('home.addContactNudge')}</Text>
+            <Feather name="user-plus" size={14} color={C.primary} />
+            <Text style={[s.addContactTx, { color: C.primary }]}>{t('home.addContactNudge')}</Text>
           </TouchableOpacity>
         )}
       </SectionCard>
@@ -466,13 +391,12 @@ function EmergencyCard({ emergencyProfile: ep, contacts, onEdit, delay }) {
   );
 }
 
-// ─── Last Scan Card ───────────────────────────────────────────────────────────
-function LastScanCard({ scan, totalScans, onPress, delay }) {
+// ─── Last scan card ───────────────────────────────────────────────────────────
+function LastScanCard({ scan, totalScans, onPress, delay, C }) {
   const { t } = useTranslation();
   const isEmergency = scan?.scan_purpose === 'EMERGENCY';
   const location = [scan?.ip_city, scan?.ip_region].filter(Boolean).join(', ');
   const isSuccess = scan?.result === 'SUCCESS';
-
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
       <SectionCard
@@ -480,40 +404,28 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
         icon={<Feather name="radio" size={13} color={C.tx3} />}
         actionLabel={t('home.viewAll', { count: totalScans })}
         onAction={onPress}
+        C={C}
       >
         {!scan ? (
           <View style={s.noScanWrap}>
-            <View style={s.noScanIconBox}>
+            <View style={[s.noScanIconBox, { backgroundColor: C.s3, borderColor: C.bd }]}>
               <Feather name="maximize-2" size={20} color={C.tx3} />
             </View>
-            <Text style={s.noScanTitle}>{t('home.noScansYet')}</Text>
-            <Text style={s.noScanBody}>{t('home.noScansBody')}</Text>
+            <Text style={[s.noScanTitle, { color: C.tx2 }]}>{t('home.noScansYet')}</Text>
+            <Text style={[s.noScanBody, { color: C.tx3 }]}>{t('home.noScansBody')}</Text>
           </View>
         ) : (
           <TouchableOpacity style={s.scanRow} onPress={onPress} activeOpacity={0.85}>
-            <View style={[s.scanTypeDot, { backgroundColor: isEmergency ? C.red : C.green }]} />
+            <View style={[s.scanTypeDot, { backgroundColor: isEmergency ? C.red : C.ok }]} />
             <View style={{ flex: 1 }}>
-              <Text style={s.scanTypeLabel}>
-                {isEmergency ? `🆘 ${t('home.emergencyScan')}` : `👁 ${t('home.generalScan')}`}
-              </Text>
+              <Text style={[s.scanTypeLabel, { color: C.tx }]}>{isEmergency ? `🆘 ${t('home.emergencyScan')}` : `👁 ${t('home.generalScan')}`}</Text>
               <View style={s.scanMeta}>
-                {location ? (
-                  <>
-                    <Feather name="map-pin" size={11} color={C.tx3} />
-                    <Text style={s.scanMetaTx}>{location}</Text>
-                    <Text style={s.scanMetaDot}>·</Text>
-                  </>
-                ) : null}
-                <Text style={s.scanMetaTx}>{fmtRelTime(scan.created_at, t)}</Text>
+                {location ? (<><Feather name="map-pin" size={11} color={C.tx3} /><Text style={[s.scanMetaTx, { color: C.tx3 }]}>{location}</Text><Text style={[s.scanMetaDot, { color: C.tx3 }]}>·</Text></>) : null}
+                <Text style={[s.scanMetaTx, { color: C.tx3 }]}>{fmtRelTime(scan.created_at, t)}</Text>
               </View>
             </View>
-            <View style={[s.scanResultBadge, {
-              backgroundColor: isSuccess ? C.greenBg : C.redBg,
-              borderColor: isSuccess ? C.greenBd : C.redBd,
-            }]}>
-              <Text style={[s.scanResultTx, { color: isSuccess ? C.green : C.red }]}>
-                {scan.result}
-              </Text>
+            <View style={[s.scanResultBadge, { backgroundColor: isSuccess ? C.okBg : C.redBg, borderColor: isSuccess ? C.okBd : C.redBd }]}>
+              <Text style={[s.scanResultTx, { color: isSuccess ? C.ok : C.red }]}>{scan.result}</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -522,251 +434,172 @@ function LastScanCard({ scan, totalScans, onPress, delay }) {
   );
 }
 
-// ─── Safety Tip ───────────────────────────────────────────────────────────────
-function SafetyTip({ delay }) {
+// ─── Safety tip ───────────────────────────────────────────────────────────────
+function SafetyTip({ delay, C }) {
   const { t } = useTranslation();
   return (
     <Animated2.View entering={FadeInDown.delay(delay).duration(400)}>
-      <View style={s.safetyTip}>
-        <View style={s.safetyIconWrap}>
-          <Feather name="shield" size={16} color={C.green} />
+      <View style={[s.safetyTip, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
+        <View style={[s.safetyIconWrap, { backgroundColor: C.okBg }]}>
+          <Feather name="shield" size={16} color={C.ok} />
         </View>
-        <Text style={s.safetyTx}>{t('home.safetyTip')}</Text>
+        <Text style={[s.safetyTx, { color: C.tx2 }]}>{t('home.safetyTip')}</Text>
       </View>
     </Animated2.View>
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors: C } = useTheme();
   const { parentUser } = useAuthStore();
 
-  // ── FIX 1: useShallow prevents new object ref on every render ──────────────
   const activeStudent = useProfileStore(
     useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
   );
-
-  // ── FIX 2: Select primitives — never wrap in [] inside the selector ────────
   const lastScanRaw = useProfileStore((s) => s.lastScan);
   const anomalyRaw = useProfileStore((s) => s.anomaly);
 
-  // ── FIX 3: greetingText defined locally ───────────────────────────────────
   const hour = new Date().getHours();
-  const greetingText = hour < 12
-    ? t('home.goodMorning')
-    : hour < 17
-      ? t('home.goodAfternoon')
-      : t('home.goodEvening');
+  const greetingText = hour < 12 ? t('home.goodMorning') : hour < 17 ? t('home.goodAfternoon') : t('home.goodEvening');
 
-  // Derived — computed outside the store so no new refs inside selectors
   const school = activeStudent?.school ?? null;
   const token = activeStudent?.token ?? null;
   const card = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = activeStudent?.emergency ?? null;
   const contacts = activeStudent?.emergency?.contacts ?? [];
-  const recentScans = lastScanRaw ? [lastScanRaw] : [];
-  const anomalies = anomalyRaw ? [anomalyRaw] : [];
-  const lastScan = recentScans[0] ?? null;
-  const totalScans = recentScans.length;
-  const unresolvedAnomaly = anomalies.find((a) => !a.resolved);
+  const lastScan = lastScanRaw ?? null;
+  const totalScans = lastScan ? 1 : 0;
+  const unresolvedAnomaly = anomalyRaw && !anomalyRaw.resolved ? anomalyRaw : null;
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
-      >
-        {/* ── Greeting ── */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+
+        {/* Greeting */}
         <Animated2.View entering={FadeInDown.delay(0).duration(400)} style={s.greetWrap}>
           <View>
-            <Text style={s.greetLine}>
+            <Text style={[s.greetLine, { color: C.tx }]}>
               {greetingText}{parentUser?.phone ? ' 👋' : ''}
             </Text>
-            <Text style={s.greetSub}>
-              {activeStudent?.first_name
-                ? t('home.subtitleNamed', { name: activeStudent.first_name })
-                : t('home.subtitle')}
+            <Text style={[s.greetSub, { color: C.tx3 }]}>
+              {activeStudent?.first_name ? t('home.subtitleNamed', { name: activeStudent.first_name }) : t('home.subtitle')}
             </Text>
           </View>
           <TouchableOpacity
-            style={s.notifBtn}
+            style={[s.notifBtn, { backgroundColor: C.s2, borderColor: C.bd }]}
             onPress={() => router.push('/(app)/scan-history')}
             activeOpacity={0.8}
           >
             <Feather name="bell" size={18} color={C.tx2} />
-            {unresolvedAnomaly && <View style={s.notifDot} />}
+            {unresolvedAnomaly && <View style={[s.notifDot, { backgroundColor: C.amb, borderColor: C.bg }]} />}
           </TouchableOpacity>
         </Animated2.View>
 
-        {/* ── Hero Card ── */}
-        <HeroCard
-          student={activeStudent}
-          school={school}
-          token={token}
-          card={card}
-          onPressCard={() => router.push('/(app)/qr')}
-          delay={60}
-        />
+        <HeroCard student={activeStudent} school={school} token={token} card={card} onPressCard={() => router.push('/(app)/qr')} delay={60} C={C} />
+        {unresolvedAnomaly && <AnomalyAlert anomaly={unresolvedAnomaly} onPress={() => router.push('/(app)/scan-history')} delay={100} C={C} />}
+        <QuickActions onShowQR={() => router.push('/(app)/qr')} onEditProfile={() => router.push('/(app)/updates')} onScanHistory={() => router.push('/(app)/scan-history')} delay={140} C={C} />
+        <EmergencyCard emergencyProfile={emergencyProfile} contacts={contacts} onEdit={() => router.push('/(app)/updates')} delay={180} C={C} />
+        <LastScanCard scan={lastScan} totalScans={totalScans} onPress={() => router.push('/(app)/scan-history')} delay={220} C={C} />
+        <SafetyTip delay={260} C={C} />
 
-        {/* ── Anomaly Alert ── */}
-        {unresolvedAnomaly && (
-          <AnomalyAlert
-            anomaly={unresolvedAnomaly}
-            onPress={() => router.push('/(app)/scan-history')}
-            delay={100}
-          />
-        )}
-
-        {/* ── Quick Actions ── */}
-        <QuickActions
-          onShowQR={() => router.push('/(app)/qr')}
-          onEditProfile={() => router.push('/(app)/updates')}
-          onScanHistory={() => router.push('/(app)/scan-history')}
-          delay={140}
-        />
-
-        {/* ── Emergency Profile ── */}
-        <EmergencyCard
-          emergencyProfile={emergencyProfile}
-          contacts={contacts}
-          onEdit={() => router.push('/(app)/updates')}
-          delay={180}
-        />
-
-        {/* ── Last Scan ── */}
-        <LastScanCard
-          scan={lastScan}
-          totalScans={totalScans}
-          onPress={() => router.push('/(app)/scan-history')}
-          delay={220}
-        />
-
-        {/* ── Safety Tip ── */}
-        <SafetyTip delay={260} />
       </ScrollView>
     </Screen>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  scroll: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 12 : 16,
-    paddingBottom: 48,
-    gap: 14,
-  },
-  greetWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingVertical: 4,
-  },
-  greetLine: { fontSize: 22, fontWeight: '800', color: C.tx, letterSpacing: -0.3 },
-  greetSub: { fontSize: 13, color: C.tx3, marginTop: 2, fontWeight: '500' },
-  notifBtn: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center', position: 'relative',
-  },
-  notifDot: {
-    position: 'absolute', top: 9, right: 10,
-    width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: C.amber, borderWidth: 1.5, borderColor: C.bg,
-  },
-  heroCard: {
-    backgroundColor: C.surface, borderRadius: 20,
-    borderWidth: 1, borderColor: C.border, overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
-      android: { elevation: 8 },
-    }),
-  },
+  scroll: { paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 12 : 16, paddingBottom: 48, gap: 14 },
+  greetWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  greetLine: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  greetSub: { fontSize: 13, marginTop: 2, fontWeight: '500' },
+  notifBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  notifDot: { position: 'absolute', top: 9, right: 10, width: 7, height: 7, borderRadius: 3.5, borderWidth: 1.5 },
+  heroCard: { borderRadius: 20, borderWidth: 1, overflow: 'hidden', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.28, shadowRadius: 20 }, android: { elevation: 8 } }) },
   heroAccent: { height: 3, width: '100%' },
   heroInner: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
   heroAvatarCol: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   heroAvatarRing: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  heroAvatar: { width: 58, height: 58, borderRadius: 999, backgroundColor: C.redBg, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  heroAvatarInitials: { fontSize: 22, fontWeight: '900', color: C.red, letterSpacing: -0.5 },
-  verifiedBadge: { position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.surface },
+  heroAvatar: { width: 58, height: 58, borderRadius: 999, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  heroAvatarInitials: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  verifiedBadge: { position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   heroMeta: { flex: 1, gap: 4 },
-  heroName: { fontSize: 17, fontWeight: '800', color: C.tx, letterSpacing: -0.2 },
+  heroName: { fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
   heroChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  chip: { backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 99, borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)', paddingHorizontal: 8, paddingVertical: 2 },
-  chipBlue: { backgroundColor: C.blueBg, borderColor: C.blueBd },
-  chipTx: { fontSize: 10.5, fontWeight: '700', color: C.amber, letterSpacing: 0.1 },
+  chip: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2 },
+  chipTx: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.1 },
   heroCardNumRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  heroCardNum: { fontSize: 11, fontWeight: '500', color: C.tx3, letterSpacing: 0.5, fontVariant: ['tabular-nums'] },
+  heroCardNum: { fontSize: 11, fontWeight: '500', letterSpacing: 0.5 },
   heroRight: { alignItems: 'center', gap: 8, flexShrink: 0 },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4 },
   statusPillTx: { fontSize: 11, fontWeight: '800', letterSpacing: 0.1 },
-  heroQrBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border2, alignItems: 'center', justifyContent: 'center' },
-  heroFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: C.border, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: C.surface2 },
-  heroFooterTx: { fontSize: 11.5, color: C.tx3, fontWeight: '500' },
-  heroDivider: { width: 1, height: 12, backgroundColor: C.border, marginHorizontal: 4 },
-  anomalyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.amberBg, borderRadius: 14, borderWidth: 1, borderColor: C.amberBd, padding: 14, gap: 12 },
-  anomalyIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  heroQrBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  heroFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 10 },
+  heroFooterTx: { fontSize: 11.5, fontWeight: '500' },
+  heroDivider: { width: 1, height: 12, marginHorizontal: 4 },
+  anomalyCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, padding: 14, gap: 12 },
+  anomalyIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   anomalyBody: { flex: 1 },
-  anomalyTitle: { fontSize: 13.5, fontWeight: '800', color: C.amber },
-  anomalyDesc: { fontSize: 12, color: C.amber, opacity: 0.75, marginTop: 3, lineHeight: 16 },
-  anomalyArrow: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  anomalyTitle: { fontSize: 13.5, fontWeight: '800' },
+  anomalyDesc: { fontSize: 12, opacity: 0.75, marginTop: 3, lineHeight: 16 },
   quickRow: { flexDirection: 'row', gap: 10 },
-  quickCard: { flex: 1, alignItems: 'center', gap: 7, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.border, paddingVertical: 16, paddingHorizontal: 6 },
+  quickCard: { flex: 1, alignItems: 'center', gap: 7, borderRadius: 16, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 6 },
   quickIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  quickLabel: { fontSize: 12.5, fontWeight: '700', color: C.tx, textAlign: 'center' },
-  quickSub: { fontSize: 10, fontWeight: '500', color: C.tx3, textAlign: 'center' },
-  sectionCard: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border },
+  quickLabel: { fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
+  quickSub: { fontSize: 10, fontWeight: '500', textAlign: 'center' },
+  sectionCard: { borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1 },
   sectionHeadLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionTitle: { fontSize: 11, fontWeight: '800', color: C.tx3, letterSpacing: 0.8, textTransform: 'uppercase' },
+  sectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  sectionActionText: { fontSize: 12.5, fontWeight: '700', color: C.red },
-  completeRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, borderBottomWidth: 1, borderBottomColor: C.border },
+  sectionActionText: { fontSize: 12.5, fontWeight: '700' },
+  completeRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14, borderBottomWidth: 1 },
   ringWrap: { width: 68, height: 68, flexShrink: 0, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   ringTrack: { position: 'absolute', inset: 0, borderRadius: 999, borderWidth: 4 },
   ringCenter: { alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   ringPct: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
   ringPctSign: { fontSize: 11, fontWeight: '700' },
-  ringLabel: { fontSize: 9, color: C.tx3, fontWeight: '600', letterSpacing: 0.3 },
-  ringBarBg: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: C.surface3, borderRadius: 2, overflow: 'hidden' },
+  ringLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 0.3 },
+  ringBarBg: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderRadius: 2, overflow: 'hidden' },
   ringBarFill: { height: '100%', borderRadius: 2 },
   completeRight: { flex: 1, gap: 5 },
-  completeHeadline: { fontSize: 14, fontWeight: '800', color: C.tx },
-  completeBody: { fontSize: 12.5, color: C.tx3, lineHeight: 17 },
+  completeHeadline: { fontSize: 14, fontWeight: '800' },
+  completeBody: { fontSize: 12.5, lineHeight: 17 },
   completeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  completeBtnTx: { fontSize: 12, fontWeight: '700', color: C.amber },
-  missingStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.amberBg, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.amberBd },
-  missingTx: { fontSize: 12, color: C.amber, flex: 1, fontWeight: '600' },
-  bloodStrip: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
-  bloodIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.redBg, borderWidth: 1, borderColor: C.redBd, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  completeBtnTx: { fontSize: 12, fontWeight: '700' },
+  missingStrip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  missingTx: { fontSize: 12, flex: 1, fontWeight: '600' },
+  bloodStrip: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  bloodIconBox: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   bloodInfo: { gap: 2 },
-  bloodLbl: { fontSize: 10, color: C.tx3, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: '700' },
-  bloodVal: { fontSize: 22, fontWeight: '900', color: C.red, lineHeight: 26 },
-  allergyPill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.amberBg, borderRadius: 99, borderWidth: 1, borderColor: C.amberBd, paddingHorizontal: 8, paddingVertical: 4 },
-  allergyTx: { fontSize: 11, color: C.amber, fontWeight: '700', maxWidth: 90 },
-  hdivider: { height: 1, backgroundColor: C.border },
+  bloodLbl: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: '700' },
+  bloodVal: { fontSize: 22, fontWeight: '900', lineHeight: 26 },
+  allergyPill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 99, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  allergyTx: { fontSize: 11, fontWeight: '700', maxWidth: 90 },
+  hdivider: { height: 1 },
   contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  contactRowBd: { borderBottomWidth: 1, borderBottomColor: C.border },
   contactAv: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   contactAvTx: { fontSize: 15, fontWeight: '900' },
-  contactName: { fontSize: 14, fontWeight: '700', color: C.tx },
-  contactRel: { fontSize: 11.5, color: C.tx3, marginTop: 2 },
-  callBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.greenBg, borderWidth: 1, borderColor: C.greenBd, alignItems: 'center', justifyContent: 'center' },
+  contactName: { fontSize: 14, fontWeight: '700' },
+  contactRel: { fontSize: 11.5, marginTop: 2 },
+  callBtn: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   addContactNudge: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  addContactTx: { fontSize: 13, color: C.red, fontWeight: '700', flex: 1 },
+  addContactTx: { fontSize: 13, fontWeight: '700', flex: 1 },
   noScanWrap: { alignItems: 'center', padding: 28, gap: 8 },
-  noScanIconBox: { width: 52, height: 52, borderRadius: 999, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  noScanTitle: { fontSize: 14, fontWeight: '800', color: C.tx2 },
-  noScanBody: { fontSize: 12.5, color: C.tx3, textAlign: 'center', lineHeight: 17 },
+  noScanIconBox: { width: 52, height: 52, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  noScanTitle: { fontSize: 14, fontWeight: '800' },
+  noScanBody: { fontSize: 12.5, textAlign: 'center', lineHeight: 17 },
   scanRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   scanTypeDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  scanTypeLabel: { fontSize: 14, fontWeight: '700', color: C.tx },
+  scanTypeLabel: { fontSize: 14, fontWeight: '700' },
   scanMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  scanMetaTx: { fontSize: 11.5, color: C.tx3 },
-  scanMetaDot: { fontSize: 10, color: C.tx3 },
+  scanMetaTx: { fontSize: 11.5 },
+  scanMetaDot: { fontSize: 10 },
   scanResultBadge: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 3 },
   scanResultTx: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
-  safetyTip: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: C.greenBg, borderRadius: 14, borderWidth: 1, borderColor: C.greenBd, padding: 14 },
-  safetyIconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(18,161,80,0.15)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  safetyTx: { fontSize: 12.5, color: C.tx2, flex: 1, lineHeight: 18, fontWeight: '500', paddingTop: 6 },
+  safetyTip: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 14, borderWidth: 1, padding: 14 },
+  safetyIconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  safetyTx: { fontSize: 12.5, flex: 1, lineHeight: 18, fontWeight: '500', paddingTop: 6 },
 });

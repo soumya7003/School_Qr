@@ -83,8 +83,8 @@ import { apiClient, authClient } from "@/lib/api/apiClient";
 // ── Guards ─────────────────────────────────────────────────────────────────────
 
 function assertRegVerifyResponse(data) {
-  if (!data?.accessToken) throw new Error("REG: missing accessToken");
-  if (!data?.refreshToken) throw new Error("REG: missing refreshToken");
+  if (!data?.access_token) throw new Error("REG: missing access_token");
+  if (!data?.refresh_token) throw new Error("REG: missing refresh_token");
   if (!data?.parent_id) throw new Error("REG: missing parent_id");
 }
 
@@ -125,11 +125,11 @@ export const registrationApi = {
     assertRegVerifyResponse(data);
 
     return {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      expiresAt: data.expiresAt ?? null,
-      isNewUser: true, // always true — registration path
-      parent_id: data.parent_id, // snake_case from backend
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: data.expires_at ?? null,
+      isNewUser: true,
+      parent_id: data.parent_id,
       student_id: data.student_id,
     };
   },
