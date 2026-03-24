@@ -1,31 +1,5 @@
 /**
- * app/(app)/updates.jsx
- *
- * BUGS FIXED:
- *
- *   [FIX-1] After completing the wizard, navigation to /(app)/home failed or
- *           was skipped. The original flow was:
- *             patchStudent() → setIsNewUser(false) → setTimeout router.replace('/home')
- *           The setTimeout(900ms) raced with AuthProvider's reactive guard.
- *           AuthProvider sees isNewUser flip to false and immediately calls
- *           router.replace('/(app)/home') — then the setTimeout also fires
- *           router.replace('/(app)/home'). Double navigation = potential crash/loop.
- *           Fixed: removed the manual router.replace entirely. AuthProvider owns
- *           all navigation. setIsNewUser(false) triggers AuthProvider automatically.
- *
- *   [FIX-2] fetchAndPersist was called before setIsNewUser(false), meaning the
- *           profile reconciliation could see setup_stage='COMPLETE' and call
- *           setIsNewUser(false) AGAIN inside fetchAndPersist (redundant double-call).
- *           Fixed: setIsNewUser(false) first, then fetchAndPersist.
- *
- *   [FIX-3] Variable `i` used in ReviewRow key inside .map() callback but `i`
- *           was not defined in that scope (it's the outer step=3 block, the map
- *           uses `(c)` without index). Added `(c, i)` to fix the ReferenceError.
- *
- *   [FIX-4] Non-new users got an Alert("Saved") after patchStudent, which is
- *           correct. But the Alert was inside the same try block as the isNewUser
- *           branch, making the control flow confusing. Separated the two branches
- *           clearly with early returns.
+ * app/(app)/updates.jsx — fully i18n-wired
  */
 
 import Screen from '@/components/common/Screen';
@@ -41,6 +15,7 @@ import {
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -94,20 +69,21 @@ const BLOOD_GROUP_FROM_ENUM = {
   'O_POS': 'O+', 'O_NEG': 'O−', 'AB_POS': 'AB+', 'AB_NEG': 'AB−', 'UNKNOWN': 'Unknown',
 };
 const PRIORITY_COLORS = ['#F97316', '#FBBF24', '#60A5FA', '#A78BFA', '#22C55E'];
-const STEPS = [
-  { id: 0, label: 'Student', short: '01' },
-  { id: 1, label: 'Medical', short: '02' },
-  { id: 2, label: 'Contacts', short: '03' },
-  { id: 3, label: 'Review', short: '04' },
-];
 
 // ── Step bar ──────────────────────────────────────────────────────────────────
 function StepBar({ current, completed, C }) {
+  const { t } = useTranslation();
+  const STEPS = [
+    { id: 0, label: t('updates_extra.stepStudent'), short: '01' },
+    { id: 1, label: t('updates_extra.stepMedical'),  short: '02' },
+    { id: 2, label: t('updates_extra.stepContacts'), short: '03' },
+    { id: 3, label: t('updates_extra.stepReview'),   short: '04' },
+  ];
   return (
     <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
       {STEPS.map((step, i) => {
         const isActive = i === current;
-        const isDone = completed.includes(i);
+        const isDone   = completed.includes(i);
         return (
           <View key={step.id} style={sb.stepGroup}>
             {i > 0 && <View style={[sb.line, { backgroundColor: C.bd2 }, (isDone || isActive) && { backgroundColor: C.primary }]} />}
@@ -199,6 +175,7 @@ const sc = StyleSheet.create({
 
 // ── Blood picker ──────────────────────────────────────────────────────────────
 function BloodPicker({ value, onChange, C }) {
+  const { t } = useTranslation();
   return (
     <View style={{ gap: 10 }}>
       <View style={bl.grid}>
@@ -218,7 +195,7 @@ function BloodPicker({ value, onChange, C }) {
       </View>
       {!value && (
         <View style={[bl.warn, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
-          <Text style={[bl.warnText, { color: C.amb }]}>Select blood group — critical for emergency response</Text>
+          <Text style={[bl.warnText, { color: C.amb }]}>{t('updates_extra.bloodGroupWarn')}</Text>
         </View>
       )}
     </View>
@@ -234,6 +211,7 @@ const bl = StyleSheet.create({
 
 // ── Contact card ──────────────────────────────────────────────────────────────
 function ContactCard({ contact, index, onEdit, onDelete, C }) {
+  const { t } = useTranslation();
   const pc = PRIORITY_COLORS[(contact.priority - 1) % PRIORITY_COLORS.length];
   const scaleAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -249,11 +227,11 @@ function ContactCard({ contact, index, onEdit, onDelete, C }) {
           <Text style={[ccc.name, { color: C.tx }]}>{contact.name}</Text>
           {contact.priority === 1 && (
             <View style={[ccc.firstTag, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-              <Text style={[ccc.firstTagText, { color: C.primary }]}>First Call</Text>
+              <Text style={[ccc.firstTagText, { color: C.primary }]}>{t('updates_extra.firstCall')}</Text>
             </View>
           )}
         </View>
-        <Text style={[ccc.meta, { color: C.tx3 }]}>{contact.relationship || 'Guardian'} · {contact.phone}</Text>
+        <Text style={[ccc.meta, { color: C.tx3 }]}>{contact.relationship || t('home.guardian')} · {contact.phone}</Text>
       </View>
       <View style={ccc.actions}>
         <TouchableOpacity style={[ccc.btn, { backgroundColor: C.s4, borderColor: C.bd }]} onPress={() => onEdit(contact)} activeOpacity={0.7}>
@@ -281,15 +259,16 @@ const ccc = StyleSheet.create({
 
 // ── Contact modal ─────────────────────────────────────────────────────────────
 function ContactModal({ visible, contact, onSave, onClose, C }) {
-  const [name, setName] = useState('');
+  const { t } = useTranslation();
+  const [name, setName]   = useState('');
   const [phone, setPhone] = useState('');
-  const [rel, setRel] = useState('');
+  const [rel, setRel]     = useState('');
   useEffect(() => {
     if (visible) { setName(contact?.name ?? ''); setPhone(contact?.phone ?? ''); setRel(contact?.relationship ?? ''); }
   }, [visible, contact]);
   const handleSave = () => {
-    if (!name.trim() || !phone.trim()) { Alert.alert('Required', 'Name and phone are required.'); return; }
-    if (!/^[6-9]\d{9}$/.test(phone.trim())) { Alert.alert('Invalid Phone', 'Enter a valid 10-digit Indian mobile number.'); return; }
+    if (!name.trim() || !phone.trim()) { Alert.alert(t('updates_extra.contactRequiredAlert'), t('updates_extra.contactRequiredMsg')); return; }
+    if (!/^[6-9]\d{9}$/.test(phone.trim())) { Alert.alert(t('updates_extra.contactInvalidPhone'), t('updates_extra.contactInvalidPhoneMsg')); return; }
     onSave({ name: name.trim(), phone: phone.trim(), relationship: rel.trim() });
     onClose();
   };
@@ -301,21 +280,21 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
             <View style={[cm.handle, { backgroundColor: C.s4 }]} />
             <View style={cm.sheetHead}>
               <View>
-                <Text style={[cm.sheetTitle, { color: C.tx }]}>{contact?.id ? 'Edit Contact' : 'Add Contact'}</Text>
-                <Text style={[cm.sheetSub, { color: C.tx3 }]}>Called when QR card is scanned</Text>
+                <Text style={[cm.sheetTitle, { color: C.tx }]}>{contact?.id ? t('updates_extra.contactModalEditTitle') : t('updates_extra.contactModalAddTitle')}</Text>
+                <Text style={[cm.sheetSub, { color: C.tx3 }]}>{t('updates_extra.contactModalSub')}</Text>
               </View>
               <TouchableOpacity style={[cm.closeBtn, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={onClose}>
                 <XSvg c={C.tx3} s={14} />
               </TouchableOpacity>
             </View>
             <View style={cm.fields}>
-              <Field label="Full Name" value={name} onChangeText={setName} placeholder="Priya Sharma" required C={C} />
-              <Field label="Phone Number" value={phone} onChangeText={setPhone} placeholder="98765 43210" keyboardType="phone-pad" required C={C} />
-              <Field label="Relationship" value={rel} onChangeText={setRel} placeholder="Mother / Father / Guardian…" C={C} />
+              <Field label={t('updates_extra.fieldContactName')}  value={name}  onChangeText={setName}  placeholder={t('updates_extra.fieldContactNamePlaceholder')}  required C={C} />
+              <Field label={t('updates_extra.fieldContactPhone')} value={phone} onChangeText={setPhone} placeholder={t('updates_extra.fieldContactPhonePlaceholder')} keyboardType="phone-pad" required C={C} />
+              <Field label={t('updates_extra.fieldContactRel')}   value={rel}   onChangeText={setRel}   placeholder={t('updates_extra.fieldContactRelPlaceholder')}   C={C} />
             </View>
             <TouchableOpacity style={[cm.saveBtn, { backgroundColor: C.primary }]} onPress={handleSave} activeOpacity={0.85}>
               <CheckSvg c="#fff" s={14} />
-              <Text style={cm.saveBtnText}>{contact?.id ? 'Save Changes' : 'Add Contact'}</Text>
+              <Text style={cm.saveBtnText}>{contact?.id ? t('updates_extra.contactSaveEdit') : t('updates_extra.contactSaveAdd')}</Text>
             </TouchableOpacity>
           </Pressable>
         </KeyboardAvoidingView>
@@ -355,12 +334,13 @@ const rv = StyleSheet.create({
 
 // ── Nav footer ────────────────────────────────────────────────────────────────
 function NavFooter({ step, onBack, onNext, nextLabel, saving, canProceed, C }) {
+  const { t } = useTranslation();
   const isFirst = step === 0;
   return (
     <View style={[nf.bar, { backgroundColor: C.s2, borderTopColor: C.bd }]}>
       <TouchableOpacity style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]} onPress={onBack} disabled={isFirst} activeOpacity={0.7}>
         <ChevLeft c={C.tx2} s={16} />
-        <Text style={[nf.backText, { color: C.tx2 }]}>Back</Text>
+        <Text style={[nf.backText, { color: C.tx2 }]}>{t('updates_extra.back')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[nf.nextBtn, { backgroundColor: C.primary }, saving && { opacity: 0.6 }, !canProceed && { opacity: 0.4 }]}
@@ -368,8 +348,8 @@ function NavFooter({ step, onBack, onNext, nextLabel, saving, canProceed, C }) {
         disabled={saving || !canProceed}
         activeOpacity={0.85}
       >
-        <Text style={nf.nextText}>{saving ? 'Saving…' : nextLabel}</Text>
-        {!saving && (nextLabel.includes('Next') ? <ChevRight c="#fff" s={15} /> : <Text style={{ fontSize: 14 }}>⚡</Text>)}
+        <Text style={nf.nextText}>{saving ? t('updates_extra.saving') : nextLabel}</Text>
+        {!saving && (nextLabel === t('updates_extra.next') ? <ChevRight c="#fff" s={15} /> : <Text style={{ fontSize: 14 }}>⚡</Text>)}
       </TouchableOpacity>
     </View>
   );
@@ -385,38 +365,35 @@ const nf = StyleSheet.create({
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function UpdatesScreen() {
   const { colors: C } = useTheme();
-  const router = useRouter();
-  const isNewUser = useAuthStore((s) => s.isNewUser);
+  const { t } = useTranslation();
+  const isNewUser    = useAuthStore((s) => s.isNewUser);
   const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
-  const patchStudent = useProfileStore((s) => s.patchStudent);
+  const patchStudent    = useProfileStore((s) => s.patchStudent);
   const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
   const student = useProfileStore(
     useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
   );
   const ep = student?.emergency ?? null;
-  const rawContacts = useMemo(
-    () => student?.emergency?.contacts ?? [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [student?.emergency?.contacts]
-  );
-  const [step, setStep] = useState(0);
-  const [completed, setCompleted] = useState([]);
-  const [saving, setSaving] = useState(false);
+  const rawContacts = useMemo(() => student?.emergency?.contacts ?? [], [student?.emergency?.contacts]);
 
-  const [firstName, setFirstName] = useState(student?.first_name ?? '');
-  const [lastName, setLastName] = useState(student?.last_name ?? '');
-  const [cls, setCls] = useState(student?.class ?? '');
-  const [section, setSection] = useState(student?.section ?? '');
-  const [bloodGroup, setBloodGroup] = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
-  const [allergies, setAllergies] = useState(ep?.allergies ?? '');
-  const [conditions, setConditions] = useState(ep?.conditions ?? '');
+  const [step, setStep]           = useState(0);
+  const [completed, setCompleted] = useState([]);
+  const [saving, setSaving]       = useState(false);
+
+  const [firstName,   setFirstName]   = useState(student?.first_name ?? '');
+  const [lastName,    setLastName]    = useState(student?.last_name  ?? '');
+  const [cls,         setCls]         = useState(student?.class      ?? '');
+  const [section,     setSection]     = useState(student?.section    ?? '');
+  const [bloodGroup,  setBloodGroup]  = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
+  const [allergies,   setAllergies]   = useState(ep?.allergies   ?? '');
+  const [conditions,  setConditions]  = useState(ep?.conditions  ?? '');
   const [medications, setMedications] = useState(ep?.medications ?? '');
-  const [doctorName, setDoctorName] = useState(ep?.doctor_name ?? '');
+  const [doctorName,  setDoctorName]  = useState(ep?.doctor_name  ?? '');
   const [doctorPhone, setDoctorPhone] = useState(ep?.doctor_phone ?? '');
-  const [notes, setNotes] = useState(ep?.notes ?? '');
-  const [contacts, setContacts] = useState(rawContacts ?? []);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingContact, setEditContact] = useState(null);
+  const [notes,       setNotes]       = useState(ep?.notes ?? '');
+  const [contacts,    setContacts]    = useState(rawContacts ?? []);
+  const [modalVisible,   setModalVisible]  = useState(false);
+  const [editingContact, setEditContact]   = useState(null);
 
   useEffect(() => { setFirstName(student?.first_name ?? ''); setLastName(student?.last_name ?? ''); setCls(student?.class ?? ''); setSection(student?.section ?? ''); }, [student]);
   useEffect(() => { setBloodGroup(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? ''); setAllergies(ep?.allergies ?? ''); setConditions(ep?.conditions ?? ''); setMedications(ep?.medications ?? ''); setDoctorName(ep?.doctor_name ?? ''); setDoctorPhone(ep?.doctor_phone ?? ''); setNotes(ep?.notes ?? ''); }, [ep]);
@@ -424,27 +401,28 @@ export default function UpdatesScreen() {
 
   const scrollRef = useRef(null);
   const scrollTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
-
   const canProceed = step === 0 ? firstName.trim().length > 0 && lastName.trim().length > 0 : true;
 
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim  = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const transitionStep = (n) => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 0,  duration: 100, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 20, duration: 100, useNativeDriver: true }),
     ]).start(() => {
-      setStep(n);
-      slideAnim.setValue(-20);
+      setStep(n); slideAnim.setValue(-20);
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 180, useNativeDriver: true }),
         Animated.timing(slideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
       ]).start();
     });
   };
 
   const goNext = () => {
-    if (step === 0 && (!firstName.trim() || !lastName.trim())) { Alert.alert('Required', 'First name and last name are required.'); return; }
+    if (step === 0 && (!firstName.trim() || !lastName.trim())) {
+      Alert.alert(t('updates_extra.requiredAlert'), t('updates_extra.requiredAlertMsg'));
+      return;
+    }
     if (step < 3) { setCompleted((p) => p.includes(step) ? p : [...p, step]); transitionStep(step + 1); scrollTop(); }
     else handleSubmitAll();
   };
@@ -470,23 +448,15 @@ export default function UpdatesScreen() {
           priority: i + 1,
         })),
       });
-
       setCompleted([0, 1, 2, 3]);
-
       if (isNewUser) {
-        // [FIX-1] Removed manual router.replace — AuthProvider handles navigation.
-        // [FIX-2] setIsNewUser(false) FIRST, then fetchAndPersist.
-        //         This way AuthProvider immediately sees isNewUser=false and
-        //         routes to /home. fetchAndPersist runs in background to sync.
         await setIsNewUser(false);
-        // fetchAndPersist in background — don't await, don't block navigation.
-        fetchAndPersist?.().catch(() => { });
+        fetchAndPersist?.().catch(() => {});
       } else {
-        // Non-new user: just show confirmation
-        Alert.alert('Saved', "All changes have been saved to your child's card.");
+        Alert.alert(t('updates_extra.saveSuccess'), t('updates_extra.saveSuccessMsg'));
       }
     } catch {
-      Alert.alert('Error', 'Could not save. Please check your connection and try again.');
+      Alert.alert(t('updates_extra.saveError'), t('updates_extra.saveErrorMsg'));
     } finally {
       setSaving(false);
     }
@@ -497,13 +467,16 @@ export default function UpdatesScreen() {
     else setContacts((p) => [...p, { id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`, ...data, priority: p.length + 1, is_active: true }]);
   };
   const handleDeleteContact = (contact) => {
-    Alert.alert('Remove Contact', `Remove ${contact.name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => setContacts((p) => p.filter((c) => c.id !== contact.id).map((c, i) => ({ ...c, priority: i + 1 }))) },
+    Alert.alert(t('updates_extra.removeContact'), t('updates_extra.removeContactMsg', { name: contact.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => setContacts((p) => p.filter((c) => c.id !== contact.id).map((c, i) => ({ ...c, priority: i + 1 }))) },
     ]);
   };
   const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
-  const nextLabel = step === 3 ? (isNewUser ? 'Activate Card' : 'Save All') : 'Next';
+
+  const nextLabel = step === 3
+    ? (isNewUser ? t('updates_extra.activateCardBtn') : t('updates_extra.saveAll'))
+    : t('updates_extra.next');
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
@@ -512,12 +485,12 @@ export default function UpdatesScreen() {
       {/* Header */}
       <View style={[s.header, { borderBottomColor: C.bd }]}>
         <Text style={[s.headerTitle, { color: C.tx }]}>
-          {isNewUser ? 'Activate Your Card' : (student?.first_name ? `${student.first_name}'s Profile` : 'Update Profile')}
+          {isNewUser ? t('updates_extra.activateCard') : (student?.first_name ? t('updates.title', { name: student.first_name }) : t('updates_extra.updateProfile'))}
         </Text>
         {isNewUser && (
           <View style={[s.newBadge, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
             <View style={[s.newDot, { backgroundColor: C.ok }]} />
-            <Text style={[s.newText, { color: C.ok }]}>New</Text>
+            <Text style={[s.newText, { color: C.ok }]}>{t('updates_extra.newBadge')}</Text>
           </View>
         )}
       </View>
@@ -533,23 +506,23 @@ export default function UpdatesScreen() {
               {isNewUser && (
                 <View style={[s.onboardBanner, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
                   <Text style={{ fontSize: 15 }}>🛡️</Text>
-                  <Text style={[s.onboardBannerText, { color: C.ok }]}>Registration successful. Fill in your child's details below to activate their emergency card.</Text>
+                  <Text style={[s.onboardBannerText, { color: C.ok }]}>{t('updates_extra.onboardBanner')}</Text>
                 </View>
               )}
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Student Name" subtitle="As it appears on school records" C={C}>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title={t('updates_extra.studentNameTitle')} subtitle={t('updates_extra.studentNameSub')} C={C}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}><Field label="First Name" value={firstName} onChangeText={setFirstName} placeholder="Aanya" required C={C} /></View>
-                  <View style={{ flex: 1 }}><Field label="Last Name" value={lastName} onChangeText={setLastName} placeholder="Sharma" required C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldFirstName')} value={firstName} onChangeText={setFirstName} placeholder={t('updates_extra.fieldFirstNamePlaceholder')} required C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldLastName')}  value={lastName}  onChangeText={setLastName}  placeholder={t('updates_extra.fieldLastNamePlaceholder')}  required C={C} /></View>
                 </View>
               </SectionCard>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title="Class & Section" accent={C.blue} C={C}>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title={t('updates_extra.classSectionTitle')} accent={C.blue} C={C}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}><Field label="Class / Year" value={cls} onChangeText={setCls} placeholder="e.g. 9 or 3rd Year" C={C} /></View>
-                  <View style={{ flex: 1 }}><Field label="Section" value={section} onChangeText={setSection} placeholder="e.g. A" C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldClass')}   value={cls}     onChangeText={setCls}     placeholder={t('updates_extra.fieldClassPlaceholder')}   C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldSection')} value={section} onChangeText={setSection} placeholder={t('updates_extra.fieldSectionPlaceholder')} C={C} /></View>
                 </View>
               </SectionCard>
               <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <Text style={[s.noteText, { color: C.tx3 }]}>Fields marked with · are required to proceed.</Text>
+                <Text style={[s.noteText, { color: C.tx3 }]}>{t('updates_extra.requiredNote')}</Text>
               </View>
             </View>
           )}
@@ -557,26 +530,26 @@ export default function UpdatesScreen() {
           {/* Step 1 — Medical */}
           {step === 1 && (
             <View style={s.stepContent}>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>🩸</Text>} title="Blood Group" subtitle="Displayed immediately on card scan" C={C}>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>🩸</Text>} title={t('updates_extra.bloodGroupTitle')} subtitle={t('updates_extra.bloodGroupSub')} C={C}>
                 <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
               </SectionCard>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>⚠️</Text>} title="Allergies" subtitle="Food, medication, environmental" accent={C.amb} C={C}>
-                <Field label="Known Allergies" value={allergies} onChangeText={setAllergies} placeholder="e.g. Peanuts, Penicillin…" multiline hint="Separate multiple with commas" C={C} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>⚠️</Text>} title={t('updates_extra.allergiesTitle')} subtitle={t('updates_extra.allergiesSub')} accent={C.amb} C={C}>
+                <Field label={t('updates_extra.fieldAllergies')} value={allergies} onChangeText={setAllergies} placeholder={t('updates_extra.fieldAllergiesPlaceholder')} multiline hint={t('updates_extra.allergiesHint')} C={C} />
               </SectionCard>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title="Medical Conditions" accent={C.blue} C={C}>
-                <Field label="Conditions" value={conditions} onChangeText={setConditions} placeholder="e.g. Asthma, Diabetes…" multiline C={C} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title={t('updates_extra.conditionsTitle')} accent={C.blue} C={C}>
+                <Field label={t('updates_extra.fieldConditions')} value={conditions} onChangeText={setConditions} placeholder={t('updates_extra.fieldConditionsPlaceholder')} multiline C={C} />
               </SectionCard>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title="Current Medications" accent={C.blue} C={C}>
-                <Field label="Medications" value={medications} onChangeText={setMedications} placeholder="e.g. Salbutamol inhaler…" multiline C={C} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title={t('updates_extra.medicationsTitle')} accent={C.blue} C={C}>
+                <Field label={t('updates_extra.fieldMedications')} value={medications} onChangeText={setMedications} placeholder={t('updates_extra.fieldMedicationsPlaceholder')} multiline C={C} />
               </SectionCard>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title="Family Doctor" accent={C.ok} C={C}>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title={t('updates_extra.doctorTitle')} accent={C.ok} C={C}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}><Field label="Doctor's Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" C={C} /></View>
-                  <View style={{ flex: 1 }}><Field label="Phone" value={doctorPhone} onChangeText={setDoctorPhone} placeholder="+91…" keyboardType="phone-pad" C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorName')}  value={doctorName}  onChangeText={setDoctorName}  placeholder={t('updates_extra.fieldDoctorNamePlaceholder')}  C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorPhone')} value={doctorPhone} onChangeText={setDoctorPhone} placeholder={t('updates_extra.fieldDoctorPhone')} keyboardType="phone-pad" C={C} /></View>
                 </View>
               </SectionCard>
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>📋</Text>} title="Responder Notes" subtitle="Special instructions shown on scan" C={C}>
-                <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="e.g. Carries inhaler. Do NOT give aspirin." multiline C={C} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>📋</Text>} title={t('updates_extra.responderNotesTitle')} subtitle={t('updates_extra.responderNotesSub')} C={C}>
+                <Field label={t('updates_extra.fieldNotes')} value={notes} onChangeText={setNotes} placeholder={t('updates_extra.fieldNotesPlaceholder')} multiline C={C} />
               </SectionCard>
             </View>
           )}
@@ -585,11 +558,11 @@ export default function UpdatesScreen() {
           {step === 2 && (
             <View style={s.stepContent}>
               <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <Text style={[s.callInfoTitle, { color: C.tx }]}>How emergency calls work</Text>
+                <Text style={[s.callInfoTitle, { color: C.tx }]}>{t('updates_extra.howCallsWork')}</Text>
                 {[
-                  { color: PRIORITY_COLORS[0], text: 'Contact #1 is called immediately on card scan' },
-                  { color: PRIORITY_COLORS[1], text: "Contact #2 called if #1 doesn't answer" },
-                  { color: PRIORITY_COLORS[2], text: '#3 and beyond serve as backups' },
+                  { color: PRIORITY_COLORS[0], text: t('updates_extra.callInfo1') },
+                  { color: PRIORITY_COLORS[1], text: t('updates_extra.callInfo2') },
+                  { color: PRIORITY_COLORS[2], text: t('updates_extra.callInfo3') },
                 ].map((item, i) => (
                   <View key={i} style={s.callInfoRow}>
                     <View style={[s.callInfoDot, { backgroundColor: item.color }]} />
@@ -601,8 +574,8 @@ export default function UpdatesScreen() {
               {sortedContacts.length === 0 ? (
                 <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
                   <Text style={{ fontSize: 28 }}>📵</Text>
-                  <Text style={[s.emptyTitle, { color: C.tx }]}>No contacts added</Text>
-                  <Text style={[s.emptySub, { color: C.tx3 }]}>Add at least one contact — they'll be called the moment the card is scanned.</Text>
+                  <Text style={[s.emptyTitle, { color: C.tx }]}>{t('updates_extra.noContactsTitle')}</Text>
+                  <Text style={[s.emptySub, { color: C.tx3 }]}>{t('updates_extra.noContactsSub')}</Text>
                 </View>
               ) : (
                 <View style={{ gap: 8 }}>
@@ -616,8 +589,8 @@ export default function UpdatesScreen() {
                 <TouchableOpacity style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]} onPress={() => { setEditContact(null); setModalVisible(true); }} activeOpacity={0.75}>
                   <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}><PlusSvg c="#fff" s={18} /></View>
                   <View>
-                    <Text style={[s.addBtnLabel, { color: C.primary }]}>Add Emergency Contact</Text>
-                    <Text style={[s.addBtnSub, { color: C.tx3 }]}>{contacts.length}/5 contacts</Text>
+                    <Text style={[s.addBtnLabel, { color: C.primary }]}>{t('updates_extra.addContact')}</Text>
+                    <Text style={[s.addBtnSub, { color: C.tx3 }]}>{t('updates_extra.contactsCount', { count: contacts.length })}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -632,44 +605,53 @@ export default function UpdatesScreen() {
                   <Text style={[s.reviewAvatarText, { color: C.primary }]}>{firstName ? firstName[0].toUpperCase() : '?'}</Text>
                 </View>
                 <View>
-                  <Text style={[s.reviewName, { color: C.tx }]}>{`${firstName} ${lastName}`.trim() || 'Student Profile'}</Text>
-                  <Text style={[s.reviewClass, { color: C.tx3 }]}>{cls && section ? `Class ${cls}-${section}` : cls ? `Class ${cls}` : 'Class not set'}</Text>
+                  <Text style={[s.reviewName, { color: C.tx }]}>{`${firstName} ${lastName}`.trim() || t('updates.title', { name: '' }).trim()}</Text>
+                  <Text style={[s.reviewClass, { color: C.tx3 }]}>
+                    {cls && section ? `Class ${cls}-${section}` : cls ? `Class ${cls}` : t('updates_extra.classNotSet')}
+                  </Text>
                 </View>
                 <View style={[s.reviewStatus, { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd }]}>
                   <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
-                  <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>{completed.length >= 3 ? 'Ready' : 'Draft'}</Text>
+                  <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
+                    {completed.length >= 3 ? t('updates_extra.statusReady') : t('updates_extra.statusDraft')}
+                  </Text>
                 </View>
               </View>
 
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Student Details" C={C}>
-                <ReviewRow label="First Name" value={firstName} C={C} />
-                <ReviewRow label="Last Name" value={lastName} C={C} />
-                <ReviewRow label="Class" value={cls} C={C} />
-                <ReviewRow label="Section" value={section} C={C} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title={t('updates_extra.reviewStudentTitle')} C={C}>
+                <ReviewRow label={t('updates_extra.reviewFieldFirstName')} value={firstName}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldLastName')}  value={lastName}   C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldClass')}     value={cls}        C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldSection')}   value={section}    C={C} />
               </SectionCard>
 
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title="Medical Information" C={C}>
-                <ReviewRow label="Blood Group" value={bloodGroup} C={C} />
-                <ReviewRow label="Allergies" value={allergies} C={C} />
-                <ReviewRow label="Conditions" value={conditions} C={C} />
-                <ReviewRow label="Medications" value={medications} C={C} />
-                <ReviewRow label="Doctor" value={doctorName} C={C} />
-                <ReviewRow label="Doctor Phone" value={doctorPhone} C={C} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title={t('updates_extra.reviewMedicalTitle')} C={C}>
+                <ReviewRow label={t('updates_extra.reviewFieldBloodGroup')}  value={bloodGroup}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldAllergies')}   value={allergies}   C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldConditions')}  value={conditions}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldMedications')} value={medications} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldDoctor')}      value={doctorName}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldDoctorPhone')} value={doctorPhone} C={C} />
               </SectionCard>
 
-              <SectionCard icon={<Text style={{ fontSize: 15 }}>📞</Text>} title={`Emergency Contacts (${contacts.length})`} accent={C.blue} C={C}>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>📞</Text>} title={t('updates_extra.reviewContactsTitle', { count: contacts.length })} accent={C.blue} C={C}>
                 {contacts.length === 0
-                  ? <Text style={[s.noContacts, { color: C.tx3 }]}>No contacts added — they won't be called on scan</Text>
-                  // [FIX-3] Added `i` as second param to fix ReferenceError on `i` in key
-                  : sortedContacts.map((c, i) => <ReviewRow key={c.id ?? `review_${i}`}
-                    label={`#${c.priority} ${c.relationship || 'Contact'}`} value={`${c.name} · ${c.phone}`} C={C} />)
+                  ? <Text style={[s.noContacts, { color: C.tx3 }]}>{t('updates_extra.reviewNoContacts')}</Text>
+                  : sortedContacts.map((c, i) => (
+                    <ReviewRow
+                      key={c.id ?? `review_${i}`}
+                      label={t('updates_extra.reviewContactLabel', { priority: c.priority, relationship: c.relationship || t('home.guardian') })}
+                      value={`${c.name} · ${c.phone}`}
+                      C={C}
+                    />
+                  ))
                 }
               </SectionCard>
 
               <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
                 <Text style={{ fontSize: 14 }}>🛡️</Text>
                 <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
-                  {isNewUser ? "Tapping 'Activate Card' will submit all data in a single secure transaction." : 'All three sections will be saved in one API call.'}
+                  {isNewUser ? t('updates_extra.reviewNoteNew') : t('updates_extra.reviewNoteEdit')}
                 </Text>
               </View>
             </View>
