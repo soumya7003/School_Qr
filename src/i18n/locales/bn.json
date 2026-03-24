@@ -212,26 +212,6 @@
     "pageTitle": "{{name}}-এর কার্ড",
     "pageTitleFallback": "ইমার্জেন্সি কার্ড",
     "subtitle": "ফিজিক্যাল ইমার্জেন্সি কার্ড",
-<<<<<<< HEAD
-    "pageSub": "ফিজিক্যাল ইমার্জেন্সি কার্ড",
-    "guardianCard": "গার্ডিয়ান কার্ড",
-    "cardholder": "কার্ডধারী",
-    "validThru": "মেয়াদ পর্যন্ত",
-    "classLabel": "শ্রেণি",
-    "dragHint": "হেলাতে টানুন  ·  উল্টাতে ট্যাব বা QR বোতামে চাপুন",
-    "cardFront": "কার্ডের সামনে",
-    "qrCode": "QR কোড",
-    "cancel": "বাতিল করুন",
-    "cardActions": "কার্ডের কার্যক্রম",
-    "cardDetails": "কার্ডের বিবরণ",
-    "glossaryTitle": "স্ট্যাটাসের অর্থ",
-    "statusDesc_ACTIVE": "কার্ড সক্রিয় এবং স্ক্যানযোগ্য",
-    "statusDesc_INACTIVE": "কার্ড সাময়িকভাবে ব্লক করা আছে",
-    "statusDesc_ISSUED": "কার্ড জারি হয়েছে, সক্রিয়করণ বাকি",
-    "statusDesc_REVOKED": "কার্ড স্থায়ীভাবে বাতিল করা হয়েছে",
-    "statusDesc_EXPIRED": "কার্ডের মেয়াদ শেষ হয়েছে",
-    "statusDesc_UNASSIGNED": "এখনো কোনো কার্ড নির্ধারিত হয়নি",
-=======
     "guardianCard": "গার্ডিয়ান কার্ড",
     "cardholderLabel": "কার্ডধারী",
     "validThruLabel": "মেয়াদ পর্যন্ত",
@@ -241,7 +221,6 @@
     "qrCode": "QR কোড",
     "dragHint": "হেলাতে টানুন  ·  উল্টাতে ট্যাব বা QR বোতামে চাপুন",
     "cardActions": "কার্ডের কার্যক্রম",
->>>>>>> c6d9d707669427e2d1f3a0aec3fac418e4ba8141
     "blockCard": "কার্ড সাময়িকভাবে ব্লক করুন",
     "blockCardSub": "স্কুল পুনরায় সক্রিয় না করা পর্যন্ত স্ক্যান বন্ধ থাকবে",
     "reportLost": "কার্ড হারিয়ে গেছে রিপোর্ট করুন",
@@ -254,11 +233,6 @@
     "activateCardSub": "যাচাইয়ের পর স্কুলের অ্যাডমিন সক্রিয় করবেন",
     "requestReplacement": "প্রতিস্থাপন কার্ডের অনুরোধ করুন",
     "requestReplacementSub": "নতুন ফিজিক্যাল কার্ডের জন্য স্কুলের সাথে যোগাযোগ করুন",
-<<<<<<< HEAD
-    "notAssigned": "এখনো কোনো কার্ড নির্ধারিত হয়নি",
-    "qrNotGenerated": "QR এখনো তৈরি হয়নি",
-    "contactSupport": "সাপোর্টে যোগাযোগ করুন",
-=======
     "contactSupport": "সাপোর্টে যোগাযোগ করুন",
     "openSupport": "সাপোর্ট খুলুন",
     "cardDetails": "কার্ডের বিবরণ",
@@ -305,7 +279,6 @@
     "toastUnblocked": "কার্ড আনব্লক করা হয়েছে",
     "toastRevoked": "হারানো রিপোর্ট করা হয়েছে",
     "toastActivated": "সক্রিয়করণের অনুরোধ পাঠানো হয়েছে",
->>>>>>> c6d9d707669427e2d1f3a0aec3fac418e4ba8141
     "confirmBlockTitle": "কার্ড ব্লক করবেন?",
     "confirmBlockBody": "{{name}}-এর কার্ড স্ক্যান করা সাময়িকভাবে বন্ধ থাকবে।",
     "confirmBlockWarning": "কার্ড হারিয়ে গেলে কিন্তু পুরোপুরি না হলে এটি ব্যবহার করুন।",
@@ -320,37 +293,11 @@
     "confirmActivateTitle": "কার্ড সক্রিয়করণের অনুরোধ করবেন?",
     "confirmActivateBody": "{{name}}-এর কার্ড সক্রিয় করতে স্কুলের সাথে যোগাযোগ করতে হবে।",
     "confirmActivateBtn": "স্কুলের সাথে যোগাযোগ করুন",
-<<<<<<< HEAD
-    "toastBlocked": "কার্ড ব্লক করা হয়েছে",
-    "toastUnblocked": "কার্ড আনব্লক করা হয়েছে",
-    "toastRevoked": "হারানো রিপোর্ট করা হয়েছে",
-    "toastActivated": "সক্রিয়করণের অনুরোধ পাঠানো হয়েছে",
-    "revokedNotice": "এই কার্ড স্থায়ীভাবে বন্ধ করা হয়েছে।",
-    "expiredNotice": "এই কার্ডের মেয়াদ শেষ হয়েছে এবং আর স্ক্যান করা যাবে না।",
-    "unassignedNotice": "এই কার্ড সেটআপ করতে আপনার স্কুলের সাথে যোগাযোগ করুন।",
-    "detailCardNumber": "কার্ড নম্বর",
-    "detailStudent": "শিক্ষার্থী",
-    "detailClass": "শ্রেণি",
-    "detailSchool": "স্কুল",
-    "detailBloodGroup": "রক্তের গ্রুপ",
-    "detailValidUntil": "বৈধতার শেষ তারিখ",
-    "detailCardStatus": "কার্ডের স্ট্যাটাস",
-    "glossaryActiveLabel": "সক্রিয়",
-    "glossaryActiveDesc": "কার্ড স্বাভাবিকভাবে কাজ করছে। স্ক্যান করলে ইমার্জেন্সি তথ্য দেখা যায়।",
-    "glossaryBlockedLabel": "ব্লক করা",
-    "glossaryBlockedDesc": "আপনি সাময়িকভাবে বন্ধ করেছেন। আনব্লক করতে স্কুলের সাথে যোগাযোগ করুন।",
-    "glossaryRevokedLabel": "হারিয়ে গেছে / বাতিল",
-    "glossaryRevokedDesc": "স্থায়ীভাবে বন্ধ। স্কুল থেকে প্রতিস্থাপনের অনুরোধ করুন।",
-    "glossaryExpiredLabel": "মেয়াদ শেষ",
-    "glossaryExpiredDesc": "কার্ডের মেয়াদ শেষ হয়েছে। স্কুল থেকে নবায়নের অনুরোধ করুন।",
-    "safetyTip": "এই কার্ডটি আপনার সন্তানের জন্য অনন্য। ফিজিক্যাল কার্ডের QR সরাসরি তাদের ইমার্জেন্সি প্রোফাইলের সাথে যুক্ত — সবসময় সাথে রাখুন।"
-=======
     "notAvailableTitle": "এখনো উপলব্ধ নয়",
     "notAvailableBody": "কার্ড {{action}} ব্যাকএন্ডের সাথে সংযুক্ত হলে উপলব্ধ হবে।",
     "notAssigned": "এখনো কোনো কার্ড নির্ধারিত হয়নি",
     "qrNotGenerated": "QR এখনো তৈরি হয়নি",
     "cancel": "বাতিল করুন"
->>>>>>> c6d9d707669427e2d1f3a0aec3fac418e4ba8141
   },
   "emergencyPage": {
     "pageTitle": "জরুরি তথ্য",
@@ -383,11 +330,7 @@
       "minimalDetail": "শুধুমাত্র গুরুত্বপূর্ণ তথ্য দেখানো হবে",
       "hidden": "লুকানো",
       "hiddenSub": "কোনো তথ্য দৃশ্যমান নয়",
-<<<<<<< HEAD
-      "hiddenDetail": "স্ক্যানার দেখবে "অভিভাবক দ্বারা তথ্য লুকানো""
-=======
       "hiddenDetail": "স্ক্যানার দেখবে অভিভাবক দ্বারা তথ্য লুকানো"
->>>>>>> c6d9d707669427e2d1f3a0aec3fac418e4ba8141
     },
     "fields": {
       "bloodGroup": "রক্তের গ্রুপ",
