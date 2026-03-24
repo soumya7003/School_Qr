@@ -1,9 +1,6 @@
 /**
  * app/(app)/emergency.jsx
  * Emergency Info — visibility + field access control
- * All colors from useTheme().colors — the _T fallback is ONLY used in
- * StyleSheet.create() which runs once at module load before the provider
- * is available; all JSX uses the live C from useTheme().
  */
 
 import Screen from '@/components/common/Screen';
@@ -18,38 +15,24 @@ import {
     StyleSheet, Switch, Text, TouchableOpacity, View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
-// ── Visibility config ─────────────────────────────────────────────────────────
+// ── Visibility config (keys only — labels come from i18n) ─────────────────────
 const VISIBILITY_CONFIG = {
-    PUBLIC: {
-        label: 'Public', sublabel: 'All fields visible',
-        detail: 'First responders see full emergency profile',
-        iconName: 'eye', tier: 0,
-        fields: ['blood_group', 'allergies', 'conditions', 'medications', 'doctor_name', 'doctor_phone', 'notes', 'contacts'],
-    },
-    MINIMAL: {
-        label: 'Minimal', sublabel: 'Blood group + contacts only',
-        detail: 'Only critical fields shown — rest are hidden',
-        iconName: 'eye', tier: 1,
-        fields: ['blood_group', 'contacts'],
-    },
-    HIDDEN: {
-        label: 'Hidden', sublabel: 'No data visible',
-        detail: 'Scanner sees "info hidden by parent"',
-        iconName: 'eye-off', tier: 2,
-        fields: [],
-    },
+    PUBLIC:  { iconName: 'eye',     tier: 0, fields: ['blood_group','allergies','conditions','medications','doctor_name','doctor_phone','notes','contacts'] },
+    MINIMAL: { iconName: 'eye',     tier: 1, fields: ['blood_group','contacts'] },
+    HIDDEN:  { iconName: 'eye-off', tier: 2, fields: [] },
 };
 
-const ALL_FIELDS = [
-    { key: 'blood_group', label: 'Blood Group', category: 'Medical', minimalAllowed: true },
-    { key: 'allergies', label: 'Allergies', category: 'Medical', minimalAllowed: false },
-    { key: 'conditions', label: 'Medical Conditions', category: 'Medical', minimalAllowed: false },
-    { key: 'medications', label: 'Medications', category: 'Medical', minimalAllowed: false },
-    { key: 'doctor_name', label: 'Doctor Name', category: 'Physician', minimalAllowed: false },
-    { key: 'doctor_phone', label: 'Doctor Phone', category: 'Physician', minimalAllowed: false },
-    { key: 'notes', label: 'Notes', category: 'Other', minimalAllowed: false },
-    { key: 'contacts', label: 'Emergency Contacts', category: 'Contacts', minimalAllowed: true },
+const ALL_FIELD_KEYS = [
+    { key: 'blood_group',  labelKey: 'emergency.fieldBloodGroup',  categoryKey: 'emergency.categoryMedical',   minimalAllowed: true  },
+    { key: 'allergies',    labelKey: 'emergency.fieldAllergies',    categoryKey: 'emergency.categoryMedical',   minimalAllowed: false },
+    { key: 'conditions',   labelKey: 'emergency.fieldConditions',   categoryKey: 'emergency.categoryMedical',   minimalAllowed: false },
+    { key: 'medications',  labelKey: 'emergency.fieldMedications',  categoryKey: 'emergency.categoryMedical',   minimalAllowed: false },
+    { key: 'doctor_name',  labelKey: 'emergency.fieldDoctorName',   categoryKey: 'emergency.categoryPhysician', minimalAllowed: false },
+    { key: 'doctor_phone', labelKey: 'emergency.fieldDoctorPhone',  categoryKey: 'emergency.categoryPhysician', minimalAllowed: false },
+    { key: 'notes',        labelKey: 'emergency.fieldNotes',        categoryKey: 'emergency.categoryOther',     minimalAllowed: false },
+    { key: 'contacts',     labelKey: 'emergency.fieldContacts',     categoryKey: 'emergency.categoryContacts',  minimalAllowed: true  },
 ];
 
 function isFieldVisible(fieldKey, visibility, hiddenFields = []) {
@@ -76,6 +59,7 @@ function PreviewDataRow({ icon, label, value, last, accent, C }) {
 
 // ── Scanner preview ───────────────────────────────────────────────────────────
 function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields, C }) {
+    const { t } = useTranslation();
     const cfg = VISIBILITY_CONFIG[visibility] ?? VISIBILITY_CONFIG.PUBLIC;
     const show = (key) => isFieldVisible(key, visibility, hiddenFields);
     const visibleContacts = show('contacts') ? (contacts ?? []).sort((a, b) => a.priority - b.priority) : [];
@@ -89,7 +73,14 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
         (show('notes') && emergency?.notes) ||
         visibleContacts.length > 0
     );
-    const fullName = [student?.first_name, student?.last_name].filter(Boolean).join(' ') || 'Student';
+    const fullName = [student?.first_name, student?.last_name].filter(Boolean).join(' ') || t('updates.childTab');
+
+    // Resolve visibility label from i18n
+    const visLabel = {
+        PUBLIC:  t('emergency.visPublicLabel'),
+        MINIMAL: t('emergency.visMinimalLabel'),
+        HIDDEN:  t('emergency.visHiddenLabel'),
+    }[visibility] ?? visibility;
 
     return (
         <View style={[s.previewCard, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
@@ -98,13 +89,13 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
                 <View style={s.previewTopLeft}>
                     <View style={[s.previewScanBadge, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
                         <View style={[s.previewScanDot, { backgroundColor: C.primary }]} />
-                        <Text style={[s.previewScanTx, { color: C.primary }]}>SCANNER VIEW</Text>
+                        <Text style={[s.previewScanTx, { color: C.primary }]}>{t('emergency.scannerViewLabel').toUpperCase()}</Text>
                     </View>
-                    <Text style={[s.previewCaption, { color: C.tx3 }]}>What first responders see</Text>
+                    <Text style={[s.previewCaption, { color: C.tx3 }]}>{t('emergency.scannerViewCaption')}</Text>
                 </View>
                 <View style={[s.previewVisBadge, { backgroundColor: C.s4, borderColor: C.bd2 }]}>
                     <Feather name={cfg.iconName} size={10} color={C.tx2} />
-                    <Text style={[s.previewVisTx, { color: C.tx2 }]}>{cfg.label}</Text>
+                    <Text style={[s.previewVisTx, { color: C.tx2 }]}>{visLabel}</Text>
                 </View>
             </View>
 
@@ -120,14 +111,16 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
                     <View style={s.previewMetaRow}>
                         {student?.class && (
                             <View style={[s.previewMetaChip, { backgroundColor: C.s4, borderColor: C.bd2 }]}>
-                                <Text style={[s.previewMetaChipTx, { color: C.tx3 }]}>Class {student.class}{student.section ? `-${student.section}` : ''}</Text>
+                                <Text style={[s.previewMetaChipTx, { color: C.tx3 }]}>
+                                    {t('emergency.previewLabelClass')} {student.class}{student.section ? `-${student.section}` : ''}
+                                </Text>
                             </View>
                         )}
                     </View>
                 </View>
                 <View style={[s.previewEmergencyPill, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
                     <MaterialCommunityIcons name="medical-bag" size={11} color={C.primary} />
-                    <Text style={[s.previewEmergencyTx, { color: C.primary }]}>Emergency</Text>
+                    <Text style={[s.previewEmergencyTx, { color: C.primary }]}>{t('emergency.emergencyLabel')}</Text>
                 </View>
             </View>
 
@@ -138,8 +131,8 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
                         <Feather name="lock" size={18} color={C.red} />
                     </View>
                     <View>
-                        <Text style={[s.previewBlockedTitle, { color: C.tx }]}>Profile Hidden by Parent</Text>
-                        <Text style={[s.previewBlockedSub, { color: C.tx3 }]}>Emergency info is not available to scanners</Text>
+                        <Text style={[s.previewBlockedTitle, { color: C.tx }]}>{t('emergency.hiddenTitle')}</Text>
+                        <Text style={[s.previewBlockedSub, { color: C.tx3 }]}>{t('emergency.hiddenSub')}</Text>
                     </View>
                 </View>
             ) : !hasAnyData ? (
@@ -148,31 +141,31 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
                         <Feather name="alert-circle" size={18} color={C.tx3} />
                     </View>
                     <View>
-                        <Text style={[s.previewBlockedTitle, { color: C.tx2 }]}>No data to display</Text>
-                        <Text style={[s.previewBlockedSub, { color: C.tx3 }]}>Fill in the emergency profile to make this useful</Text>
+                        <Text style={[s.previewBlockedTitle, { color: C.tx2 }]}>{t('emergency.noDataTitle')}</Text>
+                        <Text style={[s.previewBlockedSub, { color: C.tx3 }]}>{t('emergency.noDataSub')}</Text>
                     </View>
                 </View>
             ) : (
                 <View>
                     {show('blood_group') && emergency?.blood_group && (
                         <View style={[s.previewSection, { borderBottomColor: C.bd }]}>
-                            <Text style={[s.previewSectionHead, { color: C.tx3 }]}>MEDICAL</Text>
-                            <PreviewDataRow icon="droplet" label="Blood Group" value={emergency.blood_group} accent={C.primary} C={C} />
-                            {show('allergies') && <PreviewDataRow icon="alert-triangle" label="Allergies" value={emergency?.allergies} accent={C.amb} C={C} />}
-                            {show('conditions') && <PreviewDataRow icon="activity" label="Conditions" value={emergency?.conditions} accent={C.blue} C={C} />}
-                            {show('medications') && <PreviewDataRow icon="package" label="Medications" value={emergency?.medications} accent={C.blue} C={C} last />}
+                            <Text style={[s.previewSectionHead, { color: C.tx3 }]}>{t('emergency.previewMedicalHead').toUpperCase()}</Text>
+                            <PreviewDataRow icon="droplet"        label={t('emergency.previewLabelBloodGroup')} value={emergency.blood_group}     accent={C.primary} C={C} />
+                            {show('allergies')   && <PreviewDataRow icon="alert-triangle" label={t('emergency.previewLabelAllergies')}  value={emergency?.allergies}  accent={C.amb}  C={C} />}
+                            {show('conditions')  && <PreviewDataRow icon="activity"       label={t('emergency.previewLabelConditions')} value={emergency?.conditions} accent={C.blue} C={C} />}
+                            {show('medications') && <PreviewDataRow icon="package"        label={t('emergency.previewLabelMedications')}value={emergency?.medications} accent={C.blue} C={C} last />}
                         </View>
                     )}
                     {(show('doctor_name') && emergency?.doctor_name) && (
                         <View style={[s.previewSection, { borderBottomColor: C.bd }]}>
-                            <Text style={[s.previewSectionHead, { color: C.tx3 }]}>PHYSICIAN</Text>
-                            <PreviewDataRow icon="user" label="Doctor" value={emergency.doctor_name} accent={C.blue} C={C} />
-                            {show('doctor_phone') && <PreviewDataRow icon="phone" label="Doctor Phone" value={emergency?.doctor_phone} accent={C.ok} C={C} last />}
+                            <Text style={[s.previewSectionHead, { color: C.tx3 }]}>{t('emergency.previewPhysicianHead').toUpperCase()}</Text>
+                            <PreviewDataRow icon="user"  label={t('emergency.previewLabelDoctor')}      value={emergency.doctor_name}    accent={C.blue} C={C} />
+                            {show('doctor_phone') && <PreviewDataRow icon="phone" label={t('emergency.previewLabelDoctorPhone')} value={emergency?.doctor_phone} accent={C.ok}   C={C} last />}
                         </View>
                     )}
                     {visibleContacts.length > 0 && (
                         <View style={[s.previewSection, { borderBottomColor: C.bd }]}>
-                            <Text style={[s.previewSectionHead, { color: C.tx3 }]}>EMERGENCY CONTACTS</Text>
+                            <Text style={[s.previewSectionHead, { color: C.tx3 }]}>{t('emergency.previewContactsHead').toUpperCase()}</Text>
                             {visibleContacts.map((c, i) => (
                                 <View key={c.id ?? i} style={[s.previewContact, i < visibleContacts.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.bd }]}>
                                     <View style={[s.previewContactAv, { backgroundColor: i === 0 ? C.primaryBg : C.blueBg, borderColor: i === 0 ? C.primaryBd : C.blueBd }]}>
@@ -180,7 +173,10 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={[s.previewContactName, { color: C.tx }]}>{c.name}</Text>
-                                        <Text style={[s.previewContactRel, { color: C.tx3 }]}>{c.relationship ?? 'Guardian'}{c.priority === 1 ? '  ·  Primary' : ''}</Text>
+                                        <Text style={[s.previewContactRel, { color: C.tx3 }]}>
+                                            {c.relationship ?? t('emergency.previewLabelGuardian')}
+                                            {c.priority === 1 ? `  ·  ${t('emergency.previewLabelPrimary')}` : ''}
+                                        </Text>
                                     </View>
                                     <TouchableOpacity style={[s.previewCallBtn, { backgroundColor: C.okBg, borderColor: C.okBd }]} onPress={() => Linking.openURL(`tel:${c.phone}`)} activeOpacity={0.7}>
                                         <Feather name="phone-call" size={13} color={C.ok} />
@@ -195,7 +191,7 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
             {/* Footer */}
             <View style={[s.previewFooter, { borderTopColor: C.bd, backgroundColor: C.s3 }]}>
                 <MaterialCommunityIcons name="shield-check" size={11} color={C.tx3} />
-                <Text style={[s.previewFooterTx, { color: C.tx3 }]}>Powered by RESQID Guardian  ·  Emergency use only</Text>
+                <Text style={[s.previewFooterTx, { color: C.tx3 }]}>{t('emergency.poweredBy')}</Text>
             </View>
         </View>
     );
@@ -203,16 +199,25 @@ function ScannerPreview({ student, emergency, contacts, visibility, hiddenFields
 
 // ── Visibility selector ───────────────────────────────────────────────────────
 function VisibilitySelector({ current, onChange, C }) {
+    const { t } = useTranslation();
+
     const getColor = (key) => {
-        if (key === 'PUBLIC') return C.ok;
+        if (key === 'PUBLIC')  return C.ok;
         if (key === 'MINIMAL') return C.amb;
         return C.red;
     };
+
+    const visItems = [
+        { key: 'PUBLIC',  labelKey: 'emergency.visPublicLabel',  detailKey: 'emergency.visPublicDetail',  iconName: 'eye'     },
+        { key: 'MINIMAL', labelKey: 'emergency.visMinimalLabel', detailKey: 'emergency.visMinimalDetail', iconName: 'eye'     },
+        { key: 'HIDDEN',  labelKey: 'emergency.visHiddenLabel',  detailKey: 'emergency.visHiddenDetail',  iconName: 'eye-off' },
+    ];
+
     return (
         <View style={[s.visSeg, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
-            {Object.entries(VISIBILITY_CONFIG).map(([key, cfg], i, arr) => {
+            {visItems.map(({ key, labelKey, detailKey, iconName }, i, arr) => {
                 const active = current === key;
-                const color = getColor(key);
+                const color  = getColor(key);
                 return (
                     <TouchableOpacity
                         key={key}
@@ -222,11 +227,11 @@ function VisibilitySelector({ current, onChange, C }) {
                     >
                         <View style={s.visSegLeft}>
                             <View style={[s.visSegIcon, { backgroundColor: active ? color + '18' : C.s4, borderColor: active ? color + '35' : C.bd }]}>
-                                <Feather name={cfg.iconName} size={14} color={active ? color : C.tx3} />
+                                <Feather name={iconName} size={14} color={active ? color : C.tx3} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[s.visSegLabel, { color: active ? color : C.tx }]}>{cfg.label}</Text>
-                                <Text style={[s.visSegSub, { color: C.tx3 }]} numberOfLines={1}>{cfg.detail}</Text>
+                                <Text style={[s.visSegLabel, { color: active ? color : C.tx }]}>{t(labelKey)}</Text>
+                                <Text style={[s.visSegSub, { color: C.tx3 }]} numberOfLines={1}>{t(detailKey)}</Text>
                             </View>
                         </View>
                         <View style={[s.visSegCheck, active ? { backgroundColor: color, borderColor: color } : { backgroundColor: 'transparent', borderColor: C.bd2 }]}>
@@ -241,39 +246,42 @@ function VisibilitySelector({ current, onChange, C }) {
 
 // ── Field access table ────────────────────────────────────────────────────────
 function FieldAccessTable({ visibility, hiddenFields, onToggle, C }) {
+    const { t } = useTranslation();
+
     const isDisabled = (field) => {
         if (visibility === 'HIDDEN') return true;
         if (visibility === 'MINIMAL' && !field.minimalAllowed) return true;
         return false;
     };
+
     return (
         <View style={[s.fieldTable, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
             <View style={[s.fieldTableHead, { backgroundColor: C.s3, borderBottomColor: C.bd }]}>
-                <Text style={[s.fieldTableHeadLbl, { color: C.tx3 }]}>FIELD</Text>
-                <Text style={[s.fieldTableHeadLbl, { color: C.tx3 }]}>VISIBLE</Text>
+                <Text style={[s.fieldTableHeadLbl, { color: C.tx3 }]}>{t('settings.emergencyInfo').toUpperCase()}</Text>
+                <Text style={[s.fieldTableHeadLbl, { color: C.tx3 }]}>{t('settings.visibilityControls').toUpperCase()}</Text>
             </View>
-            {ALL_FIELDS.map((field, i) => {
-                const disabled = isDisabled(field);
-                const visible = !hiddenFields.includes(field.key);
+            {ALL_FIELD_KEYS.map((field, i) => {
+                const disabled  = isDisabled(field);
+                const visible   = !hiddenFields.includes(field.key);
                 const effective = visible && !disabled;
-                const isLast = i === ALL_FIELDS.length - 1;
-                const prevCat = i > 0 ? ALL_FIELDS[i - 1].category : null;
-                const showDiv = field.category !== prevCat && i > 0;
+                const isLast    = i === ALL_FIELD_KEYS.length - 1;
+                const prevCat   = i > 0 ? ALL_FIELD_KEYS[i - 1].categoryKey : null;
+                const showDiv   = field.categoryKey !== prevCat && i > 0;
                 return (
                     <View key={field.key}>
                         {showDiv && (
                             <View style={[s.fieldCategoryDivider, { borderBottomColor: C.bd }]}>
-                                <Text style={[s.fieldCategoryTx, { color: C.tx3 }]}>{field.category.toUpperCase()}</Text>
+                                <Text style={[s.fieldCategoryTx, { color: C.tx3 }]}>{t(field.categoryKey).toUpperCase()}</Text>
                                 <View style={[s.fieldCategoryLine, { backgroundColor: C.bd }]} />
                             </View>
                         )}
                         <View style={[s.fieldRow, !isLast && { borderBottomWidth: 1, borderBottomColor: C.bd }, disabled && s.fieldRowDim]}>
                             <View style={[s.fieldDot, { backgroundColor: effective ? C.ok : disabled ? C.tx3 + '40' : C.tx3 }]} />
-                            <Text style={[s.fieldLabel, { color: disabled ? C.tx3 : C.tx }]}>{field.label}</Text>
+                            <Text style={[s.fieldLabel, { color: disabled ? C.tx3 : C.tx }]}>{t(field.labelKey)}</Text>
                             {disabled && visibility !== 'HIDDEN' && (
                                 <View style={[s.fieldLockedTag, { backgroundColor: C.s3, borderColor: C.bd }]}>
                                     <Feather name="lock" size={9} color={C.tx3} />
-                                    <Text style={[s.fieldLockedTx, { color: C.tx3 }]}>Minimal</Text>
+                                    <Text style={[s.fieldLockedTx, { color: C.tx3 }]}>{t('emergency.lockedMinimal')}</Text>
                                 </View>
                             )}
                             <View style={{ flex: 1 }} />
@@ -295,12 +303,13 @@ function FieldAccessTable({ visibility, hiddenFields, onToggle, C }) {
 
 // ── Save bar ──────────────────────────────────────────────────────────────────
 function SaveBar({ isDirty, saving, saved, onSave, C }) {
+    const { t } = useTranslation();
     if (!isDirty) return null;
     return (
         <Animated.View entering={FadeInUp.duration(280)} style={[s.saveBar, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
             <View style={s.saveBarLeft}>
                 <View style={[s.saveBarDot, { backgroundColor: saving ? C.amb : C.primary }]} />
-                <Text style={[s.saveBarTx, { color: C.tx2 }]}>Unsaved changes</Text>
+                <Text style={[s.saveBarTx, { color: C.tx2 }]}>{t('emergency.unsavedChanges')}</Text>
             </View>
             <TouchableOpacity
                 style={[s.saveBtn, { backgroundColor: saved ? C.ok : C.primary }, saving && { opacity: 0.6 }]}
@@ -310,7 +319,7 @@ function SaveBar({ isDirty, saving, saved, onSave, C }) {
             >
                 {saved
                     ? <Feather name="check" size={14} color={C.white} />
-                    : <Text style={[s.saveBtnTx, { color: C.white }]}>{saving ? 'Saving…' : 'Save'}</Text>}
+                    : <Text style={[s.saveBtnTx, { color: C.white }]}>{saving ? t('emergency.saving') : t('emergency.save')}</Text>}
             </TouchableOpacity>
         </Animated.View>
     );
@@ -319,6 +328,7 @@ function SaveBar({ isDirty, saving, saved, onSave, C }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function EmergencyScreen() {
     const { colors: C } = useTheme();
+    const { t } = useTranslation();
     useScreenSecurity();
 
     const activeStudent = useProfileStore(
@@ -326,15 +336,15 @@ export default function EmergencyScreen() {
     );
     const patchStudent = useProfileStore((s) => s.patchStudent);
 
-    const student = activeStudent;
-    const emergency = activeStudent?.emergency ?? null;
-    const contacts = activeStudent?.emergency?.contacts ?? [];
+    const student       = activeStudent;
+    const emergency     = activeStudent?.emergency ?? null;
+    const contacts      = activeStudent?.emergency?.contacts ?? [];
     const cardVisibility = activeStudent?.card_visibility ?? null;
 
-    const [visibility, setVisibility] = useState(cardVisibility?.visibility ?? 'PUBLIC');
-    const [hiddenFields, setHiddenFields] = useState(cardVisibility?.hidden_fields ?? []);
-    const [saving, setSaving] = useState(false);
-    const [saved, setSaved] = useState(false);
+    const [visibility,    setVisibility]    = useState(cardVisibility?.visibility    ?? 'PUBLIC');
+    const [hiddenFields,  setHiddenFields]  = useState(cardVisibility?.hidden_fields ?? []);
+    const [saving,        setSaving]        = useState(false);
+    const [saved,         setSaved]         = useState(false);
 
     const isDirty =
         visibility !== (cardVisibility?.visibility ?? 'PUBLIC') ||
@@ -352,11 +362,17 @@ export default function EmergencyScreen() {
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch {
-            Alert.alert('Save Failed', 'Could not update visibility. Please try again.');
+            Alert.alert(t('emergency.saveFailed'), t('emergency.saveFailedMsg'));
         } finally {
             setSaving(false);
         }
     };
+
+    const visLabel = {
+        PUBLIC:  t('emergency.visPublicLabel'),
+        MINIMAL: t('emergency.visMinimalLabel'),
+        HIDDEN:  t('emergency.visHiddenLabel'),
+    }[visibility] ?? visibility;
 
     return (
         <Screen bg={C.bg} edges={['top', 'left', 'right']}>
@@ -365,37 +381,40 @@ export default function EmergencyScreen() {
                 {/* Header */}
                 <Animated.View entering={FadeInDown.delay(0).duration(380)} style={s.header}>
                     <View style={{ flex: 1 }}>
-                        <Text style={[s.pageTitle, { color: C.tx }]}>Emergency Info</Text>
+                        <Text style={[s.pageTitle, { color: C.tx }]}>{t('emergency.pageTitle')}</Text>
                         <Text style={[s.pageSub, { color: C.tx3 }]}>
-                            Control what first responders see when{' '}
-                            {student?.first_name ? `${student.first_name}'s` : 'the'} card is scanned
+                            {student?.first_name
+                                ? t('emergency.pageSub', { name: `${student.first_name}'s` })
+                                : t('emergency.pageSubGeneric')}
                         </Text>
                     </View>
                     <View style={[s.liveStatusPill, { backgroundColor: C.s3, borderColor: C.bd }]}>
-                        <Text style={[s.liveStatusTx, { color: C.tx2 }]}>{VISIBILITY_CONFIG[visibility]?.label}</Text>
+                        <Text style={[s.liveStatusTx, { color: C.tx2 }]}>{visLabel}</Text>
                     </View>
                 </Animated.View>
 
                 {/* Scanner preview */}
                 <Animated.View entering={FadeInDown.delay(40).duration(380)}>
-                    <Text style={[s.sectionHead, { color: C.tx3 }]}>SCANNER PREVIEW</Text>
-                    <Text style={[s.sectionDesc, { color: C.tx3 }]}>Live view of what responders see</Text>
+                    <Text style={[s.sectionHead, { color: C.tx3 }]}>{t('emergency.sectionScannerPreview').toUpperCase()}</Text>
+                    <Text style={[s.sectionDesc, { color: C.tx3 }]}>{t('emergency.sectionScannerDesc')}</Text>
                     <ScannerPreview student={student} emergency={emergency} contacts={contacts} visibility={visibility} hiddenFields={hiddenFields} C={C} />
                 </Animated.View>
 
                 {/* Visibility selector */}
                 <Animated.View entering={FadeInDown.delay(80).duration(380)}>
-                    <Text style={[s.sectionHead, { color: C.tx3 }]}>ACCESS LEVEL</Text>
-                    <Text style={[s.sectionDesc, { color: C.tx3 }]}>Set how much data is shared on scan</Text>
+                    <Text style={[s.sectionHead, { color: C.tx3 }]}>{t('emergency.sectionAccessLevel').toUpperCase()}</Text>
+                    <Text style={[s.sectionDesc, { color: C.tx3 }]}>{t('emergency.sectionAccessDesc')}</Text>
                     <VisibilitySelector current={visibility} onChange={setVisibility} C={C} />
                 </Animated.View>
 
                 {/* Field access */}
                 {visibility !== 'HIDDEN' && (
                     <Animated.View entering={FadeIn.duration(320)} layout={Layout.duration(260)}>
-                        <Text style={[s.sectionHead, { color: C.tx3 }]}>FIELD ACCESS</Text>
+                        <Text style={[s.sectionHead, { color: C.tx3 }]}>{t('emergency.sectionFieldAccess').toUpperCase()}</Text>
                         <Text style={[s.sectionDesc, { color: C.tx3 }]}>
-                            {visibility === 'MINIMAL' ? 'Only blood group and contacts available in Minimal mode' : 'Toggle individual fields'}
+                            {visibility === 'MINIMAL'
+                                ? t('emergency.sectionFieldAccessDescMinimal')
+                                : t('emergency.sectionFieldAccessDescPublic')}
                         </Text>
                         <FieldAccessTable visibility={visibility} hiddenFields={hiddenFields} onToggle={toggleField} C={C} />
                     </Animated.View>
@@ -408,10 +427,8 @@ export default function EmergencyScreen() {
                             <Feather name="alert-triangle" size={15} color={C.amb} />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text style={[s.hiddenWarnTitle, { color: C.amb }]}>Hidden mode active</Text>
-                            <Text style={[s.hiddenWarnBody, { color: C.amb }]}>
-                                First responders will not see any emergency info. Only use this if you have another way to communicate this information.
-                            </Text>
+                            <Text style={[s.hiddenWarnTitle, { color: C.amb }]}>{t('emergency.hiddenWarnTitle')}</Text>
+                            <Text style={[s.hiddenWarnBody, { color: C.amb }]}>{t('emergency.hiddenWarnBody')}</Text>
                         </View>
                     </Animated.View>
                 )}
@@ -425,9 +442,7 @@ export default function EmergencyScreen() {
                         <Feather name="shield" size={13} color={C.ok} />
                     </View>
                     <Text style={[s.safetyNoteTx, { color: C.tx2 }]}>
-                        We recommend keeping visibility set to{' '}
-                        <Text style={{ color: C.ok, fontWeight: '800' }}>Public</Text>
-                        {' '}— it gives first responders the best chance to help your child.
+                        {t('emergency.safetyNote')}
                     </Text>
                 </Animated.View>
 
