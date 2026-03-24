@@ -24,9 +24,9 @@ import { authClient } from "@/lib/api/apiClient";
 // ── Validators (fail-fast on unexpected shapes) ───────────────────────────────
 
 const assertVerifyResponse = (data) => {
-  if (!data?.accessToken) throw new Error("AUTH: missing accessToken");
-  if (!data?.refreshToken) throw new Error("AUTH: missing refreshToken");
-  if (!data?.parent?.id) throw new Error("AUTH: missing parent.id");
+  if (!data?.access_token) throw new Error("AUTH: missing access_token");
+  if (!data?.refresh_token) throw new Error("AUTH: missing refresh_token");
+  if (!data?.parent_id) throw new Error("AUTH: missing parent_id");
 };
 
 // ── Auth API ──────────────────────────────────────────────────────────────────
@@ -61,11 +61,11 @@ export const authApi = {
     assertVerifyResponse(data);
 
     return {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      expiresAt: data.expiresAt ?? null,
-      isNewUser: data.isNewUser ?? false,
-      parent: data.parent, // { id }
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: data.expires_at ?? null,
+      isNewUser: data.is_new_user ?? false,
+      parent: { id: data.parent_id },
     };
   },
 

@@ -1,41 +1,50 @@
 /**
- * src/providers/ThemeProvider.jsx
+ * providers/ThemeProvider.jsx
  *
- * Single source of truth for theme.
- * Wrap the app with <ThemeProvider> in _layout.jsx.
- * Consume via useThemeContext() anywhere.
+ * FIXED:
+ *  - Context default is darkT so useTheme() NEVER returns null
+ *  - Exports useTheme() (primary) + useThemeContext() (legacy alias)
+ *  - ThemeProvider must wrap the whole app in providers/index.jsx
  */
 
-import { darkT, lightT } from "@/theme/tokens";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useColorScheme as useSystemColorScheme } from "react-native";
+import { darkT, lightT } from '@/theme/tokens';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useState,
+} from 'react';
+import { useColorScheme as useSystemColorScheme } from 'react-native';
 
-const THEME_KEY = "app_theme";
+const THEME_KEY = 'resqid_theme_pref';
 
-const ThemeContext = createContext(null);
+const ThemeContext = createContext({
+    theme: 'system',
+    resolvedTheme: 'dark',
+    colors: darkT,
+    setTheme: () => { },
+});
 
 export function ThemeProvider({ children }) {
-    const systemScheme = useSystemColorScheme(); // 'dark' | 'light' | null
-    const [theme, setThemeState] = useState("system"); // persisted user preference
+    const systemScheme = useSystemColorScheme();
+    const [theme, setThemeState] = useState('system');
 
-    // ── Rehydrate saved preference ────────────────────────────────────────────
+    // Rehydrate from storage
     useEffect(() => {
         AsyncStorage.getItem(THEME_KEY)
-            .then((saved) => { if (saved) setThemeState(saved); })
-            .catch(() => {});
+            .then((v) => { if (v) setThemeState(v); })
+            .catch(() => { });
     }, []);
 
-    // ── Persist & apply ───────────────────────────────────────────────────────
-    const setTheme = useCallback(async (newTheme) => {
-        setThemeState(newTheme);
-        try { await AsyncStorage.setItem(THEME_KEY, newTheme); } catch {}
+    const setTheme = useCallback(async (next) => {
+        setThemeState(next);
+        try { await AsyncStorage.setItem(THEME_KEY, next); } catch { }
     }, []);
 
-    const resolvedTheme =
-        theme === "system" ? (systemScheme ?? "dark") : theme;
-
-    const colors = resolvedTheme === "light" ? lightT : darkT;
+    const resolvedTheme = theme === 'system' ? (systemScheme ?? 'dark') : theme;
+    const colors = resolvedTheme === 'light' ? lightT : darkT;
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme, colors }}>
@@ -44,5 +53,10 @@ export function ThemeProvider({ children }) {
     );
 }
 
-/** Primary hook — use everywhere instead of inline state */
-export const useThemeContext = () => useContext(ThemeContext);
+/** Primary hook — always returns valid colors. Use this everywhere. */
+export function useTheme() {
+    return useContext(ThemeContext);
+}
+
+/** Legacy alias */
+export const useThemeContext = useTheme;
