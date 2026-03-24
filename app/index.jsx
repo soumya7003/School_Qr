@@ -518,7 +518,7 @@ export default function WelcomeScreen() {
     router.replace({ pathname: "/(auth)/login", params: { mode: safeMode } });
   }, []);
 
-  const handleGetStarted = useCallback(() => navigate("home"), [navigate]);
+  const handleGetStarted = useCallback(() => navigate("register"), [navigate]);
   const handleSignIn = useCallback(() => navigate("login"), [navigate]);
 
   // [F12] Authenticated redirect via effect — never return null

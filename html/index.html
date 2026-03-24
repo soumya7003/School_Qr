@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!doctype html>
 <html lang="en">
   <head>
@@ -3182,3 +3183,3189 @@
     </div>
   </body>
 </html>
+=======
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School QR – Parent App UI/UX</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #e8342a;
+        --primary-dark: #b5251d;
+        --primary-light: #ff6b63;
+        --bg: #0a0d12;
+        --surface: #131720;
+        --surface2: #1c2232;
+        --surface3: #242a3d;
+        --border: rgba(255, 255, 255, 0.07);
+        --text: #f0f2f7;
+        --text2: #8a90a2;
+        --text3: #555c70;
+        --green: #22c55e;
+        --amber: #f59e0b;
+        --blue: #3b82f6;
+        --radius: 20px;
+        --radius-sm: 12px;
+        --phone-w: 375px;
+        --phone-h: 812px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: #070a0f;
+        font-family: "DM Sans", sans-serif;
+        color: var(--text);
+        min-height: 100vh;
+        padding: 40px 20px 80px;
+      }
+
+      /* ── Page header ── */
+      .page-header {
+        text-align: center;
+        margin-bottom: 64px;
+      }
+      .page-header h1 {
+        font-family: "Sora", sans-serif;
+        font-size: 36px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #fff 0%, var(--primary-light) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 10px;
+      }
+      .page-header p {
+        color: var(--text2);
+        font-size: 15px;
+      }
+
+      /* ── Section label ── */
+      .section-label {
+        font-family: "Sora", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 2.5px;
+        text-transform: uppercase;
+        color: var(--primary);
+        margin-bottom: 24px;
+        padding-left: 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .section-label::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+        max-width: 200px;
+      }
+
+      /* ── Flow row ── */
+      .flow-section {
+        margin-bottom: 80px;
+      }
+      .flow-row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+      .flow-arrow {
+        display: flex;
+        align-items: center;
+        padding-top: 80px;
+        color: var(--text3);
+        font-size: 22px;
+        flex-shrink: 0;
+      }
+
+      /* ── Phone frame ── */
+      .phone-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+      .phone-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--text3);
+      }
+      .phone {
+        width: var(--phone-w);
+        height: var(--phone-h);
+        background: var(--bg);
+        border-radius: 44px;
+        border: 2px solid rgba(255, 255, 255, 0.09);
+        overflow: hidden;
+        position: relative;
+        box-shadow:
+          0 0 0 6px rgba(255, 255, 255, 0.03),
+          0 30px 80px rgba(0, 0, 0, 0.7),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        flex-shrink: 0;
+      }
+      /* notch */
+      .phone::before {
+        content: "";
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 110px;
+        height: 28px;
+        background: #0a0d12;
+        border-radius: 20px;
+        z-index: 100;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+      }
+      .screen {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 1 – LANDING                         */
+      /* ─────────────────────────────────────────── */
+      .s-landing {
+        background: var(--bg);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        padding-bottom: 48px;
+        overflow: hidden;
+      }
+      .s-landing .blob {
+        position: absolute;
+        top: -60px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 340px;
+        height: 340px;
+        background: radial-gradient(
+          circle at 50% 50%,
+          rgba(232, 52, 42, 0.35) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .s-landing .illustration {
+        position: absolute;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 180px;
+        height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .s-landing .shield-icon {
+        width: 140px;
+        height: 140px;
+        background: linear-gradient(145deg, #1c2232, #131720);
+        border-radius: 40px;
+        border: 1.5px solid rgba(232, 52, 42, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow:
+          0 0 60px rgba(232, 52, 42, 0.2),
+          0 20px 40px rgba(0, 0, 0, 0.5);
+      }
+      .s-landing .shield-icon svg {
+        width: 72px;
+        height: 72px;
+      }
+      .s-landing .badge-ring {
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        border: 1px dashed rgba(232, 52, 42, 0.2);
+        animation: spin 20s linear infinite;
+      }
+      .s-landing .badge-dot {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 8px;
+        height: 8px;
+        background: var(--primary);
+        border-radius: 50%;
+        box-shadow: 0 0 12px var(--primary);
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .s-landing .landing-text {
+        z-index: 1;
+        text-align: center;
+        margin-bottom: 32px;
+        padding: 0 28px;
+      }
+      .s-landing .app-name {
+        font-family: "Sora", sans-serif;
+        font-size: 30px;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-bottom: 12px;
+      }
+      .s-landing .app-name span {
+        color: var(--primary);
+      }
+      .s-landing .tagline {
+        font-size: 14px;
+        color: var(--text2);
+        line-height: 1.6;
+      }
+      .s-landing .actions {
+        width: 100%;
+        padding: 0 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 1;
+      }
+      .btn-primary {
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        border-radius: 14px;
+        height: 54px;
+        font-family: "Sora", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 8px 24px rgba(232, 52, 42, 0.35);
+        transition: all 0.2s;
+      }
+      .btn-secondary {
+        background: var(--surface);
+        color: var(--text);
+        border: 1.5px solid var(--border);
+        border-radius: 14px;
+        height: 54px;
+        font-family: "Sora", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .s-landing .trust-row {
+        z-index: 1;
+        display: flex;
+        gap: 6px;
+        margin-top: 20px;
+        align-items: center;
+      }
+      .trust-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 8px var(--green);
+      }
+      .trust-text {
+        font-size: 12px;
+        color: var(--text3);
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 2 – LOGIN                           */
+      /* ─────────────────────────────────────────── */
+      .s-login {
+        background: var(--bg);
+        padding: 60px 24px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .screen-back {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text2);
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      .screen-back svg {
+        width: 18px;
+        height: 18px;
+      }
+      .screen-title {
+        font-family: "Sora", sans-serif;
+        font-size: 26px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .screen-subtitle {
+        font-size: 13px;
+        color: var(--text2);
+        line-height: 1.6;
+      }
+      .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .field-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text2);
+        letter-spacing: 0.5px;
+      }
+      .field-input {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 12px;
+        height: 50px;
+        padding: 0 16px;
+        color: var(--text);
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .field-input.active {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(232, 52, 42, 0.12);
+      }
+      .field-input svg {
+        width: 18px;
+        height: 18px;
+        color: var(--text3);
+        flex-shrink: 0;
+      }
+      .field-input .value {
+        color: var(--text);
+        font-size: 15px;
+      }
+      .field-input .placeholder {
+        color: var(--text3);
+        font-size: 14px;
+      }
+      .method-tabs {
+        display: flex;
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 4px;
+        gap: 4px;
+      }
+      .tab {
+        flex: 1;
+        height: 36px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text3);
+      }
+      .tab.active {
+        background: var(--primary);
+        color: #fff;
+      }
+      .scan-option {
+        border: 1.5px dashed rgba(232, 52, 42, 0.3);
+        border-radius: 14px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: var(--primary);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .scan-option svg {
+        width: 28px;
+        height: 28px;
+      }
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--text3);
+        font-size: 12px;
+      }
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 3 – OTP                             */
+      /* ─────────────────────────────────────────── */
+      .s-otp {
+        background: var(--bg);
+        padding: 60px 24px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+      .otp-illustration {
+        display: flex;
+        justify-content: center;
+        margin: 8px 0;
+      }
+      .otp-icon-wrap {
+        width: 80px;
+        height: 80px;
+        background: var(--surface);
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid var(--border);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      }
+      .otp-icon-wrap svg {
+        width: 40px;
+        height: 40px;
+      }
+      .otp-boxes {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+      .otp-box {
+        width: 52px;
+        height: 58px;
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Sora", sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .otp-box.filled {
+        border-color: var(--primary);
+        background: rgba(232, 52, 42, 0.08);
+      }
+      .otp-box.active {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(232, 52, 42, 0.15);
+      }
+      .resend-row {
+        text-align: center;
+        font-size: 13px;
+        color: var(--text2);
+      }
+      .resend-row span {
+        color: var(--primary);
+        font-weight: 600;
+      }
+      .timer-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 13px;
+        color: var(--text2);
+        margin: 0 auto;
+        width: fit-content;
+      }
+      .timer-badge .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--amber);
+        animation: pulse 1s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 4 – DASHBOARD (new user)            */
+      /* ─────────────────────────────────────────── */
+      .s-dash {
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      /* top nav */
+      .top-nav {
+        padding: 54px 20px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+      }
+      .nav-left h3 {
+        font-family: "Sora", sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text3);
+      }
+      .nav-left h2 {
+        font-family: "Sora", sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .notif-btn {
+        width: 38px;
+        height: 38px;
+        background: var(--surface);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        border: 1px solid var(--border);
+      }
+      .notif-btn svg {
+        width: 18px;
+        height: 18px;
+        color: var(--text2);
+      }
+      .notif-dot {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 7px;
+        height: 7px;
+        background: var(--primary);
+        border-radius: 50%;
+        border: 1.5px solid var(--bg);
+      }
+      .premium-btn {
+        height: 32px;
+        background: linear-gradient(135deg, #f59e0b, #ef4444);
+        border-radius: 10px;
+        padding: 0 12px;
+        font-family: "Sora", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        letter-spacing: 0.3px;
+      }
+
+      /* scroll area */
+      .dash-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 20px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        scrollbar-width: none;
+      }
+      .dash-scroll::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* student hero card */
+      .student-hero {
+        background: linear-gradient(145deg, #1c2232, #161b28);
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        position: relative;
+      }
+      .hero-accent {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(
+          90deg,
+          var(--primary),
+          var(--primary-light)
+        );
+      }
+      .hero-inner {
+        padding: 18px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .student-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: var(--surface3);
+        border: 2px solid rgba(232, 52, 42, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+      .avatar-placeholder {
+        font-family: "Sora", sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--primary);
+      }
+      .student-info {
+        flex: 1;
+      }
+      .student-name {
+        font-family: "Sora", sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        margin-bottom: 3px;
+      }
+      .student-meta {
+        font-size: 12px;
+        color: var(--text2);
+      }
+      .card-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        border-radius: 6px;
+        padding: 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .status-pill.active {
+        background: rgba(34, 197, 94, 0.12);
+        color: var(--green);
+      }
+      .status-pill.inactive {
+        background: rgba(245, 158, 11, 0.12);
+        color: var(--amber);
+      }
+      .status-pill.pending {
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--blue);
+      }
+      .status-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      /* toggle row */
+      .toggle-row {
+        padding: 12px 18px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .toggle-label {
+        font-size: 13px;
+        color: var(--text2);
+        font-weight: 500;
+      }
+      .toggle {
+        width: 44px;
+        height: 24px;
+        border-radius: 12px;
+        background: var(--surface3);
+        position: relative;
+        border: 1px solid var(--border);
+      }
+      .toggle.on {
+        background: var(--primary);
+        border-color: var(--primary);
+      }
+      .toggle-thumb {
+        position: absolute;
+        top: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        transition: left 0.2s;
+      }
+      .toggle.on .toggle-thumb {
+        left: calc(100% - 20px);
+      }
+      .toggle:not(.on) .toggle-thumb {
+        left: 2px;
+      }
+
+      /* quick actions */
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .section-head h4 {
+        font-family: "Sora", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .section-head a {
+        font-size: 12px;
+        color: var(--primary);
+      }
+      .quick-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .quick-card {
+        background: var(--surface);
+        border-radius: 14px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .quick-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .quick-icon.red {
+        background: rgba(232, 52, 42, 0.12);
+        color: var(--primary);
+      }
+      .quick-icon.green {
+        background: rgba(34, 197, 94, 0.12);
+        color: var(--green);
+      }
+      .quick-icon.blue {
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--blue);
+      }
+      .quick-icon.amber {
+        background: rgba(245, 158, 11, 0.12);
+        color: var(--amber);
+      }
+      .quick-icon svg {
+        width: 18px;
+        height: 18px;
+      }
+      .quick-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .quick-sub {
+        font-size: 11px;
+        color: var(--text3);
+      }
+
+      /* scan activity */
+      .activity-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .activity-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 12px;
+        border: 1px solid var(--border);
+      }
+      .act-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(34, 197, 94, 0.1);
+        color: var(--green);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .act-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .act-info {
+        flex: 1;
+      }
+      .act-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .act-sub {
+        font-size: 11px;
+        color: var(--text3);
+      }
+      .act-time {
+        font-size: 11px;
+        color: var(--text3);
+      }
+
+      /* complete profile banner */
+      .complete-banner {
+        background: linear-gradient(
+          135deg,
+          rgba(232, 52, 42, 0.15),
+          rgba(232, 52, 42, 0.05)
+        );
+        border: 1.5px solid rgba(232, 52, 42, 0.25);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .complete-banner svg {
+        width: 22px;
+        height: 22px;
+        color: var(--primary);
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .complete-banner h4 {
+        font-family: "Sora", sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .complete-banner p {
+        font-size: 12px;
+        color: var(--text2);
+        line-height: 1.5;
+      }
+      .complete-btn {
+        margin-top: 10px;
+        height: 34px;
+        background: var(--primary);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        padding: 0 14px;
+        width: fit-content;
+      }
+
+      /* progress steps */
+      .steps-row {
+        display: flex;
+        align-items: center;
+        gap: 0;
+      }
+      .step-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        flex: 1;
+      }
+      .step-circle {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--surface3);
+        border: 2px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text3);
+      }
+      .step-circle.done {
+        background: var(--green);
+        border-color: var(--green);
+        color: #fff;
+      }
+      .step-circle.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+      }
+      .step-lbl {
+        font-size: 10px;
+        color: var(--text3);
+        text-align: center;
+      }
+      .step-line {
+        flex: 1;
+        height: 2px;
+        background: var(--border);
+        margin-bottom: 16px;
+      }
+      .step-line.done {
+        background: var(--green);
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 5 – EDIT PROFILE FORM              */
+      /* ─────────────────────────────────────────── */
+      .s-form {
+        background: var(--bg);
+        padding: 54px 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        overflow: hidden;
+      }
+      .form-scroll {
+        flex: 1;
+        overflow-y: auto;
+        margin-top: 16px;
+        padding-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        scrollbar-width: none;
+      }
+      .form-scroll::-webkit-scrollbar {
+        display: none;
+      }
+      .form-section-title {
+        font-family: "Sora", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--primary);
+        margin-bottom: 10px;
+        margin-top: 4px;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .form-field.full {
+        grid-column: 1 / -1;
+      }
+      .form-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text3);
+        letter-spacing: 0.4px;
+      }
+      .form-input {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        height: 42px;
+        padding: 0 12px;
+        color: var(--text);
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+      }
+      .form-input.has-val {
+        border-color: rgba(232, 52, 42, 0.25);
+        color: var(--text);
+      }
+      .form-input.placeholder-val {
+        color: var(--text3);
+      }
+      .form-textarea {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        height: 70px;
+        padding: 10px 12px;
+        color: var(--text);
+        font-size: 13px;
+        display: flex;
+        align-items: flex-start;
+      }
+      .photo-upload {
+        background: var(--surface);
+        border: 1.5px dashed rgba(232, 52, 42, 0.3);
+        border-radius: 14px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 16px;
+      }
+      .photo-circle {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: var(--surface3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid var(--border);
+      }
+      .photo-circle svg {
+        width: 22px;
+        height: 22px;
+        color: var(--text3);
+      }
+      .photo-info h5 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+      .photo-info p {
+        font-size: 11px;
+        color: var(--text3);
+      }
+
+      /* bottom tab bar */
+      .tab-bar {
+        display: flex;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 8px 0 20px;
+        flex-shrink: 0;
+        position: relative;
+      }
+      .tab-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding-top: 4px;
+      }
+      .tab-item svg {
+        width: 22px;
+        height: 22px;
+        color: var(--text3);
+      }
+      .tab-item.active svg {
+        color: var(--primary);
+      }
+      .tab-item-label {
+        font-size: 9px;
+        font-weight: 600;
+        color: var(--text3);
+        letter-spacing: 0.3px;
+      }
+      .tab-item.active .tab-item-label {
+        color: var(--primary);
+      }
+      .tab-scan-btn {
+        width: 52px;
+        height: 52px;
+        background: var(--primary);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: -20px;
+        box-shadow: 0 8px 20px rgba(232, 52, 42, 0.4);
+      }
+      .tab-scan-btn svg {
+        width: 24px;
+        height: 24px;
+        color: #fff;
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 6 – PROFILE DETAILS VIEW           */
+      /* ─────────────────────────────────────────── */
+      .s-profile {
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .profile-hero {
+        padding: 54px 20px 20px;
+        background: linear-gradient(
+          180deg,
+          rgba(232, 52, 42, 0.08) 0%,
+          transparent 100%
+        );
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .profile-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 22px;
+        background: var(--surface3);
+        border: 2px solid rgba(232, 52, 42, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Sora", sans-serif;
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--primary);
+        position: relative;
+      }
+      .profile-badge {
+        position: absolute;
+        bottom: -6px;
+        right: -6px;
+        width: 22px;
+        height: 22px;
+        background: var(--green);
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid var(--bg);
+      }
+      .profile-badge svg {
+        width: 11px;
+        height: 11px;
+        color: #fff;
+      }
+      .profile-name {
+        font-family: "Sora", sans-serif;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .profile-tags {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .tag {
+        height: 24px;
+        border-radius: 7px;
+        padding: 0 10px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+      }
+      .tag.school {
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--blue);
+      }
+      .tag.class {
+        background: rgba(245, 158, 11, 0.12);
+        color: var(--amber);
+      }
+      .profile-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 20px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        scrollbar-width: none;
+      }
+      .profile-scroll::-webkit-scrollbar {
+        display: none;
+      }
+      .info-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .info-card-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .info-card-head h4 {
+        font-family: "Sora", sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: var(--text2);
+      }
+      .info-card-head svg {
+        width: 15px;
+        height: 15px;
+        color: var(--primary);
+      }
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+      }
+      .info-cell {
+        padding: 10px 14px;
+      }
+      .info-cell:nth-child(odd) {
+        border-right: 1px solid var(--border);
+      }
+      .info-cell:nth-child(n + 3) {
+        border-top: 1px solid var(--border);
+      }
+      .info-key {
+        font-size: 10px;
+        color: var(--text3);
+        margin-bottom: 3px;
+        letter-spacing: 0.3px;
+      }
+      .info-val {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .contact-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+      }
+      .contact-row + .contact-row {
+        border-top: 1px solid var(--border);
+      }
+      .contact-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .contact-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .contact-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .contact-rel {
+        font-size: 11px;
+        color: var(--text3);
+      }
+      .contact-phone {
+        font-size: 12px;
+        color: var(--primary);
+        margin-left: auto;
+      }
+      .emergency-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: rgba(232, 52, 42, 0.1);
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--primary);
+        width: fit-content;
+        margin: 0 14px 12px;
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  SCREEN 7 – SETTINGS                        */
+      /* ─────────────────────────────────────────── */
+      .s-settings {
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .settings-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 20px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        scrollbar-width: none;
+        margin-top: 4px;
+      }
+      .settings-scroll::-webkit-scrollbar {
+        display: none;
+      }
+      .settings-group {
+        margin-bottom: 8px;
+      }
+      .settings-group-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--text3);
+        padding: 8px 2px 6px;
+      }
+      .settings-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+      .settings-item:first-of-type {
+        border-radius: 14px 14px 0 0;
+      }
+      .settings-item:last-of-type {
+        border-radius: 0 0 14px 14px;
+      }
+      .settings-item:only-of-type {
+        border-radius: 14px;
+      }
+      .settings-item + .settings-item {
+        border-top: none;
+      }
+      .settings-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .settings-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .settings-title {
+        font-size: 14px;
+        font-weight: 500;
+        flex: 1;
+      }
+      .settings-value {
+        font-size: 12px;
+        color: var(--text3);
+      }
+      .settings-arrow {
+        color: var(--text3);
+      }
+      .settings-arrow svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ─────────────────────────────────────────── */
+      /*  Legend / annotation area                   */
+      /* ─────────────────────────────────────────── */
+      .annotations {
+        max-width: 900px;
+        margin: 60px auto 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 28px 32px;
+      }
+      .annotations h3 {
+        font-family: "Sora", sans-serif;
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: var(--text);
+      }
+      .ann-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .ann-item h4 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--primary);
+        margin-bottom: 6px;
+      }
+      .ann-item p {
+        font-size: 12px;
+        color: var(--text2);
+        line-height: 1.6;
+      }
+      .ann-item ul {
+        margin: 4px 0 0 14px;
+      }
+      .ann-item li {
+        font-size: 12px;
+        color: var(--text2);
+        line-height: 1.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-header">
+      <h1>School QR – Parent App</h1>
+      <p>Complete UI/UX flow · Dark theme · React Native ready</p>
+    </div>
+
+    <!-- ══════════════════════════════════════════ -->
+    <!--  FLOW 1 – AUTH                            -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="section-label">Flow 01 — Authentication</div>
+      <div class="flow-row">
+        <!-- LANDING -->
+        <div class="phone-wrap">
+          <div class="phone-label">Landing</div>
+          <div class="phone">
+            <div class="screen s-landing">
+              <div class="blob"></div>
+              <div class="illustration">
+                <div class="badge-ring"><div class="badge-dot"></div></div>
+                <div class="shield-icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#E8342A"
+                    stroke-width="1.5"
+                  >
+                    <path
+                      d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"
+                    />
+                    <path
+                      d="M9 12l2 2 4-4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div class="landing-text">
+                <div class="app-name">School<span>QR</span><br />Guardian</div>
+                <div class="tagline">
+                  Your child's safety card,<br />always in your pocket.
+                </div>
+              </div>
+              <div class="actions">
+                <div class="btn-primary">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  Get Started
+                </div>
+                <div class="btn-secondary">I already have an account</div>
+              </div>
+              <div class="trust-row">
+                <div class="trust-dot"></div>
+                <div class="trust-text">
+                  Trusted by 2,400+ parents across India
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">→</div>
+
+        <!-- REGISTER / LOGIN -->
+        <div class="phone-wrap">
+          <div class="phone-label">Register / Login</div>
+          <div class="phone">
+            <div class="screen s-login">
+              <div class="screen-back">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M19 12H5M12 5l-7 7 7 7" />
+                </svg>
+                Back
+              </div>
+              <div class="screen-title">Link your<br />child's card</div>
+              <div class="screen-subtitle">
+                Enter the card number on the back of the QR card, or scan it.
+              </div>
+
+              <div class="method-tabs">
+                <div class="tab active">Manual Entry</div>
+                <div class="tab">Scan QR</div>
+              </div>
+
+              <div class="scan-option">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <path d="M14 14h2v2h-2zM18 14h3M20 16v3M14 18h2v3M18 20h3" />
+                </svg>
+                Tap to scan card QR code
+              </div>
+
+              <div class="divider">or enter manually</div>
+
+              <div class="field-group">
+                <div class="field">
+                  <div class="field-label">CARD NUMBER</div>
+                  <div class="field-input active">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="2" y="5" width="20" height="14" rx="2" />
+                      <path d="M2 10h20" />
+                    </svg>
+                    <div class="value">SQ-2024-004891</div>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="field-label">MOBILE NUMBER</div>
+                  <div class="field-input">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.69 16 19.79 19.79 0 011.61 7.36 2 2 0 013.6 5.18h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 12a16 16 0 006.06 6.06l.97-.97a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7a2 2 0 011.72 2.03z"
+                      />
+                    </svg>
+                    <div class="placeholder">+91 enter mobile number</div>
+                  </div>
+                </div>
+              </div>
+              <div class="btn-primary" style="margin-top: 4px">Send OTP →</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">→</div>
+
+        <!-- OTP -->
+        <div class="phone-wrap">
+          <div class="phone-label">OTP Verify</div>
+          <div class="phone">
+            <div class="screen s-otp">
+              <div class="screen-back">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M19 12H5M12 5l-7 7 7 7" />
+                </svg>
+                Back
+              </div>
+              <div class="otp-illustration">
+                <div class="otp-icon-wrap">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#E8342A"
+                    stroke-width="1.5"
+                    width="40"
+                    height="40"
+                  >
+                    <path
+                      d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.69 16 19.79 19.79 0 011.61 7.36 2 2 0 013.6 5.18h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 12a16 16 0 006.06 6.06l.97-.97a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7a2 2 0 011.72 2.03z"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <div class="screen-title">Enter OTP</div>
+                <div class="screen-subtitle" style="margin-top: 6px">
+                  We sent a 6-digit code to<br /><strong
+                    style="color: var(--text)"
+                    >+91 98765 43210</strong
+                  >
+                </div>
+              </div>
+              <div class="otp-boxes">
+                <div class="otp-box filled">4</div>
+                <div class="otp-box filled">7</div>
+                <div class="otp-box filled">2</div>
+                <div class="otp-box active"></div>
+                <div class="otp-box"></div>
+                <div class="otp-box"></div>
+              </div>
+              <div class="timer-badge">
+                <div class="dot"></div>
+                Resend code in 01:42
+              </div>
+              <div class="btn-primary">Verify & Continue →</div>
+              <div class="resend-row">
+                Didn't receive? <span>Resend OTP</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════ -->
+    <!--  FLOW 2 – DASHBOARD STATES               -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="section-label">Flow 02 — Dashboard States</div>
+      <div class="flow-row">
+        <!-- DASHBOARD – NEW USER (incomplete profile) -->
+        <div class="phone-wrap">
+          <div class="phone-label">Dashboard · New User</div>
+          <div class="phone">
+            <div class="screen s-dash">
+              <div class="top-nav">
+                <div class="nav-left">
+                  <h3>Welcome back 👋</h3>
+                  <h2>Priya Sharma</h2>
+                </div>
+                <div class="nav-right">
+                  <div class="notif-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                      />
+                    </svg>
+                    <div class="notif-dot"></div>
+                  </div>
+                  <div class="premium-btn">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                      />
+                    </svg>
+                    PREMIUM
+                  </div>
+                </div>
+              </div>
+
+              <div class="dash-scroll">
+                <!-- complete profile prompt -->
+                <div class="complete-banner">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                  <div>
+                    <h4>Complete your profile</h4>
+                    <p>
+                      Add emergency contacts, blood group, and medical info to
+                      activate your card fully.
+                    </p>
+                    <div class="complete-btn">Complete Profile →</div>
+                  </div>
+                </div>
+
+                <!-- progress steps -->
+                <div class="steps-row">
+                  <div class="step-item">
+                    <div class="step-circle done">✓</div>
+                    <div class="step-lbl">Card<br />Linked</div>
+                  </div>
+                  <div class="step-line done"></div>
+                  <div class="step-item">
+                    <div class="step-circle done">✓</div>
+                    <div class="step-lbl">Phone<br />Verified</div>
+                  </div>
+                  <div class="step-line"></div>
+                  <div class="step-item">
+                    <div class="step-circle active">3</div>
+                    <div class="step-lbl">Profile<br />Details</div>
+                  </div>
+                  <div class="step-line"></div>
+                  <div class="step-item">
+                    <div class="step-circle">4</div>
+                    <div class="step-lbl">Card<br />Active</div>
+                  </div>
+                </div>
+
+                <!-- student card (incomplete) -->
+                <div class="student-hero">
+                  <div class="hero-accent"></div>
+                  <div class="hero-inner">
+                    <div class="student-avatar">
+                      <div class="avatar-placeholder">A</div>
+                    </div>
+                    <div class="student-info">
+                      <div class="student-name">Arjun Sharma</div>
+                      <div class="student-meta">
+                        Class 6 · Section B · Delhi Public School
+                      </div>
+                      <div class="card-status">
+                        <div class="status-pill pending">
+                          <div class="status-dot"></div>
+                          Setup Pending
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-label">Card Active</div>
+                    <div class="toggle"><div class="toggle-thumb"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- tab bar -->
+              <div class="tab-bar">
+                <div class="tab-item active">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                  <span class="tab-item-label">HOME</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path
+                      d="M14 14h2v2h-2zM18 14h3M20 16v3M14 18h2v3M18 20h3"
+                    />
+                  </svg>
+                  <span class="tab-item-label">QR</span>
+                </div>
+                <div class="tab-item">
+                  <div class="tab-scan-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    >
+                      <path
+                        d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3zM4 16h4v5H5a1 1 0 01-1-1v-4zM16 17h4a1 1 0 011 1v2a1 1 0 01-1 1h-4v-4zM9 9h6v6H9V9z"
+                      />
+                    </svg>
+                  </div>
+                  <span class="tab-item-label" style="margin-top: 4px"
+                    >SCAN</span
+                  >
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                    />
+                  </svg>
+                  <span class="tab-item-label">UPDATE</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                  <span class="tab-item-label">SETTINGS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">→</div>
+
+        <!-- EDIT PROFILE FORM -->
+        <div class="phone-wrap">
+          <div class="phone-label">Edit Profile Form</div>
+          <div class="phone">
+            <div class="screen s-form" style="height: 100%">
+              <div class="screen-back">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  width="18"
+                  height="18"
+                >
+                  <path d="M19 12H5M12 5l-7 7 7 7" />
+                </svg>
+                Student Profile
+              </div>
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  margin-top: 4px;
+                "
+              >
+                <div class="screen-title" style="font-size: 20px">
+                  Edit Details
+                </div>
+                <div
+                  style="
+                    font-size: 11px;
+                    color: var(--primary);
+                    font-weight: 600;
+                  "
+                >
+                  AUTO-SAVE ON
+                </div>
+              </div>
+
+              <div class="form-scroll">
+                <!-- photo -->
+                <div class="photo-upload">
+                  <div class="photo-circle">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </div>
+                  <div class="photo-info">
+                    <h5>Student Photo</h5>
+                    <p>Tap to upload from gallery</p>
+                  </div>
+                </div>
+
+                <!-- basic info -->
+                <div class="form-section-title">Basic Info</div>
+                <div class="form-grid">
+                  <div class="form-field">
+                    <div class="form-label">FIRST NAME</div>
+                    <div class="form-input has-val">Arjun</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">LAST NAME</div>
+                    <div class="form-input has-val">Sharma</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">CLASS</div>
+                    <div class="form-input has-val">6</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">SECTION</div>
+                    <div class="form-input has-val">B</div>
+                  </div>
+                  <div class="form-field full">
+                    <div class="form-label">DATE OF BIRTH</div>
+                    <div class="form-input placeholder-val">DD / MM / YYYY</div>
+                  </div>
+                </div>
+
+                <!-- emergency info -->
+                <div class="form-section-title">Emergency Info</div>
+                <div class="form-grid">
+                  <div class="form-field full">
+                    <div class="form-label">BLOOD GROUP</div>
+                    <div class="form-input placeholder-val">
+                      Select blood group
+                    </div>
+                  </div>
+                  <div class="form-field full">
+                    <div class="form-label">ALLERGIES</div>
+                    <div class="form-textarea placeholder-val">
+                      e.g. Peanuts, Penicillin...
+                    </div>
+                  </div>
+                  <div class="form-field full">
+                    <div class="form-label">MEDICAL CONDITIONS</div>
+                    <div class="form-textarea placeholder-val">
+                      e.g. Asthma, Diabetes...
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">DOCTOR NAME</div>
+                    <div class="form-input placeholder-val">Full name</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">DOCTOR PHONE</div>
+                    <div class="form-input placeholder-val">+91</div>
+                  </div>
+                </div>
+
+                <!-- emergency contacts -->
+                <div class="form-section-title">Emergency Contacts</div>
+                <div class="form-grid">
+                  <div class="form-field full">
+                    <div class="form-label">CONTACT 1 NAME</div>
+                    <div class="form-input has-val">Priya Sharma</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">PHONE</div>
+                    <div class="form-input has-val">+91 987...</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">RELATION</div>
+                    <div class="form-input has-val">Mother</div>
+                  </div>
+                  <div class="form-field full" style="align-items: flex-start">
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        cursor: pointer;
+                      "
+                    >
+                      <div
+                        style="
+                          color: var(--primary);
+                          font-size: 20px;
+                          line-height: 1;
+                        "
+                      >
+                        +
+                      </div>
+                      <div
+                        style="
+                          font-size: 13px;
+                          color: var(--primary);
+                          font-weight: 600;
+                        "
+                      >
+                        Add another contact
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="btn-primary" style="margin-top: 8px">
+                  Save & Continue →
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">→</div>
+
+        <!-- PROFILE DETAILS VIEW -->
+        <div class="phone-wrap">
+          <div class="phone-label">Profile Details View</div>
+          <div class="phone">
+            <div class="screen s-profile">
+              <div class="profile-hero">
+                <div class="profile-avatar">
+                  A
+                  <div class="profile-badge">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                    >
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="profile-name">Arjun Sharma</div>
+                <div class="profile-tags">
+                  <div class="tag school">Delhi Public School</div>
+                  <div class="tag class">Class 6-B</div>
+                </div>
+              </div>
+
+              <div class="profile-scroll">
+                <!-- card status -->
+                <div class="student-hero">
+                  <div class="hero-accent"></div>
+                  <div class="hero-inner" style="padding: 14px 16px">
+                    <div style="flex: 1">
+                      <div
+                        style="
+                          font-size: 12px;
+                          color: var(--text3);
+                          margin-bottom: 2px;
+                        "
+                      >
+                        Card Status
+                      </div>
+                      <div
+                        style="
+                          font-family: &quot;Sora&quot;, sans-serif;
+                          font-size: 15px;
+                          font-weight: 700;
+                        "
+                      >
+                        SQ-2024-004891
+                      </div>
+                      <div class="card-status" style="margin-top: 5px">
+                        <div class="status-pill inactive">
+                          <div class="status-dot"></div>
+                          Awaiting Activation
+                        </div>
+                      </div>
+                    </div>
+                    <div style="text-align: right">
+                      <div
+                        style="
+                          font-size: 11px;
+                          color: var(--text3);
+                          margin-bottom: 2px;
+                        "
+                      >
+                        Activate Card
+                      </div>
+                      <div class="toggle on">
+                        <div class="toggle-thumb"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- emergency info -->
+                <div class="info-card">
+                  <div class="info-card-head">
+                    <h4>EMERGENCY INFO</h4>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                      />
+                      <path
+                        d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                      />
+                    </svg>
+                  </div>
+                  <div class="emergency-chip">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    Blood Group: B+
+                  </div>
+                  <div class="info-grid">
+                    <div class="info-cell">
+                      <div class="info-key">ALLERGIES</div>
+                      <div class="info-val">Peanuts</div>
+                    </div>
+                    <div class="info-cell">
+                      <div class="info-key">CONDITIONS</div>
+                      <div class="info-val">Mild Asthma</div>
+                    </div>
+                    <div class="info-cell">
+                      <div class="info-key">DOCTOR</div>
+                      <div class="info-val">Dr. Mehta</div>
+                    </div>
+                    <div class="info-cell">
+                      <div class="info-key">DOCTOR PHONE</div>
+                      <div class="info-val" style="color: var(--primary)">
+                        +91 9876...
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- contacts -->
+                <div class="info-card">
+                  <div class="info-card-head"><h4>EMERGENCY CONTACTS</h4></div>
+                  <div class="contact-row">
+                    <div
+                      class="contact-icon"
+                      style="
+                        background: rgba(232, 52, 42, 0.1);
+                        color: var(--primary);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div class="contact-name">Priya Sharma</div>
+                      <div class="contact-rel">Mother · Primary</div>
+                    </div>
+                    <div class="contact-phone">📞</div>
+                  </div>
+                  <div class="contact-row">
+                    <div
+                      class="contact-icon"
+                      style="
+                        background: rgba(59, 130, 246, 0.1);
+                        color: var(--blue);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div class="contact-name">Rajesh Sharma</div>
+                      <div class="contact-rel">Father</div>
+                    </div>
+                    <div class="contact-phone">📞</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tab-bar">
+                <div class="tab-item active">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                  <span class="tab-item-label">HOME</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path
+                      d="M14 14h2v2h-2zM18 14h3M20 16v3M14 18h2v3M18 20h3"
+                    />
+                  </svg>
+                  <span class="tab-item-label">QR</span>
+                </div>
+                <div class="tab-item">
+                  <div class="tab-scan-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    >
+                      <path
+                        d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3zM4 16h4v5H5a1 1 0 01-1-1v-4zM16 17h4a1 1 0 011 1v2a1 1 0 01-1 1h-4v-4zM9 9h6v6H9V9z"
+                      />
+                    </svg>
+                  </div>
+                  <span class="tab-item-label" style="margin-top: 4px"
+                    >SCAN</span
+                  >
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                    />
+                  </svg>
+                  <span class="tab-item-label">UPDATE</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                  <span class="tab-item-label">SETTINGS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════ -->
+    <!--  FLOW 3 – ACTIVE DASHBOARD + SETTINGS    -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="section-label">Flow 03 — Active Dashboard & Settings</div>
+      <div class="flow-row">
+        <!-- DASHBOARD – ACTIVE USER -->
+        <div class="phone-wrap">
+          <div class="phone-label">Dashboard · Active Card</div>
+          <div class="phone">
+            <div class="screen s-dash">
+              <div class="top-nav">
+                <div class="nav-left">
+                  <h3>Good morning 👋</h3>
+                  <h2>Priya Sharma</h2>
+                </div>
+                <div class="nav-right">
+                  <div class="notif-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                      />
+                    </svg>
+                    <div class="notif-dot"></div>
+                  </div>
+                  <div class="premium-btn">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                      />
+                    </svg>
+                    PRO
+                  </div>
+                </div>
+              </div>
+
+              <div class="dash-scroll">
+                <!-- student card ACTIVE -->
+                <div class="student-hero">
+                  <div class="hero-accent"></div>
+                  <div class="hero-inner">
+                    <div class="student-avatar" style="background: #2a1f1f">
+                      <!-- photo placeholder with face icon -->
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="rgba(232,52,42,0.5)"
+                        stroke-width="1"
+                        width="40"
+                        height="40"
+                      >
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </div>
+                    <div class="student-info">
+                      <div class="student-name">Arjun Sharma</div>
+                      <div class="student-meta">Class 6-B · DPS, Delhi</div>
+                      <div class="card-status">
+                        <div class="status-pill active">
+                          <div class="status-dot"></div>
+                          Card Active
+                        </div>
+                        <div
+                          style="
+                            font-size: 11px;
+                            color: var(--text3);
+                            margin-left: 4px;
+                          "
+                        >
+                          B+ blood
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="toggle-row">
+                    <div class="toggle-label">
+                      Card Active · Tap to deactivate
+                    </div>
+                    <div class="toggle on">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- quick actions grid -->
+                <div class="section-head">
+                  <h4>Quick Actions</h4>
+                  <a>See all</a>
+                </div>
+                <div class="quick-grid">
+                  <div class="quick-card">
+                    <div class="quick-icon red">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="7" height="7" rx="1" />
+                        <rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" />
+                        <path
+                          d="M14 14h2v2h-2zM18 14h3M20 16v3M14 18h2v3M18 20h3"
+                        />
+                      </svg>
+                    </div>
+                    <div class="quick-title">Show QR</div>
+                    <div class="quick-sub">Display card for scanning</div>
+                  </div>
+                  <div class="quick-card">
+                    <div class="quick-icon green">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    </div>
+                    <div class="quick-title">Scan History</div>
+                    <div class="quick-sub">3 scans today</div>
+                  </div>
+                  <div class="quick-card">
+                    <div class="quick-icon blue">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.69 16"
+                        />
+                        <path
+                          d="M1.61 7.36A2 2 0 013.6 5.18h3a2 2 0 012 1.72"
+                        />
+                      </svg>
+                    </div>
+                    <div class="quick-title">Emergency</div>
+                    <div class="quick-sub">2 contacts saved</div>
+                  </div>
+                  <div class="quick-card">
+                    <div class="quick-icon amber">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                        />
+                        <path
+                          d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="quick-title">Edit Profile</div>
+                    <div class="quick-sub">Update details</div>
+                  </div>
+                </div>
+
+                <!-- recent scans -->
+                <div class="section-head" style="margin-top: 4px">
+                  <h4>Recent Scans</h4>
+                  <a>View all</a>
+                </div>
+                <div class="activity-list">
+                  <div class="activity-item">
+                    <div
+                      class="act-icon"
+                      style="
+                        background: rgba(34, 197, 94, 0.1);
+                        color: var(--green);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="act-info">
+                      <div class="act-title">School Gate – Entry</div>
+                      <div class="act-sub">DPS Delhi · Security Guard</div>
+                    </div>
+                    <div class="act-time">8:14 AM</div>
+                  </div>
+                  <div class="activity-item">
+                    <div
+                      class="act-icon"
+                      style="
+                        background: rgba(59, 130, 246, 0.1);
+                        color: var(--blue);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="act-info">
+                      <div class="act-title">Library Access</div>
+                      <div class="act-sub">DPS Delhi · Library Staff</div>
+                    </div>
+                    <div class="act-time">Yesterday</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tab-bar">
+                <div class="tab-item active">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                  <span class="tab-item-label">HOME</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path
+                      d="M14 14h2v2h-2zM18 14h3M20 16v3M14 18h2v3M18 20h3"
+                    />
+                  </svg>
+                  <span class="tab-item-label">QR</span>
+                </div>
+                <div class="tab-item">
+                  <div class="tab-scan-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    >
+                      <path
+                        d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3zM4 16h4v5H5a1 1 0 01-1-1v-4zM16 17h4a1 1 0 011 1v2a1 1 0 01-1 1h-4v-4zM9 9h6v6H9V9z"
+                      />
+                    </svg>
+                  </div>
+                  <span class="tab-item-label" style="margin-top: 4px"
+                    >SCAN</span
+                  >
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                    />
+                  </svg>
+                  <span class="tab-item-label">UPDATE</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                  <span class="tab-item-label">SETTINGS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow" style="padding-top: 60px">→</div>
+
+        <!-- SETTINGS -->
+        <div class="phone-wrap">
+          <div class="phone-label">Settings Screen</div>
+          <div class="phone">
+            <div class="screen s-settings">
+              <div class="top-nav" style="padding-bottom: 10px">
+                <div class="nav-left">
+                  <h2>Settings</h2>
+                </div>
+                <div class="nav-right">
+                  <div class="premium-btn">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                      />
+                    </svg>
+                    PREMIUM
+                  </div>
+                </div>
+              </div>
+
+              <!-- profile mini card -->
+              <div
+                style="
+                  margin: 0 20px 4px;
+                  background: var(--surface);
+                  border: 1px solid var(--border);
+                  border-radius: 14px;
+                  padding: 14px;
+                  display: flex;
+                  gap: 12px;
+                  align-items: center;
+                "
+              >
+                <div
+                  style="
+                    width: 46px;
+                    height: 46px;
+                    border-radius: 13px;
+                    background: var(--surface3);
+                    border: 1.5px solid rgba(232, 52, 42, 0.3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: &quot;Sora&quot;, sans-serif;
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: var(--primary);
+                  "
+                >
+                  P
+                </div>
+                <div>
+                  <div
+                    style="
+                      font-family: &quot;Sora&quot;, sans-serif;
+                      font-size: 15px;
+                      font-weight: 700;
+                    "
+                  >
+                    Priya Sharma
+                  </div>
+                  <div style="font-size: 12px; color: var(--text3)">
+                    +91 98765 43210
+                  </div>
+                </div>
+                <div style="margin-left: auto; color: var(--text3)">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+              </div>
+
+              <div class="settings-scroll">
+                <!-- CARD -->
+                <div class="settings-group">
+                  <div class="settings-group-label">Card & Profile</div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(232, 52, 42, 0.1);
+                        color: var(--primary);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="2" y="5" width="20" height="14" rx="2" />
+                        <path d="M2 10h20" />
+                      </svg>
+                    </div>
+                    <div class="settings-title">My Card</div>
+                    <div class="settings-value">Active</div>
+                    <div class="settings-arrow">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        width="14"
+                        height="14"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(59, 130, 246, 0.1);
+                        color: var(--blue);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Student Profile</div>
+                    <div class="settings-value">Arjun S.</div>
+                    <div class="settings-arrow">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        width="14"
+                        height="14"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(245, 158, 11, 0.1);
+                        color: var(--amber);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Emergency Profile</div>
+                    <div class="settings-value">Public</div>
+                    <div class="settings-arrow">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        width="14"
+                        height="14"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- NOTIFICATIONS -->
+                <div class="settings-group">
+                  <div class="settings-group-label">Notifications</div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(34, 197, 94, 0.1);
+                        color: var(--green);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+                        />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Scan Alerts</div>
+                    <div class="toggle on" style="margin-left: auto">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                  </div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(59, 130, 246, 0.1);
+                        color: var(--blue);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Push Notifications</div>
+                    <div class="toggle on" style="margin-left: auto">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECURITY -->
+                <div class="settings-group">
+                  <div class="settings-group-label">Security & Privacy</div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(232, 52, 42, 0.1);
+                        color: var(--primary);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Profile Visibility</div>
+                    <div class="settings-value">Public</div>
+                    <div class="settings-arrow">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        width="14"
+                        height="14"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="settings-item">
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(245, 158, 11, 0.1);
+                        color: var(--amber);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect
+                          x="3"
+                          y="11"
+                          width="18"
+                          height="11"
+                          rx="2"
+                          ry="2"
+                        />
+                        <path d="M7 11V7a5 5 0 0110 0v4" />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Change Phone</div>
+                    <div class="settings-arrow" style="margin-left: auto">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        width="14"
+                        height="14"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ACCOUNT -->
+                <div class="settings-group">
+                  <div class="settings-group-label">Account</div>
+                  <div
+                    class="settings-item"
+                    style="border-radius: 14px 14px 0 0"
+                  >
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(59, 130, 246, 0.1);
+                        color: var(--blue);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 8v4M12 16h.01" />
+                      </svg>
+                    </div>
+                    <div class="settings-title">Help & Support</div>
+                    <div class="settings-arrow" style="margin-left: auto">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        width="14"
+                        height="14"
+                      >
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div
+                    class="settings-item"
+                    style="border-radius: 0 0 14px 14px"
+                  >
+                    <div
+                      class="settings-icon"
+                      style="
+                        background: rgba(232, 52, 42, 0.1);
+                        color: var(--primary);
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
+                        />
+                      </svg>
+                    </div>
+                    <div class="settings-title" style="color: var(--primary)">
+                      Log Out
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tab-bar">
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                  <span class="tab-item-label">HOME</span>
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path
+                      d="M14 14h2v2h-2zM18 14h3M20 16v3M14 18h2v3M18 20h3"
+                    />
+                  </svg>
+                  <span class="tab-item-label">QR</span>
+                </div>
+                <div class="tab-item">
+                  <div class="tab-scan-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    >
+                      <path
+                        d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3zM4 16h4v5H5a1 1 0 01-1-1v-4zM16 17h4a1 1 0 011 1v2a1 1 0 01-1 1h-4v-4zM9 9h6v6H9V9z"
+                      />
+                    </svg>
+                  </div>
+                  <span class="tab-item-label" style="margin-top: 4px"
+                    >SCAN</span
+                  >
+                </div>
+                <div class="tab-item">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                    />
+                  </svg>
+                  <span class="tab-item-label">UPDATE</span>
+                </div>
+                <div class="tab-item active">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                  <span class="tab-item-label">SETTINGS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════ -->
+    <!--  ANNOTATIONS                              -->
+    <!-- ══════════════════════════════════════════ -->
+    <div class="annotations">
+      <h3>Design Notes & Suggestions</h3>
+      <div class="ann-grid">
+        <div class="ann-item">
+          <h4>Dashboard — What to show</h4>
+          <p>Based on your schema, the home dashboard should show:</p>
+          <ul>
+            <li>Student name, class, school, photo</li>
+            <li>Card status (Active / Inactive / Pending)</li>
+            <li>Card toggle → triggers OTP before deactivating</li>
+            <li>Blood group chip (always visible, critical for emergencies)</li>
+            <li>Last 2–3 scan events (from ScanLog)</li>
+            <li>Quick action buttons: QR, Edit, Emergency Contacts, History</li>
+          </ul>
+        </div>
+        <div class="ann-item">
+          <h4>New User Registration Flow</h4>
+          <ul>
+            <li>Step 1 — Scan QR or enter card number</li>
+            <li>Step 2 — Enter mobile → OTP → account created</li>
+            <li>Step 3 — Banner prompts to complete profile (non-blocking)</li>
+            <li>Step 4 — Edit form (all fields from EmergencyProfile)</li>
+            <li>Step 5 — OTP re-verify before saving sensitive data</li>
+            <li>Step 6 — Profile view → Card toggle → OTP → Card activated</li>
+          </ul>
+        </div>
+        <div class="ann-item">
+          <h4>Bottom Tab Bar</h4>
+          <ul>
+            <li>
+              <strong>HOME</strong> – Dashboard with student card + activity
+            </li>
+            <li>
+              <strong>QR</strong> – Display the student's QR card full screen
+            </li>
+            <li>
+              <strong>SCAN</strong> – Floating center button, open camera
+              scanner
+            </li>
+            <li>
+              <strong>UPDATE</strong> – Edit profile / pending update requests
+              (StudentUpdateRequest)
+            </li>
+            <li>
+              <strong>SETTINGS</strong> – Notifications, visibility, account
+            </li>
+          </ul>
+        </div>
+        <div class="ann-item">
+          <h4>Photo Placeholder (your suggestion)</h4>
+          <p>
+            The student card has a photo placeholder that shows initials until a
+            photo is uploaded. Once uploaded, it displays the student photo.
+            This ties to <code>photo_url</code> in the Student model. The avatar
+            doubles as identity confirmation when a first responder scans the
+            card.
+          </p>
+        </div>
+        <div class="ann-item">
+          <h4>Premium Button</h4>
+          <p>
+            The top-right Premium button opens an upgrade modal. For premium
+            users it shows "PRO" with a gold star badge. This maps to the
+            Subscription model — check subscription status on app load and badge
+            accordingly.
+          </p>
+        </div>
+        <div class="ann-item">
+          <h4>Card Activate / Deactivate</h4>
+          <p>
+            Toggling the card active/inactive is a sensitive action. Always
+            trigger an OTP challenge before confirming the change. Map the token
+            status: <code>ACTIVE ↔ INACTIVE</code>. Show a bottom sheet
+            confirmation with a timer before the OTP screen.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+>>>>>>> be4eb76b0bd7bccb9a1307efc3a6c736c389f63d

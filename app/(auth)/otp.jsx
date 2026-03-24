@@ -284,7 +284,7 @@ export default function OtpScreen() {
           parent_id: response.parent_id,
           accessToken: response.accessToken,
           refreshToken: response.refreshToken,
-          expiresAt: response.expiresAt,  // [FIX-5]
+          expiresAt: response.expiresAt,
         });
 
         setVerified(true);
@@ -333,7 +333,7 @@ export default function OtpScreen() {
           card_number: cardNumber,
           phone: rawPhone,
         });
-        setActiveNonce(response.data.nonce);
+        setActiveNonce(response.nonce);
       } else {
         // [FIX-4] sendOtp (not resendOtp — that method doesn't exist)
         await authApi.sendOtp(rawPhone);

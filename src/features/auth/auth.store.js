@@ -1,43 +1,36 @@
 /**
  * features/auth/auth.store.js
  *
- * Responsibilities:
- *   - isAuthenticated / isNewUser / parentUser in memory
- *   - Hydrate from SecureStore on cold start (ONE read via storage.readAuth)
- *   - loginSuccess: persist tokens + user to SecureStore, update state
- *   - setIsNewUser: called by updates.jsx after onboarding completes
- *   - logout: clear SecureStore + state
+ * PRODUCTION — tokens in SecureStore, user identity in separate SecureStore key.
  *
- * WHAT THIS STORE DOES NOT DO (compared to original):
- *   - No jwt-decode — expiresAt comes directly from backend (expiresAt field)
- *   - No separate cache key — user is stored inside the single auth_v1 blob
- *   - No internal mutex — storage.writeAuth() already serialises writes
- *   - No setLoading — screens manage their own loading state
+ * STORAGE SPLIT (fixes 2048-byte SecureStore limit):
+ *   auth_v1  → { accessToken, refreshToken, expiresAt, isNewUser }   ~200 bytes
+ *   user_v1  → { id, phone, name, is_phone_verified }                ~100 bytes
+ *
+ * Both stay well under the 2048-byte limit.
+ *
+ * SESSION EXPIRY:
+ *   Backend JWT expiresIn: '30d'. expiresAt = jwt.decode(token).exp (Unix seconds).
+ *   hydrate() checks: expiresAt - now > 60s → valid session.
+ *   If expired → isAuthenticated = false → redirect to login screen.
  */
 
 import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
-// ── DEV BYPASS ────────────────────────────────────────────────────────────────
-// TODO: flip to false before commit / production build
-const __DEV_BYPASS_AUTH__ = true;
-const __DEV_USER__ = Object.freeze({
-  id: "dev-parent-001",
+const __DEV_BYPASS_AUTH__ = false;
+const __DEV_USER__ = {
+  id: "dev-parent-id",
   phone: "+919999999999",
-});
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Validation ────────────────────────────────────────────────────────────────
-// Relaxed: phone is optional — backend only returns { id } in parent object.
-// Phone is populated later from GET /parent/me via profile.store.
+  name: "Dev User",
+  is_phone_verified: true,
+};
 
 const isValidUser = (u) =>
   u !== null &&
   typeof u === "object" &&
   typeof u.id === "string" &&
   u.id.trim() !== "";
-
-// ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useAuthStore = create((set, get) => {
   let _hydrationPromise = null;
@@ -51,32 +44,32 @@ export const useAuthStore = create((set, get) => {
 
     // ── Hydrate ───────────────────────────────────────────────────────────────
     /**
-     * Called once from AuthProvider on cold start.
-     * ONE SecureStore read → sets all auth state synchronously.
-     *
-     * isNewUser is persisted — if parent killed app during onboarding,
-     * they're correctly routed back to /updates on next open.
+     * Called once from root _layout.jsx on cold start.
+     * Reads auth_v1 (tokens) and user_v1 (identity) in parallel.
+     * If session expired → forces re-login.
      */
     hydrate: async () => {
-      if (__DEV_BYPASS_AUTH__) return; // skip SecureStore read in dev
-
+      if (__DEV_BYPASS_AUTH__) return;
       if (_hydrationPromise) return _hydrationPromise;
 
       _hydrationPromise = (async () => {
         try {
-          const authState = await storage.readAuth(); // single read
-          const hasSession = authState
-            ? authState.expiresAt - Math.floor(Date.now() / 1000) > 60 &&
-              !!authState.accessToken &&
-              !!authState.refreshToken
-            : false;
+          const [authState, user] = await Promise.all([
+            storage.readAuth(),
+            storage.readUser(),
+          ]);
+
+          const nowSecs = Math.floor(Date.now() / 1000);
+          const hasSession =
+            !!authState?.accessToken &&
+            !!authState?.refreshToken &&
+            typeof authState?.expiresAt === "number" &&
+            authState.expiresAt - nowSecs > 60;
 
           set({
             isAuthenticated: hasSession,
             parentUser:
-              hasSession && isValidUser(authState?.user)
-                ? Object.freeze(authState.user)
-                : null,
+              hasSession && isValidUser(user) ? Object.freeze(user) : null,
             isNewUser: hasSession ? Boolean(authState?.isNewUser) : false,
             isHydrated: true,
           });
@@ -97,10 +90,10 @@ export const useAuthStore = create((set, get) => {
 
     // ── Login Success ─────────────────────────────────────────────────────────
     /**
-     * Called by useLoginSuccess (login) and useRegistrationSuccess (register)
-     * in AuthProvider — NOT called directly from otp.jsx.
+     * Called by useLoginSuccess (login) and useRegistrationSuccess (register).
      *
-     * Persists tokens + user + isNewUser to SecureStore in a single writeAuth call.
+     * Writes tokens to auth_v1 and user to user_v1 in parallel.
+     * Both keys stay safely under the 2048-byte SecureStore limit.
      */
     loginSuccess: async (
       user,
@@ -111,14 +104,10 @@ export const useAuthStore = create((set, get) => {
     ) => {
       const validUser = isValidUser(user) ? user : null;
 
-      // Single write — atomically stores everything together
-      await storage.writeAuth({
-        accessToken,
-        refreshToken,
-        expiresAt,
-        user: validUser,
-        isNewUser,
-      });
+      await Promise.all([
+        storage.writeAuth({ accessToken, refreshToken, expiresAt, isNewUser }),
+        validUser ? storage.writeUser(validUser) : Promise.resolve(),
+      ]);
 
       set({
         isAuthenticated: true,
@@ -130,9 +119,8 @@ export const useAuthStore = create((set, get) => {
 
     // ── Set Is New User ───────────────────────────────────────────────────────
     /**
-     * Called by updates.jsx after onboarding PATCH + fetchAndPersist completes.
-     * Flipping isNewUser to false unlocks the rest of the app.
-     * Persisted immediately so app-kill after onboarding won't re-trigger it.
+     * Called by updates.jsx after onboarding wizard completes.
+     * Flips isNewUser → false to unlock the rest of the app.
      */
     setIsNewUser: async (val) => {
       const value = Boolean(val);
@@ -142,30 +130,32 @@ export const useAuthStore = create((set, get) => {
 
     // ── Set Parent User ───────────────────────────────────────────────────────
     /**
-     * Called by profile.store after GET /parent/me returns phone + full data.
+     * Called by profile.store.fetchAndPersist() after GET /parents/me.
+     * Enriches parentUser with phone + name (login only gives us { id }).
      */
     setParentUser: async (user) => {
       if (!isValidUser(user)) {
         set({ parentUser: null });
-        await storage.writeAuth({ user: null });
+        await storage.clearUser();
         return;
       }
-      set({ parentUser: Object.freeze(user) });
-      await storage.writeAuth({ user });
+      const frozen = Object.freeze(user);
+      set({ parentUser: frozen });
+      await storage.writeUser(user);
     },
 
     // ── Logout ────────────────────────────────────────────────────────────────
     /**
-     * Clears SecureStore + resets state.
+     * Clears auth_v1 + user_v1 (SecureStore) + profile_v1 (MMKV).
      * isHydrated stays true so AuthProvider redirect fires immediately.
      */
     logout: async () => {
-      await Promise.allSettled([storage.clearAuth(), storage.clearProfile()]);
+      await storage.clearAll(); // wipes all three keys
       set({
         isAuthenticated: false,
         parentUser: null,
         isNewUser: false,
-        isHydrated: true, // must stay true — AuthProvider needs it to redirect
+        isHydrated: true,
       });
       _hydrationPromise = null;
     },
@@ -183,12 +173,9 @@ export const useAuthStore = create((set, get) => {
 });
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
-
 export const useIsAuthenticated = () => useAuthStore((s) => s.isAuthenticated);
 export const useIsHydrated = () => useAuthStore((s) => s.isHydrated);
 export const useIsNewUser = () => useAuthStore((s) => s.isNewUser);
 export const useParentUserId = () =>
   useAuthStore((s) => s.parentUser?.id ?? null);
-
-/** True when hydration is complete and ready to render screens. */
 export const useAuthReady = () => useAuthStore((s) => s.isHydrated);
