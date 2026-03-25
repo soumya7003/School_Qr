@@ -1,40 +1,42 @@
-import { useLogout } from "@/providers/AuthProvider";
-import { useEffect, useRef } from "react";
-import { AppState, PanResponder } from "react-native";
+import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
+import { useBiometricStore } from '@/store/biometricStore';
 
-const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+// Simple store for lock state (could also be Zustand)
+let isLocked = false;
+const listeners = new Set();
 
-export const useInactivityLock = () => {
-  const timer = useRef(null);
-  const logout = useLogout();
+function setLocked(locked) {
+    isLocked = locked;
+    listeners.forEach(fn => fn(isLocked));
+}
 
-  const resetTimer = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      logout();
-    }, INACTIVITY_TIMEOUT);
-  };
+export function useLockState() {
+    const [locked, setLockedState] = useState(isLocked);
+    useEffect(() => {
+        const listener = (newLocked) => setLockedState(newLocked);
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+    }, []);
+    return locked;
+}
 
-  // Reset timer on any touch
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponderCapture: () => {
-      resetTimer();
-      return false; // don't consume touch
-    },
-  });
+export function unlock() {
+    setLocked(false);
+}
 
-  useEffect(() => {
-    resetTimer();
-    // Also reset on app foreground
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") resetTimer();
-    });
+/**
+ * Hook to set lock when app goes to background (if biometric is enabled).
+ */
+export function useInactivityLock() {
+    const isBiometricEnabled = useBiometricStore((state) => state.isBiometricEnabled);
 
-    return () => {
-      clearTimeout(timer.current);
-      sub.remove();
-    };
-  }, []);
-
-  return panResponder.panHandlers;
-};
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (nextAppState) => {
+            if (nextAppState === 'background' && isBiometricEnabled) {
+                setLocked(true);
+            }
+        });
+        return () => subscription.remove();
+    }, [isBiometricEnabled]);
+}

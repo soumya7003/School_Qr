@@ -7,15 +7,12 @@
     "scheme": "safetyqrapp",
     "icon": "./assets/images/app_icon.png",
     "userInterfaceStyle": "automatic",
-
     "updates": {
       "enabled": false
     },
-
     "runtimeVersion": {
       "policy": "appVersion"
     },
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.animesh144.safetyqrapp",
@@ -24,7 +21,6 @@
         "NSFaceIDUsageDescription": "Face ID is used to secure your child's emergency data."
       }
     },
-
     "android": {
       "package": "com.animesh144.safetyqrapp",
       "adaptiveIcon": {
@@ -40,7 +36,6 @@
         "android.permission.VIBRATE"
       ]
     },
-
     "plugins": [
       "expo-router",
       [
@@ -64,15 +59,14 @@
         {
           "faceIDPermission": "Allow RESQID to use Face ID to secure your account."
         }
-      ]
+      ],
+      "expo-localization"
     ],
-
     "extra": {
       "eas": {
         "projectId": "8b193d0d-4f69-41d2-8e0e-59aeecc83565"
       }
     },
-
     "owner": "optimas144"
   }
 }

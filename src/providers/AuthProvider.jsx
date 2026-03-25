@@ -2,7 +2,7 @@ import { authApi } from '@/features/auth/auth.api';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { storage } from '@/lib/storage/storage';
-import { router, useSegments } from 'expo-router';
+import { router, useSegments, useRootNavigationState } from 'expo-router';
 import { createContext, useCallback, useEffect } from 'react';
 
 export const AuthContext = createContext(null);
@@ -16,7 +16,9 @@ export function AuthProvider({ children }) {
 
     const segments = useSegments();
 
-    // ✅ CORE LOGIC: profile completion check
+    // ✅ Wait for expo-router's root navigator to be fully mounted
+    const navigationState = useRootNavigationState();
+
     const isProfileComplete =
         students.length > 0 &&
         students.some(
@@ -26,6 +28,9 @@ export function AuthProvider({ children }) {
         );
 
     useEffect(() => {
+        // ✅ CRITICAL: bail out until the root navigator is ready
+        if (!navigationState?.key) return;
+
         if (!isHydrated || !profileHydrated) return;
 
         const inAuthGroup = segments[0] === '(auth)';
@@ -42,7 +47,6 @@ export function AuthProvider({ children }) {
 
         // ─── AUTHENTICATED BUT PROFILE NOT COMPLETE ───────
         if (!isProfileComplete) {
-            // 🔴 FORCE user to updates page only
             if (segments[1] !== 'updates') {
                 router.replace('/(app)/updates');
             }
@@ -55,6 +59,7 @@ export function AuthProvider({ children }) {
         }
 
     }, [
+        navigationState?.key,   // ✅ added as dependency
         isAuthenticated,
         isHydrated,
         profileHydrated,
@@ -110,7 +115,7 @@ export function useRegistrationSuccess() {
                 accessToken,
                 refreshToken,
                 expiresAt,
-                true // still useful for backend meaning, but NOT for routing
+                true
             );
 
             try {
