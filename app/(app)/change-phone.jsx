@@ -1,6 +1,7 @@
 /**
  * app/(app)/change-phone.jsx
  * All colors from useTheme().colors
+ * All strings from i18n changePhone namespace
  */
 
 import Screen from '@/components/common/Screen';
@@ -9,6 +10,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator, Alert, KeyboardAvoidingView,
     Platform, StyleSheet, Text, TextInput,
@@ -25,17 +27,26 @@ const ArrowLeft = ({ c }) => (
 
 // ── Step bar ──────────────────────────────────────────────────────────────────
 function StepBar({ step, C }) {
+    const { t } = useTranslation();
     return (
         <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
             {[1, 2].map((n) => (
                 <View key={n} style={sb.item}>
-                    <View style={[sb.dot, { borderColor: C.bd2, backgroundColor: C.s3 }, step === n && { borderColor: C.primary, backgroundColor: C.primaryBg }, step > n && { borderColor: C.okBd, backgroundColor: C.okBg }]}>
+                    <View style={[
+                        sb.dot,
+                        { borderColor: C.bd2, backgroundColor: C.s3 },
+                        step === n && { borderColor: C.primary, backgroundColor: C.primaryBg },
+                        step > n && { borderColor: C.okBd, backgroundColor: C.okBg },
+                    ]}>
                         {step > n
-                            ? <Svg width={10} height={10} viewBox="0 0 24 24" fill="none"><Path d="M20 6L9 17l-5-5" stroke={C.ok} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /></Svg>
-                            : <Text style={[sb.dotText, { color: step === n ? C.primary : C.tx3 }]}>{n}</Text>}
+                            ? <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
+                                <Path d="M20 6L9 17l-5-5" stroke={C.ok} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                              </Svg>
+                            : <Text style={[sb.dotText, { color: step === n ? C.primary : C.tx3 }]}>{n}</Text>
+                        }
                     </View>
                     <Text style={[sb.label, { color: step === n ? C.tx : C.tx3 }]}>
-                        {n === 1 ? 'New Number' : 'Verify OTP'}
+                        {n === 1 ? t('changePhone.stepNewNumber') : t('changePhone.stepVerifyOtp')}
                     </Text>
                 </View>
             ))}
@@ -150,6 +161,7 @@ const ot = StyleSheet.create({
 export default function ChangePhoneScreen() {
     const router = useRouter();
     const { colors: C } = useTheme();
+    const { t } = useTranslation();
     const { parentUser } = useAuthStore();
 
     const [step, setStep] = useState(1);
@@ -167,7 +179,10 @@ export default function ChangePhoneScreen() {
 
     const startCooldown = (secs = 30) => {
         setResend(secs);
-        const iv = setInterval(() => setResend((p) => { if (p <= 1) { clearInterval(iv); return 0; } return p - 1; }), 1000);
+        const iv = setInterval(() => setResend((p) => {
+            if (p <= 1) { clearInterval(iv); return 0; }
+            return p - 1;
+        }), 1000);
     };
 
     const handleSendOtp = async () => {
@@ -176,25 +191,41 @@ export default function ChangePhoneScreen() {
             await new Promise((r) => setTimeout(r, 1000));
             setStep(2);
             startCooldown(30);
-        } catch { Alert.alert('Error', 'Could not send OTP. Please try again.'); }
-        finally { setLoading(false); }
+        } catch {
+            Alert.alert(t('common.error'), t('changePhone.errorSend'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleVerify = async () => {
         setLoading(true);
         try {
             await new Promise((r) => setTimeout(r, 1000));
-            Alert.alert('Phone Updated', 'Your phone number has been changed successfully.', [{ text: 'Done', onPress: () => router.back() }]);
-        } catch { Alert.alert('Invalid OTP', 'The code you entered is incorrect.'); }
-        finally { setLoading(false); }
+            Alert.alert(
+                t('changePhone.successTitle'),
+                t('changePhone.successMessage'),
+                [{ text: t('changePhone.done'), onPress: () => router.back() }],
+            );
+        } catch {
+            Alert.alert(t('changePhone.invalidOtp'), t('changePhone.errorVerify'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleResend = async () => {
         if (resendCooldown > 0) return;
         setLoading(true);
-        try { await new Promise((r) => setTimeout(r, 800)); startCooldown(30); setOtpValue(''); }
-        catch { Alert.alert('Error', 'Could not resend OTP.'); }
-        finally { setLoading(false); }
+        try {
+            await new Promise((r) => setTimeout(r, 800));
+            startCooldown(30);
+            setOtpValue('');
+        } catch {
+            Alert.alert(t('common.error'), t('changePhone.errorResend'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -206,7 +237,7 @@ export default function ChangePhoneScreen() {
                     <TouchableOpacity style={[nav.back, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={() => router.back()} activeOpacity={0.7}>
                         <ArrowLeft c={C.tx} />
                     </TouchableOpacity>
-                    <Text style={[nav.title, { color: C.tx }]}>Change Phone Number</Text>
+                    <Text style={[nav.title, { color: C.tx }]}>{t('changePhone.title')}</Text>
                     <View style={{ width: 40 }} />
                 </Animated.View>
 
@@ -222,18 +253,33 @@ export default function ChangePhoneScreen() {
                                 <View style={[cp.iconCircle, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
                                     <Text style={{ fontSize: 22 }}>📱</Text>
                                 </View>
-                                <Text style={[cp.formTitle, { color: C.tx }]}>Enter New Number</Text>
+                                <Text style={[cp.formTitle, { color: C.tx }]}>{t('changePhone.enterNewNumber')}</Text>
                                 <Text style={[cp.formSub, { color: C.tx3 }]}>
-                                    Currently using{' '}
+                                    {t('changePhone.currentlyUsing')}{' '}
                                     <Text style={{ color: C.tx2, fontWeight: '700' }}>{maskedOld}</Text>
                                 </Text>
                             </View>
-                            <Field label="New Phone Number" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" maxLength={15} autoFocus C={C} />
+                            <Field
+                                label={t('changePhone.newPhoneNumber')}
+                                value={phone}
+                                onChangeText={setPhone}
+                                placeholder={t('changePhone.placeholder')}
+                                keyboardType="phone-pad"
+                                maxLength={15}
+                                autoFocus
+                                C={C}
+                            />
                             <View style={[cp.infoNote, { backgroundColor: C.s3, borderColor: C.bd }]}>
                                 <Text style={{ fontSize: 14 }}>🛡️</Text>
-                                <Text style={[cp.infoText, { color: C.tx2 }]}>A one-time password will be sent to verify your new number before the change takes effect.</Text>
+                                <Text style={[cp.infoText, { color: C.tx2 }]}>{t('changePhone.otpNote')}</Text>
                             </View>
-                            <PrimaryBtn label="Send OTP" onPress={handleSendOtp} loading={loading} disabled={!isPhoneValid} C={C} />
+                            <PrimaryBtn
+                                label={t('changePhone.sendOtp')}
+                                onPress={handleSendOtp}
+                                loading={loading}
+                                disabled={!isPhoneValid}
+                                C={C}
+                            />
                         </View>
                     ) : (
                         <View style={cp.form}>
@@ -241,24 +287,36 @@ export default function ChangePhoneScreen() {
                                 <View style={[cp.iconCircle, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
                                     <Text style={{ fontSize: 22 }}>🔐</Text>
                                 </View>
-                                <Text style={[cp.formTitle, { color: C.tx }]}>Enter OTP</Text>
+                                <Text style={[cp.formTitle, { color: C.tx }]}>{t('changePhone.enterOtp')}</Text>
                                 <Text style={[cp.formSub, { color: C.tx3 }]}>
-                                    Sent to{' '}
+                                    {t('changePhone.sentTo')}{' '}
                                     <Text style={{ color: C.tx2, fontWeight: '700' }}>{phone}</Text>
                                 </Text>
                             </View>
                             <OtpInput value={otpValue} onChange={setOtpValue} C={C} />
                             <View style={cp.resendRow}>
-                                <Text style={[cp.resendLabel, { color: C.tx3 }]}>Didn't receive the code?</Text>
+                                <Text style={[cp.resendLabel, { color: C.tx3 }]}>{t('changePhone.didntReceive')}</Text>
                                 <TouchableOpacity onPress={handleResend} disabled={resendCooldown > 0 || loading} activeOpacity={0.7}>
                                     <Text style={[cp.resendBtn, { color: resendCooldown > 0 ? C.tx3 : C.primary }]}>
-                                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+                                        {resendCooldown > 0
+                                            ? t('changePhone.resendIn', { seconds: resendCooldown })
+                                            : t('changePhone.resendOtp')}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
-                            <PrimaryBtn label="Verify & Update" onPress={handleVerify} loading={loading} disabled={!isOtpComplete} C={C} />
-                            <TouchableOpacity style={cp.backToPhone} onPress={() => { setStep(1); setOtpValue(''); }} activeOpacity={0.7}>
-                                <Text style={[cp.backToPhoneText, { color: C.tx3 }]}>← Change phone number</Text>
+                            <PrimaryBtn
+                                label={t('changePhone.verifyAndUpdate')}
+                                onPress={handleVerify}
+                                loading={loading}
+                                disabled={!isOtpComplete}
+                                C={C}
+                            />
+                            <TouchableOpacity
+                                style={cp.backToPhone}
+                                onPress={() => { setStep(1); setOtpValue(''); }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[cp.backToPhoneText, { color: C.tx3 }]}>{t('changePhone.changePhoneNumber')}</Text>
                             </TouchableOpacity>
                         </View>
                     )}
