@@ -1,180 +1,379 @@
 /**
- * QR Screen — Student card viewer + full card management for parents.
- *
- * Schema fields used:
- *   Token:  status (TokenStatus), expires_at, activated_at, revoked_at
- *   Card:   card_number, print_status, printed_at
- *   TokenStatus enum: UNASSIGNED | ISSUED | ACTIVE | INACTIVE | REVOKED | EXPIRED
- *   NotificationType: CARD_REVOKED, CARD_REPLACED (fired by backend on revoke/replace)
- *
- * Card actions available to parent:
- *   ACTIVE   → Block Card (→ INACTIVE, reversible)  |  Report Lost (→ REVOKED, permanent)
- *   INACTIVE → Unblock Card (→ ACTIVE)              |  Report Lost (→ REVOKED, permanent)
- *   ISSUED   → Activate Card (→ ACTIVE)
- *   REVOKED  → Request Replacement (school contact)
- *   EXPIRED  → Request Replacement (school contact)
+ * app/(app)/qr.jsx
+ * Emergency QR Card Screen
  */
 
 import Screen from '@/components/common/Screen';
-import QrCard from '@/components/qr/QrCard';
-import { ShareIcon } from '@/components/ui/ShareIcon';
 import { useProfileStore } from '@/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/theme';
+import { useFetchOnMount } from '@/hooks/useFetchOnMount';
+import { useTheme } from '@/providers/ThemeProvider';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+    Alert,
+    Dimensions,
     Modal,
+    Platform,
     Pressable,
+    ScrollView,
     Share,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
+import {
+    Gesture,
+    GestureDetector,
+    GestureHandlerRootView,
+} from 'react-native-gesture-handler';
+import QRCode from 'react-native-qrcode-svg';
 import Animated, {
+    Easing,
     FadeIn,
     FadeInDown,
     FadeInUp,
+    interpolate,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withSpring,
+    withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { useShallow } from 'zustand/react/shallow';
+import { useTranslation } from 'react-i18next';
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+const { width: SW } = Dimensions.get('window');
+const CARD_W = SW - 48;
+const CARD_H = Math.round(CARD_W * 0.631);
 
-const IconShield = ({ color = colors.success, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const IconLock = ({ color = colors.warning, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Rect x={3} y={11} width={18} height={11} rx={2} stroke={color} strokeWidth={1.8} />
-        <Path d="M7 11V7a5 5 0 0110 0v4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-const IconUnlock = ({ color = colors.success, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Rect x={3} y={11} width={18} height={11} rx={2} stroke={color} strokeWidth={1.8} />
-        <Path d="M7 11V7a5 5 0 019.9-1" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-const IconAlertTriangle = ({ color = colors.primary, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M12 9v4M12 17h.01" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-const IconRefresh = ({ color = colors.info, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M23 4v6h-6M1 20v-6h6"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const IconCheck = ({ color = colors.white, size = 16 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M20 6L9 17l-5-5" stroke={color} strokeWidth={2.5}
-            strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const IconZap = ({ color = colors.success, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const IconPhone = ({ color = colors.info, size = 18 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.66A2 2 0 012 .99h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"
-            stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-const IconInfo = ({ color = colors.textTertiary, size = 14 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Circle cx={12} cy={12} r={10} stroke={color} strokeWidth={1.8} />
-        <Path d="M12 8v4M12 16h.01" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-);
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtDate(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-    });
-}
-
-/**
- * Token.status → visual meta for the status pill
- */
-function tokenMeta(status) {
+// ─── Card palette (absolute colors — card always looks "physical") ────────────
+function cardPalette(status) {
     switch (status) {
-        case 'ACTIVE': return { label: 'Active', color: colors.success, bg: colors.successBg, desc: 'Card is working normally' };
-        case 'INACTIVE': return { label: 'Blocked', color: colors.warning, bg: colors.warningBg, desc: 'Scanning is temporarily paused' };
-        case 'ISSUED': return { label: 'Not Activated', color: colors.info, bg: colors.infoBg, desc: 'Tap Activate to enable this card' };
-        case 'REVOKED': return { label: 'Reported Lost', color: colors.primary, bg: colors.primaryBg, desc: 'Card is permanently disabled' };
-        case 'EXPIRED': return { label: 'Expired', color: colors.primary, bg: colors.primaryBg, desc: 'Request a replacement from school' };
-        case 'UNASSIGNED': return { label: 'Not Set Up', color: colors.textTertiary, bg: colors.surface3, desc: 'Contact school to set up this card' };
-        default: return { label: status ?? '—', color: colors.textTertiary, bg: colors.surface3, desc: '' };
+        case 'ACTIVE':   return { gradFront: ['#0B1A10','#0D1F13','#071209'], gradBack: ['#091509','#0B1A0C','#060E06'], glow: '#12A150', shimmer: 'rgba(18,161,80,0.22)',   accent: '#12A150', chip: '#1A3A22' };
+        case 'INACTIVE': return { gradFront: ['#1A1508','#1D1709','#110F05'], gradBack: ['#161206','#1A1508','#0E0B04'], glow: '#F97316', shimmer: 'rgba(249,115,22,0.22)', accent: '#F97316', chip: '#2E2310' };
+        case 'REVOKED':
+        case 'EXPIRED':  return { gradFront: ['#1A0808','#1C0A0A','#130606'], gradBack: ['#150505','#180707','#0D0404'], glow: '#EF4444', shimmer: 'rgba(239,68,68,0.20)',   accent: '#EF4444', chip: '#2E1010' };
+        case 'ISSUED':   return { gradFront: ['#0A0F1C','#0D1322','#060A12'], gradBack: ['#080D18','#0B1020','#050810'], glow: '#60A5FA', shimmer: 'rgba(96,165,250,0.20)',  accent: '#60A5FA', chip: '#10182E' };
+        default:         return { gradFront: ['#10101A','#131318','#0A0A10'], gradBack: ['#0C0C14','#0F0F18','#08080E'], glow: '#444',    shimmer: 'rgba(240,240,244,0.06)', accent: 'rgba(240,240,244,0.30)', chip: '#1A1A22' };
     }
 }
 
-/**
- * Card.print_status → label
- */
-function printStatusLabel(s) {
-    if (s === 'PRINTED') return '✓ Printed';
-    if (s === 'PENDING') return 'Awaiting print';
-    if (s === 'SHIPPED') return 'On the way';
-    return s ?? '—';
+// Card-local badge — pass t() so labels are translated
+function cardBadge(status, t) {
+    switch (status) {
+        case 'ACTIVE':   return { label: t('qr.badgeActive'),       color: '#12A150', bg: 'rgba(18,161,80,0.18)',   bd: 'rgba(18,161,80,0.38)',   pulse: true  };
+        case 'INACTIVE': return { label: t('qr.badgeInactive'),     color: '#F97316', bg: 'rgba(249,115,22,0.18)', bd: 'rgba(249,115,22,0.38)', pulse: false };
+        case 'ISSUED':   return { label: t('qr.badgeIssued'),       color: '#60A5FA', bg: 'rgba(96,165,250,0.18)', bd: 'rgba(96,165,250,0.38)', pulse: false };
+        case 'REVOKED':  return { label: t('qr.badgeRevoked'),      color: '#EF4444', bg: 'rgba(239,68,68,0.18)',  bd: 'rgba(239,68,68,0.38)',  pulse: false };
+        case 'EXPIRED':  return { label: t('qr.badgeExpired'),      color: '#EF4444', bg: 'rgba(239,68,68,0.18)',  bd: 'rgba(239,68,68,0.38)',  pulse: false };
+        default:         return { label: t('qr.badgeNotSetUp'),     color: 'rgba(240,240,244,0.45)', bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.12)', pulse: false };
+    }
+}
+
+// Theme-aware token meta
+function tokenMeta(status, C, t) {
+    switch (status) {
+        case 'ACTIVE':     return { label: t('qr.statusActive'),     color: C.ok,      bg: C.okBg,      bd: C.okBd,      desc: t('qr.descActive'),     pulse: true  };
+        case 'INACTIVE':   return { label: t('qr.statusInactive'),   color: C.primary, bg: C.primaryBg, bd: C.primaryBd, desc: t('qr.descInactive'),   pulse: false };
+        case 'ISSUED':     return { label: t('qr.statusIssued'),     color: C.blue,    bg: C.blueBg,    bd: C.blueBd,    desc: t('qr.descIssued'),     pulse: false };
+        case 'REVOKED':    return { label: t('qr.statusRevoked'),    color: C.red,     bg: C.redBg,     bd: C.redBd,     desc: t('qr.descRevoked'),    pulse: false };
+        case 'EXPIRED':    return { label: t('qr.statusExpired'),    color: C.red,     bg: C.redBg,     bd: C.redBd,     desc: t('qr.descExpired'),    pulse: false };
+        case 'UNASSIGNED': return { label: t('qr.statusNotSetUp'),   color: C.tx3,     bg: C.s4,        bd: C.bd,        desc: t('qr.descUnassigned'), pulse: false };
+        default:           return { label: status ?? '—',            color: C.tx3,     bg: C.s4,        bd: C.bd,        desc: '',                     pulse: false };
+    }
+}
+
+// ─── Blood group enum → display label ────────────────────────────────────────
+const BLOOD_GROUP_FROM_ENUM = {
+    A_POS: 'A+', A_NEG: 'A−', B_POS: 'B+', B_NEG: 'B−',
+    O_POS: 'O+', O_NEG: 'O−', AB_POS: 'AB+', AB_NEG: 'AB−',
+    UNKNOWN: 'Unknown',
+};
+
+function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function fmtValidThru(iso) {
+    if (!iso) return '——/——';
+    const d = new Date(iso);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}`;
+}
+function fmtCardNum(n) {
+    if (!n) return 'RQ-0000-XXXXXXXX';
+    const parts = n.split('-');
+    if (parts.length === 3) return `${parts[0]}  ${parts[1]}  ${parts[2]}`;
+    return n;
+}
+
+// ─── Pulse dot ────────────────────────────────────────────────────────────────
+function PulseDot({ color, size = 7 }) {
+    const opacity = useSharedValue(1);
+    useEffect(() => {
+        opacity.value = withRepeat(withSequence(
+            withTiming(0.2, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+            withTiming(1.0, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        ), -1, false);
+    }, []);
+    return <Animated.View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, useAnimatedStyle(() => ({ opacity: opacity.value }))]} />;
+}
+
+// ─── Shimmer ──────────────────────────────────────────────────────────────────
+function ShimmerLayer({ tiltX, tiltY, shimmerColor }) {
+    const style = useAnimatedStyle(() => ({
+        opacity: interpolate(Math.abs(tiltX.value) + Math.abs(tiltY.value), [0, 24], [0.0, 0.55]),
+        transform: [
+            { translateX: interpolate(tiltY.value, [-14, 14], [-CARD_W * 0.4, CARD_W * 0.4]) },
+            { translateY: interpolate(tiltX.value, [-10, 10], [-CARD_H * 0.5, CARD_H * 0.5]) },
+        ],
+    }));
+    return (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 22, overflow: 'hidden' }, style]}>
+            <LinearGradient colors={['transparent', shimmerColor, 'rgba(255,255,255,0.18)', shimmerColor, 'transparent']} start={[0, 0.3]} end={[1, 0.7]} style={{ width: '100%', height: '100%' }} />
+        </Animated.View>
+    );
+}
+
+// ─── Physical card ────────────────────────────────────────────────────────────
+function PhysicalCard({ student, token, isFlipped, onFlip }) {
+    const { t } = useTranslation();
+
+    const cardNumber = token?.card_number ?? null;
+    const qrValue = token?.qr_url
+        ?? (cardNumber ? `https://resqid.in/s/${cardNumber}` : null)
+        ?? 'https://resqid.in';
+
+    const status = token?.status ?? 'UNASSIGNED';
+    const pal = cardPalette(status);
+    const badge = cardBadge(status, t);
+    const isExpiring = token?.expires_at && (new Date(token.expires_at) - Date.now()) < 30 * 24 * 60 * 60 * 1000;
+    const initials = [student?.first_name?.[0], student?.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
+    const fullName = [student?.first_name, student?.last_name].filter(Boolean).join(' ').toUpperCase() || '—';
+    const classLine = student?.class ? `CLASS ${student.class}${student.section ? `-${student.section}` : ''}` : '';
+    const schoolShort = student?.school?.name ? student.school.name.slice(0, 22) + (student.school.name.length > 22 ? '…' : '') : '';
+
+    const tiltX = useSharedValue(0), tiltY = useSharedValue(0);
+    const shiftX = useSharedValue(0), shiftY = useSharedValue(0);
+    const flipProgress = useSharedValue(isFlipped ? 1 : 0);
+    const [showBack, setShowBack] = useState(isFlipped);
+    const prev = useRef(isFlipped);
+
+    useEffect(() => {
+        if (prev.current === isFlipped) return;
+        prev.current = isFlipped;
+        if (isFlipped) {
+            flipProgress.value = withTiming(1, { duration: 500, easing: Easing.inOut(Easing.cubic) }, () => runOnJS(setShowBack)(true));
+        } else {
+            runOnJS(setShowBack)(false);
+            flipProgress.value = withTiming(0, { duration: 500, easing: Easing.inOut(Easing.cubic) });
+        }
+    }, [isFlipped]);
+
+    const glowOpacity = useSharedValue(0.18);
+    useEffect(() => {
+        if (status === 'ACTIVE') {
+            glowOpacity.value = withRepeat(withSequence(
+                withTiming(0.50, { duration: 2400, easing: Easing.inOut(Easing.ease) }),
+                withTiming(0.16, { duration: 2400, easing: Easing.inOut(Easing.ease) }),
+            ), -1, false);
+        }
+    }, [status]);
+
+    const pan = Gesture.Pan()
+        .onUpdate((e) => {
+            tiltX.value = interpolate(e.translationY, [-90, 90], [12, -12]);
+            tiltY.value = interpolate(e.translationX, [-90, 90], [-14, 14]);
+            shiftX.value = interpolate(e.translationX, [-90, 90], [-8, 8]);
+            shiftY.value = interpolate(e.translationY, [-90, 90], [-5, 5]);
+        })
+        .onEnd(() => {
+            [tiltX, tiltY, shiftX, shiftY].forEach((v) => { v.value = withSpring(0, { damping: 12, stiffness: 200 }); });
+        });
+
+    const frontStyle = useAnimatedStyle(() => ({
+        transform: [{ perspective: 1000 }, { translateX: shiftX.value }, { translateY: shiftY.value }, { rotateX: `${tiltX.value}deg` }, { rotateY: `${interpolate(flipProgress.value, [0, 1], [0, 180])}deg` }],
+    }));
+    const backStyle = useAnimatedStyle(() => ({
+        transform: [{ perspective: 1000 }, { translateX: shiftX.value }, { translateY: shiftY.value }, { rotateX: `${tiltX.value}deg` }, { rotateY: `${interpolate(flipProgress.value, [0, 1], [180, 360])}deg` }],
+    }));
+    const glowStyle = useAnimatedStyle(() => ({ opacity: glowOpacity.value }));
+    const shadow = Platform.select({ ios: { shadowColor: pal.glow, shadowOffset: { width: 0, height: 18 }, shadowOpacity: 0.45, shadowRadius: 36 }, android: { elevation: 22 } });
+
+    return (
+        <GestureHandlerRootView style={{ alignItems: 'center' }}>
+            <GestureDetector gesture={pan}>
+                <View style={{ width: CARD_W, height: CARD_H + 32, alignItems: 'center', justifyContent: 'center' }}>
+                    <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: CARD_W * 0.8, height: CARD_H * 0.55, borderRadius: 999, backgroundColor: pal.glow, top: CARD_H * 0.28, alignSelf: 'center' }, glowStyle]} />
+
+                    {/* FRONT */}
+                    <Animated.View style={[{ width: CARD_W, height: CARD_H, position: 'absolute', backfaceVisibility: 'hidden' }, frontStyle]}>
+                        <LinearGradient colors={pal.gradFront} start={[0, 0]} end={[1, 1]} style={[cs.cardFace, shadow]}>
+                            <View style={[cs.cardRing, { borderColor: pal.accent + '35' }]} />
+                            <View style={[cs.cardStripe, { backgroundColor: pal.accent }]} />
+                            <View style={[cs.cardArc1, { borderColor: pal.accent + '10' }]} />
+                            <View style={[cs.cardArc2, { borderColor: pal.accent + '07' }]} />
+                            <ShimmerLayer tiltX={tiltX} tiltY={tiltY} shimmerColor={pal.shimmer} />
+                            <View style={cs.frontContent}>
+                                <View style={cs.row}>
+                                    <View style={cs.brandGroup}>
+                                        <View style={[cs.brandMark, { backgroundColor: pal.accent + '1C', borderColor: pal.accent + '42' }]}>
+                                            <MaterialCommunityIcons name="shield-check" size={13} color={pal.accent} />
+                                        </View>
+                                        <View>
+                                            <Text style={cs.brandName}>RESQID</Text>
+                                            <Text style={cs.brandSub}>{t('qr.guardianCard')}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={[cs.cardBadge, { backgroundColor: badge.bg, borderColor: badge.bd }]}>
+                                        {badge.pulse && <PulseDot color={badge.color} size={5} />}
+                                        <Text style={[cs.cardBadgeTx, { color: badge.color }]}>{badge.label}</Text>
+                                    </View>
+                                </View>
+                                <View style={cs.chipRow}>
+                                    <View style={[cs.chipBody, { backgroundColor: pal.chip, borderColor: pal.accent + '32' }]}>
+                                        <View style={[cs.chipLine, { backgroundColor: pal.accent + '55' }]} />
+                                        <View style={[cs.chipLine, { backgroundColor: pal.accent + '38', marginTop: 4 }]} />
+                                        <View style={cs.chipDivider} />
+                                    </View>
+                                    <MaterialCommunityIcons name="contactless-payment" size={18} color={pal.accent + '65'} />
+                                </View>
+                                <Text style={cs.cardNum}>{fmtCardNum(cardNumber)}</Text>
+                                <View style={[cs.row, { alignItems: 'flex-end' }]}>
+                                    <View style={{ flex: 1, gap: 1 }}>
+                                        <Text style={cs.metaLbl}>{t('qr.cardholderLabel')}</Text>
+                                        <Text style={cs.cardHolder} numberOfLines={1}>{fullName}</Text>
+                                        {classLine ? <Text style={cs.cardSub} numberOfLines={1}>{classLine}{schoolShort ? `  ·  ${schoolShort}` : ''}</Text> : null}
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end', gap: 7 }}>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={cs.metaLbl}>{t('qr.validThruLabel')}</Text>
+                                            <Text style={[cs.cardValidTx, isExpiring && { color: '#F97316' }]}>{fmtValidThru(token?.expires_at)}</Text>
+                                        </View>
+                                        <TouchableOpacity style={[cs.qrFlipBtn, { borderColor: pal.accent + '45', backgroundColor: pal.accent + '14' }]} onPress={onFlip} activeOpacity={0.75}>
+                                            <MaterialCommunityIcons name="qrcode" size={12} color={pal.accent} />
+                                            <Text style={[cs.qrFlipBtnTx, { color: pal.accent }]}>{t('qr.qrCode')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        </LinearGradient>
+                    </Animated.View>
+
+                    {/* BACK */}
+                    <Animated.View style={[{ width: CARD_W, height: CARD_H, position: 'absolute', backfaceVisibility: 'hidden' }, backStyle]}>
+                        <LinearGradient colors={pal.gradBack} start={[1, 0]} end={[0, 1]} style={[cs.cardFace, shadow]}>
+                            <View style={[cs.cardRing, { borderColor: pal.accent + '30' }]} />
+                            <View style={[cs.cardStripe, { backgroundColor: pal.accent, opacity: 0.4 }]} />
+                            <ShimmerLayer tiltX={tiltX} tiltY={tiltY} shimmerColor={pal.shimmer} />
+                            <View style={cs.backContent}>
+                                <View style={cs.backLeft}>
+                                    <View style={cs.brandGroup}>
+                                        <View style={[cs.brandMark, { width: 24, height: 24, backgroundColor: pal.accent + '1C', borderColor: pal.accent + '35' }]}>
+                                            <MaterialCommunityIcons name="shield-check" size={10} color={pal.accent} />
+                                        </View>
+                                        <Text style={[cs.brandName, { fontSize: 9, letterSpacing: 1.3 }]}>RESQID</Text>
+                                    </View>
+                                    <View style={[cs.backAvatar, { backgroundColor: pal.accent + '1A', borderColor: pal.accent + '38' }]}>
+                                        <Text style={[cs.backAvatarTx, { color: pal.accent }]}>{initials}</Text>
+                                    </View>
+                                    <View>
+                                        <Text style={cs.backMetaLbl}>{t('qr.cardholderLabel')}</Text>
+                                        <Text style={cs.backName} numberOfLines={1}>{fullName}</Text>
+                                        {classLine ? <Text style={cs.backClass} numberOfLines={1}>{classLine}</Text> : null}
+                                    </View>
+                                    <View>
+                                        <Text style={cs.backMetaLbl}>{t('qr.cardNoLabel')}</Text>
+                                        <Text style={cs.backCardNum} numberOfLines={1}>{fmtCardNum(cardNumber)}</Text>
+                                    </View>
+                                    <View>
+                                        <Text style={cs.backMetaLbl}>{t('qr.statusLabel')}</Text>
+                                        <Text style={[cs.backStatus, { color: badge.color }]}>{badge.label}</Text>
+                                    </View>
+                                </View>
+                                <View style={[cs.qrBox, { borderColor: pal.accent + '40' }]}>
+                                    {showBack && <QRCode value={qrValue} size={CARD_H * 0.60} color="#1A1A1E" backgroundColor="#FFFFFF" quietZone={5} ecl="M" />}
+                                    {showBack && !token?.is_qr_active && token?.qr_url == null && (
+                                        <Text style={{ fontSize: 8, color: pal.accent, marginTop: 4, textAlign: 'center', opacity: 0.7 }}>{t('qr.qrNotGenerated')}</Text>
+                                    )}
+                                </View>
+                            </View>
+                        </LinearGradient>
+                    </Animated.View>
+                </View>
+            </GestureDetector>
+        </GestureHandlerRootView>
+    );
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function CardTabs({ isFlipped, onFlip, C }) {
+    const { t } = useTranslation();
+    return (
+        <View style={[s.tabRow, { backgroundColor: C.s2, borderColor: C.bd }]}>
+            {[
+                { label: t('qr.cardFront'), icon: 'credit-card-outline', active: !isFlipped, onPress: () => isFlipped && onFlip() },
+                { label: t('qr.qrCode'),   icon: 'qrcode-scan',          active: isFlipped,  onPress: () => !isFlipped && onFlip() },
+            ].map((tab) => (
+                <TouchableOpacity key={tab.label} style={[s.tab, tab.active && { backgroundColor: C.s4, borderWidth: 1, borderColor: C.bd2 }]} onPress={tab.onPress} activeOpacity={0.7}>
+                    <MaterialCommunityIcons name={tab.icon} size={13} color={tab.active ? C.tx : C.tx3} />
+                    <Text style={[s.tabTx, { color: tab.active ? C.tx : C.tx3, fontWeight: tab.active ? '800' : '600' }]}>{tab.label}</Text>
+                </TouchableOpacity>
+            ))}
+        </View>
+    );
+}
+
+// ─── Action button ────────────────────────────────────────────────────────────
+function ActionBtn({ icon, label, sublabel, onPress, color, bg, border, disabled }) {
+    return (
+        <TouchableOpacity style={[s.actionBtn, { backgroundColor: bg, borderColor: border }, disabled && s.actionBtnDim]} onPress={onPress} activeOpacity={disabled ? 1 : 0.75} disabled={disabled}>
+            <View style={[s.actionBtnIcon, { backgroundColor: color + '18' }]}>{icon}</View>
+            <View style={{ flex: 1 }}>
+                <Text style={[s.actionBtnLabel, { color }]}>{label}</Text>
+                {sublabel ? <Text style={s.actionBtnSub}>{sublabel}</Text> : null}
+            </View>
+            <Feather name="chevron-right" size={14} color={color + '55'} />
+        </TouchableOpacity>
+    );
+}
+
+// ─── Detail row ───────────────────────────────────────────────────────────────
+function DetailRow({ label, value, valueColor, last, C }) {
+    return (
+        <View style={[s.detailRow, !last && { borderBottomWidth: 1, borderBottomColor: C.bd }]}>
+            <Text style={[s.detailLabel, { color: C.tx3 }]}>{label}</Text>
+            <Text style={[s.detailValue, { color: valueColor ?? C.tx }]} numberOfLines={1}>{value}</Text>
+        </View>
+    );
 }
 
 // ─── Confirm modal ────────────────────────────────────────────────────────────
-// Used for destructive actions — block and report lost
-
-function ConfirmModal({ visible, title, body, confirmLabel, confirmColor = colors.primary, onConfirm, onCancel, icon, warning }) {
+function ConfirmModal({ visible, title, body, confirmLabel, confirmColor, onConfirm, onCancel, icon, warning, C }) {
+    const { t } = useTranslation();
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-            <Pressable style={styles.modalOverlay} onPress={onCancel}>
-                <Animated.View entering={FadeInUp.duration(300)} style={styles.modalSheet}>
-                    {/* Icon */}
-                    <View style={[styles.modalIconWrap, { backgroundColor: `${confirmColor}15` }]}>
-                        {icon}
-                    </View>
-
-                    <Text style={styles.modalTitle}>{title}</Text>
-                    <Text style={styles.modalBody}>{body}</Text>
-
-                    {/* Warning note */}
+            <Pressable style={s.overlay} onPress={onCancel}>
+                <Animated.View entering={FadeInUp.duration(260)} style={[s.modalSheet, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
+                    <View style={[s.modalIconBox, { backgroundColor: confirmColor + '18' }]}>{icon}</View>
+                    <Text style={[s.modalTitle, { color: C.tx }]}>{title}</Text>
+                    <Text style={[s.modalBody, { color: C.tx2 }]}>{body}</Text>
                     {warning && (
-                        <View style={styles.modalWarning}>
-                            <IconAlertTriangle color={colors.warning} size={14} />
-                            <Text style={styles.modalWarningText}>{warning}</Text>
+                        <View style={[s.modalWarn, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
+                            <Feather name="alert-triangle" size={13} color={C.amb} />
+                            <Text style={[s.modalWarnTx, { color: C.amb }]}>{warning}</Text>
                         </View>
                     )}
-
-                    {/* Actions */}
-                    <View style={styles.modalActions}>
-                        <TouchableOpacity style={styles.modalCancelBtn} onPress={onCancel} activeOpacity={0.7}>
-                            <Text style={styles.modalCancelText}>Cancel</Text>
+                    <View style={s.modalBtns}>
+                        <TouchableOpacity style={[s.modalCancelBtn, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={onCancel} activeOpacity={0.7}>
+                            <Text style={[s.modalCancelTx, { color: C.tx2 }]}>{t('qr.cancel')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modalConfirmBtn, { backgroundColor: confirmColor }]}
-                            onPress={onConfirm}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.modalConfirmText}>{confirmLabel}</Text>
+                        <TouchableOpacity style={[s.modalConfirmBtn, { backgroundColor: confirmColor }]} onPress={onConfirm} activeOpacity={0.85}>
+                            <Text style={s.modalConfirmTx}>{confirmLabel}</Text>
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
@@ -183,699 +382,475 @@ function ConfirmModal({ visible, title, body, confirmLabel, confirmColor = color
     );
 }
 
-// ─── Action button ────────────────────────────────────────────────────────────
-
-function ActionBtn({ icon, label, sublabel, onPress, color, bg, border, disabled }) {
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function ToastBanner({ action, C }) {
+    const { t } = useTranslation();
+    const map = {
+        blocked:   { label: t('qr.toastBlocked'),   color: C.primary, bg: C.primaryBg, bd: C.primaryBd, icon: 'lock'           },
+        unblocked: { label: t('qr.toastUnblocked'),  color: C.ok,      bg: C.okBg,      bd: C.okBd,      icon: 'unlock'         },
+        revoked:   { label: t('qr.toastRevoked'),    color: C.red,     bg: C.redBg,     bd: C.redBd,     icon: 'alert-triangle' },
+        activated: { label: t('qr.toastActivated'),  color: C.ok,      bg: C.okBg,      bd: C.okBd,      icon: 'zap'            },
+    };
+    const toast = map[action];
+    if (!toast) return null;
     return (
-        <TouchableOpacity
-            style={[
-                styles.actionBtn,
-                { backgroundColor: bg, borderColor: border ?? colors.border },
-                disabled && styles.actionBtnDisabled,
-            ]}
-            onPress={onPress}
-            activeOpacity={disabled ? 1 : 0.75}
-            disabled={disabled}
-        >
-            <View style={[styles.actionBtnIcon, { backgroundColor: `${color}18` }]}>
-                {icon}
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[styles.actionBtnLabel, { color }]}>{label}</Text>
-                {sublabel ? <Text style={styles.actionBtnSublabel}>{sublabel}</Text> : null}
-            </View>
-        </TouchableOpacity>
+        <Animated.View entering={FadeInDown.duration(280)} style={[s.toast, { backgroundColor: toast.bg, borderColor: toast.bd }]}>
+            <View style={[s.toastIcon, { backgroundColor: toast.color + '20' }]}><Feather name={toast.icon} size={13} color={toast.color} /></View>
+            <Text style={[s.toastTx, { color: toast.color }]}>{toast.label}</Text>
+        </Animated.View>
     );
 }
 
-// ─── Card detail row ──────────────────────────────────────────────────────────
-
-function DetailRow({ label, value, valueColor, last }) {
+// ─── Loading overlay ──────────────────────────────────────────────────────────
+function LoadingOverlay({ visible, C }) {
+    const { t } = useTranslation();
+    if (!visible) return null;
     return (
-        <View style={[styles.detailRow, !last && styles.detailRowBorder]}>
-            <Text style={styles.detailLabel}>{label}</Text>
-            <Text style={[styles.detailValue, valueColor && { color: valueColor }]}>{value}</Text>
-        </View>
+        <Animated.View entering={FadeIn.duration(150)} style={[s.loadingOverlay, { backgroundColor: C.bg + 'CC' }]}>
+            <View style={[s.loadingBox, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
+                <Text style={[s.loadingTx, { color: C.tx2 }]}>{t('common.loading')}</Text>
+            </View>
+        </Animated.View>
     );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
+// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function QrScreen() {
+    const { colors: C } = useTheme();
     const router = useRouter();
-    const { student, emergencyProfile, token, card, blockCard, unblockCard, revokeCard, activateCard } = useProfileStore();
+    const { t } = useTranslation();
 
-    const status = token?.status ?? 'UNASSIGNED';
-    const meta = tokenMeta(status);
+    useFetchOnMount();
 
-    // Modal states
-    const [showBlockConfirm, setShowBlockConfirm] = useState(false);
-    const [showUnblockConfirm, setShowUnblockConfirm] = useState(false);
-    const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
-    const [showActivateConfirm, setShowActivateConfirm] = useState(false);
-    const [actionDone, setActionDone] = useState(null); // 'blocked'|'unblocked'|'revoked'|'activated'
+    const { student, token } = useProfileStore(
+        useShallow((s) => {
+            const st = s.students.find((x) => x.id === s.activeStudentId) ?? s.students[0] ?? null;
+            return { student: st, token: st?.token ?? null };
+        }),
+    );
+    const isHydrated     = useProfileStore((s) => s.isHydrated);
+    const isFetching     = useProfileStore((s) => s.isFetching);
+    const fetchAndPersist  = useProfileStore((s) => s.fetchAndPersist);
+    const lockCard       = useProfileStore((s) => s.lockCard);
+    const requestReplace = useProfileStore((s) => s.requestReplace);
 
-    // ── Action handlers ──────────────────────────────────────────────
+    const status    = token?.status ?? 'UNASSIGNED';
+    const meta      = tokenMeta(status, C, t);
+    const studentId = student?.id ?? null;
+
+    const [isFlipped,    setIsFlipped]    = useState(false);
+    const [showBlock,    setShowBlock]    = useState(false);
+    const [showUnblock,  setShowUnblock]  = useState(false);
+    const [showRevoke,   setShowRevoke]   = useState(false);
+    const [showActivate, setShowActivate] = useState(false);
+    const [actionDone,   setActionDone]   = useState(null);
+    const [loading,      setLoading]      = useState(false);
+    const toastTimer = useRef(null);
+
+    const showToast = (key) => {
+        setActionDone(key);
+        clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setActionDone(null), 3500);
+    };
+    useEffect(() => () => clearTimeout(toastTimer.current), []);
 
     const doBlock = async () => {
-        setShowBlockConfirm(false);
-        await blockCard?.();              // sets Token.status = INACTIVE
-        setActionDone('blocked');
-        setTimeout(() => setActionDone(null), 3000);
+        setShowBlock(false);
+        if (!studentId) return Alert.alert(t('common.error'), t('common.studentNotFound'));
+        setLoading(true);
+        try {
+            await lockCard(studentId);
+            showToast('blocked');
+        } catch (err) {
+            Alert.alert(t('common.failed'), err?.response?.data?.message ?? t('common.tryAgain'));
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const doUnblock = async () => {
-        setShowUnblockConfirm(false);
-        await unblockCard?.();            // sets Token.status = ACTIVE
-        setActionDone('unblocked');
-        setTimeout(() => setActionDone(null), 3000);
+    const doUnblock = () => {
+        setShowUnblock(false);
+        Alert.alert(
+            t('qr.contactSupport'),
+            t('qr.unblockAlertBody'),
+            [{ text: t('common.ok') }, { text: t('qr.openSupport'), onPress: () => router.push('/(app)/support') }],
+        );
     };
 
     const doRevoke = async () => {
-        setShowRevokeConfirm(false);
-        await revokeCard?.();             // sets Token.status = REVOKED, fires CARD_REVOKED notification
-        setActionDone('revoked');
+        setShowRevoke(false);
+        if (!studentId) return;
+        setLoading(true);
+        try {
+            await requestReplace(studentId, 'Card reported lost or stolen by parent via app');
+            await fetchAndPersist?.();
+            showToast('revoked');
+        } catch (err) {
+            Alert.alert(t('common.failed'), err?.response?.data?.message ?? t('common.tryAgain'));
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const doActivate = async () => {
-        setShowActivateConfirm(false);
-        await activateCard?.();           // sets Token.status = ACTIVE
-        setActionDone('activated');
-        setTimeout(() => setActionDone(null), 3000);
+    const doActivate = () => {
+        setShowActivate(false);
+        router.push('/(app)/support');
     };
 
     const handleShare = async () => {
         await Share.share({
-            message: `${student?.first_name ?? 'Child'}'s emergency card — scan in case of emergency. Card: ${card?.card_number ?? token?.token_hash ?? ''}`,
+            message: t('qr.shareMessage', {
+                name: student?.first_name ?? t('home.guardian'),
+                cardNumber: token?.card_number ?? '—',
+            }),
         });
     };
 
-    const handleRequestReplacement = () => {
-        router.push('/(app)/support');
-    };
-
-    // ── Actions to show based on current Token.status ────────────────
     const renderActions = () => {
         switch (status) {
-
             case 'ACTIVE':
-                return (
-                    <>
-                        <ActionBtn
-                            icon={<IconLock color={colors.warning} size={16} />}
-                            label="Block Card Temporarily"
-                            sublabel="Scanning will be paused until you unblock"
-                            color={colors.warning}
-                            bg={colors.warningBg}
-                            border="rgba(245,158,11,0.25)"
-                            onPress={() => setShowBlockConfirm(true)}
-                        />
-                        <ActionBtn
-                            icon={<IconAlertTriangle color={colors.primary} size={16} />}
-                            label="Report Card Lost"
-                            sublabel="Permanently disables this card — can't be undone"
-                            color={colors.primary}
-                            bg={colors.primaryBg}
-                            border="rgba(232,52,42,0.2)"
-                            onPress={() => setShowRevokeConfirm(true)}
-                        />
-                    </>
-                );
-
+                return (<>
+                    <ActionBtn
+                        icon={<Feather name="lock" size={16} color={C.primary} />}
+                        label={t('qr.blockCard')}
+                        sublabel={t('qr.blockCardSub')}
+                        color={C.primary} bg={C.primaryBg} border={C.primaryBd}
+                        onPress={() => setShowBlock(true)}
+                    />
+                    <ActionBtn
+                        icon={<Feather name="alert-triangle" size={16} color={C.red} />}
+                        label={t('qr.reportLost')}
+                        sublabel={t('qr.reportLostSub')}
+                        color={C.red} bg={C.redBg} border={C.redBd}
+                        onPress={() => setShowRevoke(true)}
+                    />
+                </>);
             case 'INACTIVE':
-                return (
-                    <>
-                        <ActionBtn
-                            icon={<IconUnlock color={colors.success} size={16} />}
-                            label="Unblock Card"
-                            sublabel="Resume normal scanning"
-                            color={colors.success}
-                            bg={colors.successBg}
-                            border="rgba(22,163,74,0.25)"
-                            onPress={() => setShowUnblockConfirm(true)}
-                        />
-                        <ActionBtn
-                            icon={<IconAlertTriangle color={colors.primary} size={16} />}
-                            label="Report Card Lost Instead"
-                            sublabel="Permanently disables this card — can't be undone"
-                            color={colors.primary}
-                            bg={colors.primaryBg}
-                            border="rgba(232,52,42,0.2)"
-                            onPress={() => setShowRevokeConfirm(true)}
-                        />
-                    </>
-                );
-
+                return (<>
+                    <ActionBtn
+                        icon={<Feather name="phone" size={16} color={C.ok} />}
+                        label={t('qr.unblockCard')}
+                        sublabel={t('qr.unblockCardSub')}
+                        color={C.ok} bg={C.okBg} border={C.okBd}
+                        onPress={() => setShowUnblock(true)}
+                    />
+                    <ActionBtn
+                        icon={<Feather name="alert-triangle" size={16} color={C.red} />}
+                        label={t('qr.reportLostInstead')}
+                        sublabel={t('qr.reportLostSub')}
+                        color={C.red} bg={C.redBg} border={C.redBd}
+                        onPress={() => setShowRevoke(true)}
+                    />
+                </>);
             case 'ISSUED':
                 return (
                     <ActionBtn
-                        icon={<IconZap color={colors.success} size={16} />}
-                        label="Activate Card"
-                        sublabel="Enable this card so it can be scanned"
-                        color={colors.success}
-                        bg={colors.successBg}
-                        border="rgba(22,163,74,0.25)"
-                        onPress={() => setShowActivateConfirm(true)}
+                        icon={<Feather name="zap" size={16} color={C.ok} />}
+                        label={t('qr.activateCard')}
+                        sublabel={t('qr.activateCardSub')}
+                        color={C.ok} bg={C.okBg} border={C.okBd}
+                        onPress={() => setShowActivate(true)}
                     />
                 );
-
             case 'REVOKED':
             case 'EXPIRED':
-                return (
-                    <>
-                        <View style={styles.revokedNotice}>
-                            <IconAlertTriangle color={colors.primary} size={16} />
-                            <Text style={styles.revokedNoticeText}>
-                                {status === 'REVOKED'
-                                    ? 'This card has been permanently disabled. Anyone trying to scan it will see an error.'
-                                    : 'This card has expired. It can no longer be scanned.'}
-                            </Text>
-                        </View>
-                        <ActionBtn
-                            icon={<IconRefresh color={colors.info} size={16} />}
-                            label="Request a Replacement Card"
-                            sublabel="Contact your school to get a new physical card"
-                            color={colors.info}
-                            bg={colors.infoBg}
-                            border="rgba(59,130,246,0.25)"
-                            onPress={handleRequestReplacement}
-                        />
-                        <ActionBtn
-                            icon={<IconPhone color={colors.textSecondary} size={16} />}
-                            label="Contact School Support"
-                            sublabel="We'll help you get sorted"
-                            color={colors.textSecondary}
-                            bg={colors.surface3}
-                            border={colors.border}
-                            onPress={() => router.push('/(app)/support')}
-                        />
-                    </>
-                );
-
+                return (<>
+                    <View style={[s.revokedNotice, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
+                        <Feather name="alert-circle" size={15} color={C.red} />
+                        <Text style={[s.revokedNoticeTx, { color: C.tx2 }]}>
+                            {status === 'REVOKED' ? t('qr.revokedNotice') : t('qr.expiredNotice')}
+                        </Text>
+                    </View>
+                    <ActionBtn
+                        icon={<Feather name="refresh-cw" size={16} color={C.blue} />}
+                        label={t('qr.requestReplacement')}
+                        sublabel={t('qr.requestReplacementSub')}
+                        color={C.blue} bg={C.blueBg} border={C.blueBd}
+                        onPress={() => router.push('/(app)/support')}
+                    />
+                </>);
             default:
                 return (
-                    <View style={styles.revokedNotice}>
-                        <IconInfo color={colors.textTertiary} size={14} />
-                        <Text style={styles.revokedNoticeText}>
-                            Contact your school to set up this card.
-                        </Text>
+                    <View style={[s.revokedNotice, { backgroundColor: C.s3, borderColor: C.bd }]}>
+                        <Feather name="info" size={14} color={C.tx3} />
+                        <Text style={[s.revokedNoticeTx, { color: C.tx3 }]}>{t('qr.unassignedNotice')}</Text>
                     </View>
                 );
         }
     };
 
-    // ── Toast feedback bar ───────────────────────────────────────────
-    const toastMeta = {
-        blocked: { label: 'Card blocked — scanning is paused', color: colors.warning, bg: colors.warningBg },
-        unblocked: { label: 'Card unblocked — scanning is active', color: colors.success, bg: colors.successBg },
-        revoked: { label: 'Card reported lost — permanently locked', color: colors.primary, bg: colors.primaryBg },
-        activated: { label: 'Card activated — ready to scan', color: colors.success, bg: colors.successBg },
-    };
-    const toast = actionDone ? toastMeta[actionDone] : null;
-
     return (
-        <Screen bg={colors.screenBg} scroll edges={['top', 'left', 'right']}>
+        <Screen bg={C.bg} edges={['top', 'left', 'right']}>
+            <LoadingOverlay visible={loading} C={C} />
 
-            {/* ── Confirm modals ── */}
             <ConfirmModal
-                visible={showBlockConfirm}
-                title="Block Card Temporarily?"
-                body={`This will pause all scanning for ${student?.first_name ?? 'your child'}'s card. No one will be able to scan it until you unblock it.`}
-                warning="Use this if the card is misplaced but not fully lost."
-                confirmLabel="Block Card"
-                confirmColor={colors.warning}
-                icon={<IconLock color={colors.warning} size={24} />}
+                visible={showBlock}
+                title={t('qr.confirmBlockTitle')}
+                body={t('qr.confirmBlockBody', { name: student?.first_name ?? '' })}
+                warning={t('qr.confirmBlockWarning')}
+                confirmLabel={t('qr.confirmBlockBtn')}
+                confirmColor={C.primary}
+                icon={<Feather name="lock" size={24} color={C.primary} />}
                 onConfirm={doBlock}
-                onCancel={() => setShowBlockConfirm(false)}
+                onCancel={() => setShowBlock(false)}
+                C={C}
             />
-
             <ConfirmModal
-                visible={showUnblockConfirm}
-                title="Unblock This Card?"
-                body={`This will restore normal scanning for ${student?.first_name ?? 'your child'}'s card immediately.`}
-                confirmLabel="Unblock Card"
-                confirmColor={colors.success}
-                icon={<IconUnlock color={colors.success} size={24} />}
+                visible={showUnblock}
+                title={t('qr.confirmUnblockTitle')}
+                body={t('qr.confirmUnblockBody')}
+                warning={null}
+                confirmLabel={t('qr.confirmUnblockBtn')}
+                confirmColor={C.ok}
+                icon={<Feather name="phone" size={24} color={C.ok} />}
                 onConfirm={doUnblock}
-                onCancel={() => setShowUnblockConfirm(false)}
+                onCancel={() => setShowUnblock(false)}
+                C={C}
             />
-
             <ConfirmModal
-                visible={showRevokeConfirm}
-                title="Report Card as Lost?"
-                body={`This will permanently disable ${student?.first_name ?? 'your child'}'s card. Anyone who tries to scan it will see that it's been reported lost.`}
-                warning="This cannot be undone. You'll need to request a new card from your school."
-                confirmLabel="Yes, Report Lost"
-                confirmColor={colors.primary}
-                icon={<IconAlertTriangle color={colors.primary} size={24} />}
+                visible={showRevoke}
+                title={t('qr.confirmRevokeTitle')}
+                body={t('qr.confirmRevokeBody', { name: student?.first_name ?? '' })}
+                warning={t('qr.confirmRevokeWarning')}
+                confirmLabel={t('qr.confirmRevokeBtn')}
+                confirmColor={C.red}
+                icon={<Feather name="alert-triangle" size={24} color={C.red} />}
                 onConfirm={doRevoke}
-                onCancel={() => setShowRevokeConfirm(false)}
+                onCancel={() => setShowRevoke(false)}
+                C={C}
             />
-
             <ConfirmModal
-                visible={showActivateConfirm}
-                title="Activate This Card?"
-                body={`Once activated, ${student?.first_name ?? 'your child'}'s card will be live and can be scanned in an emergency.`}
-                confirmLabel="Activate Card"
-                confirmColor={colors.success}
-                icon={<IconZap color={colors.success} size={24} />}
+                visible={showActivate}
+                title={t('qr.confirmActivateTitle')}
+                body={t('qr.confirmActivateBody')}
+                warning={null}
+                confirmLabel={t('qr.confirmActivateBtn')}
+                confirmColor={C.ok}
+                icon={<Feather name="zap" size={24} color={C.ok} />}
                 onConfirm={doActivate}
-                onCancel={() => setShowActivateConfirm(false)}
+                onCancel={() => setShowActivate(false)}
+                C={C}
             />
 
-            <View style={styles.container}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-                {/* ── Header ── */}
-                <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.header}>
+                <Animated.View entering={FadeInDown.delay(0).duration(360)} style={s.header}>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.pageTitle}>
-                            {student?.first_name ? `${student.first_name}'s Card` : 'Emergency Card'}
+                        <Text style={[s.pageTitle, { color: C.tx }]}>
+                            {student?.first_name
+                                ? t('qr.pageTitle', { name: student.first_name })
+                                : t('qr.pageTitleFallback')}
                         </Text>
-                        <Text style={styles.pageSubtitle}>Manage and share your child's QR card</Text>
+                        <Text style={[s.pageSub, { color: C.tx3 }]}>{t('qr.subtitle')}</Text>
                     </View>
-                    <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.7}>
-                        <ShareIcon />
+                    <TouchableOpacity style={[s.shareBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={handleShare} activeOpacity={0.7}>
+                        <Feather name="share" size={16} color={C.tx2} />
                     </TouchableOpacity>
                 </Animated.View>
 
-                {/* ── Action feedback toast ── */}
-                {toast && (
-                    <Animated.View
-                        entering={FadeInDown.duration(300)}
-                        style={[styles.toast, { backgroundColor: toast.bg, borderColor: `${toast.color}30` }]}
-                    >
-                        <IconCheck color={toast.color} size={14} />
-                        <Text style={[styles.toastText, { color: toast.color }]}>{toast.label}</Text>
-                    </Animated.View>
-                )}
-
-                {/* ── Status pill ── */}
-                <Animated.View entering={FadeInDown.delay(40).duration(400)} style={styles.statusPillRow}>
-                    <View style={[styles.statusPill, { backgroundColor: meta.bg, borderColor: `${meta.color}30` }]}>
-                        <View style={[styles.statusDot, { backgroundColor: meta.color }]} />
-                        <Text style={[styles.statusPillText, { color: meta.color }]}>{meta.label}</Text>
+                <Animated.View entering={FadeInDown.delay(40).duration(360)} style={s.statusRow}>
+                    <View style={[s.statusPill, { backgroundColor: meta.bg, borderColor: meta.bd }]}>
+                        {meta.pulse && <PulseDot color={meta.color} size={6} />}
+                        <Text style={[s.statusPillTx, { color: meta.color }]}>{meta.label}</Text>
                     </View>
-                    <Text style={styles.statusDesc}>{meta.desc}</Text>
+                    <Text style={[s.statusDesc, { color: C.tx3 }]} numberOfLines={1}>{meta.desc}</Text>
                 </Animated.View>
 
-                {/* ── QR Card ── */}
-                <Animated.View entering={FadeIn.delay(80).duration(500)}>
-                    <QrCard
-                        student={student}
-                        token={token}
-                        emergencyProfile={emergencyProfile}
-                    />
+                {actionDone && <ToastBanner action={actionDone} C={C} />}
+
+                <Animated.View entering={FadeIn.delay(60).duration(500)}>
+                    <PhysicalCard student={student} token={token} isFlipped={isFlipped} onFlip={() => setIsFlipped((v) => !v)} />
                 </Animated.View>
 
-                {/* ── Card actions ── */}
-                <Animated.View entering={FadeInDown.delay(160).duration(400)} style={styles.actionsSection}>
-                    <Text style={styles.sectionLabel}>Card Actions</Text>
-                    <View style={styles.actionsList}>
-                        {renderActions()}
-                    </View>
+                <Animated.View entering={FadeInDown.delay(100).duration(340)}>
+                    <CardTabs isFlipped={isFlipped} onFlip={() => setIsFlipped((v) => !v)} C={C} />
                 </Animated.View>
 
-                {/* ── Card details strip ── */}
-                <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.detailsCard}>
-                    <Text style={styles.sectionLabel}>Card Details</Text>
-                    <View style={styles.detailsBlock}>
-                        <DetailRow
-                            label="Card Number"
-                            value={card?.card_number ?? '—'}
-                        />
-                        <DetailRow
-                            label="Valid Until"
-                            value={fmtDate(token?.expires_at)}
-                            valueColor={
-                                token?.expires_at &&
-                                    (new Date(token.expires_at) - new Date()) < 30 * 24 * 60 * 60 * 1000
-                                    ? colors.warning : undefined
-                            }
-                        />
-                        <DetailRow
-                            label="Activated On"
-                            value={fmtDate(token?.activated_at)}
-                        />
-                        <DetailRow
-                            label="Print Status"
-                            value={printStatusLabel(card?.print_status)}
-                            last
-                        />
-                    </View>
+                <Animated.View entering={FadeInDown.delay(118).duration(300)} style={s.dragHint}>
+                    <MaterialCommunityIcons name="gesture-swipe" size={12} color={C.tx3} style={{ opacity: 0.5 }} />
+                    <Text style={[s.dragHintTx, { color: C.tx3, opacity: 0.5 }]}>{t('qr.dragHint')}</Text>
                 </Animated.View>
 
-                {/* ── Safety tip ── */}
-                <Animated.View entering={FadeInDown.delay(240).duration(400)} style={styles.safetyTip}>
-                    <IconShield color={colors.success} size={14} />
-                    <Text style={styles.safetyTipText}>
-                        🔒  This QR code is unique to your child. Only share with trusted school staff or emergency services.
-                    </Text>
+                <Animated.View entering={FadeInDown.delay(160).duration(360)} style={s.section}>
+                    <Text style={[s.sectionHead, { color: C.tx3 }]}>{t('qr.cardActions').toUpperCase()}</Text>
+                    <View style={s.actionList}>{renderActions()}</View>
                 </Animated.View>
 
-                {/* ── Status glossary ── */}
-                <Animated.View entering={FadeInDown.delay(260).duration(400)} style={styles.glossary}>
-                    <Text style={styles.glossaryTitle}>What do the statuses mean?</Text>
-                    {[
-                        { label: 'Active', desc: 'Card works normally. Emergency info shows when scanned.', color: colors.success },
-                        { label: 'Blocked', desc: 'Temporarily paused by you. Unblock at any time.', color: colors.warning },
-                        { label: 'Lost/Revoked', desc: 'Permanently disabled. Request a replacement from school.', color: colors.primary },
-                        { label: 'Expired', desc: 'Card past its valid date. Request renewal from school.', color: colors.primary },
-                    ].map((g, i) => (
-                        <View key={i} style={[styles.glossaryRow, i < 3 && styles.glossaryRowBorder]}>
-                            <View style={[styles.glossaryDot, { backgroundColor: g.color }]} />
-                            <Text style={[styles.glossaryLabel, { color: g.color }]}>{g.label}</Text>
-                            <Text style={styles.glossaryDesc}>{g.desc}</Text>
+                <Animated.View entering={FadeInDown.delay(200).duration(360)} style={s.section}>
+                    <Text style={[s.sectionHead, { color: C.tx3 }]}>{t('qr.cardDetails').toUpperCase()}</Text>
+
+                    {isFetching && !isHydrated && (
+                        <View style={[s.detailsBlock, { backgroundColor: C.s2, borderColor: C.bd, padding: 20, alignItems: 'center' }]}>
+                            <Text style={[s.detailLabel, { color: C.tx3 }]}>{t('common.loading')}</Text>
                         </View>
-                    ))}
+                    )}
+
+                    {isHydrated && !token && (
+                        <View style={[s.detailsBlock, { backgroundColor: C.s2, borderColor: C.bd, padding: 16, gap: 6 }]}>
+                            <Feather name="info" size={16} color={C.tx3} />
+                            <Text style={[s.detailValue, { color: C.tx3 }]}>{t('qr.notAssigned')}</Text>
+                            <Text style={[s.detailLabel, { color: C.tx3 }]}>{t('qr.unassignedNotice')}</Text>
+                        </View>
+                    )}
+
+                    {token && (
+                        <View style={[s.detailsBlock, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                            <DetailRow label={t('qr.detailCardNumber')} value={token.card_number ?? '—'} C={C} />
+                            <DetailRow
+                                label={t('qr.detailStudent')}
+                                value={[student?.first_name, student?.last_name].filter(Boolean).join(' ') || '—'}
+                                C={C}
+                            />
+                            <DetailRow
+                                label={t('qr.detailClass')}
+                                value={student?.class ? `${student.class}${student?.section ? `-${student.section}` : ''}` : '—'}
+                                C={C}
+                            />
+                            <DetailRow label={t('qr.detailSchool')} value={student?.school?.name ?? '—'} C={C} />
+                            <DetailRow
+                                label={t('qr.detailBloodGroup')}
+                                value={BLOOD_GROUP_FROM_ENUM[student?.emergency?.blood_group] ?? student?.emergency?.blood_group ?? '—'}
+                                C={C}
+                            />
+                            <DetailRow
+                                label={t('qr.detailValidUntil')}
+                                value={fmtDate(token.expires_at)}
+                                valueColor={
+                                    token.expires_at &&
+                                    (new Date(token.expires_at) - Date.now()) < 30 * 24 * 60 * 60 * 1000
+                                        ? C.amb : undefined
+                                }
+                                C={C}
+                            />
+                            <DetailRow label={t('qr.detailCardStatus')} value={meta.label} valueColor={meta.color} last C={C} />
+                        </View>
+                    )}
                 </Animated.View>
 
-            </View>
+                <Animated.View entering={FadeInDown.delay(230).duration(360)}>
+                    <View style={[s.safetyTip, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
+                        <View style={[s.safetyIconBox, { backgroundColor: C.okBg }]}>
+                            <Feather name="shield" size={14} color={C.ok} />
+                        </View>
+                        <Text style={[s.safetyTx, { color: C.tx2 }]}>{t('qr.safetyTip')}</Text>
+                    </View>
+                </Animated.View>
+
+                <Animated.View entering={FadeInDown.delay(260).duration(360)} style={s.section}>
+                    <Text style={[s.sectionHead, { color: C.tx3 }]}>{t('qr.glossaryTitle').toUpperCase()}</Text>
+                    <View style={[s.glossary, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                        {[
+                            { label: t('qr.glossaryActiveLabel'),  desc: t('qr.glossaryActiveDesc'),  color: C.ok      },
+                            { label: t('qr.glossaryBlockedLabel'), desc: t('qr.glossaryBlockedDesc'), color: C.primary },
+                            { label: t('qr.glossaryRevokedLabel'), desc: t('qr.glossaryRevokedDesc'), color: C.red     },
+                            { label: t('qr.glossaryExpiredLabel'), desc: t('qr.glossaryExpiredDesc'), color: C.red     },
+                        ].map((g, i, arr) => (
+                            <View key={i} style={[s.glossaryRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.bd }]}>
+                                <View style={[s.glossaryDot, { backgroundColor: g.color }]} />
+                                <Text style={[s.glossaryLabel, { color: g.color }]}>{g.label}</Text>
+                                <Text style={[s.glossaryDesc, { color: C.tx3 }]}>{g.desc}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </Animated.View>
+
+            </ScrollView>
         </Screen>
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Card face styles ─────────────────────────────────────────────────────────
+const cs = StyleSheet.create({
+    cardFace: { width: CARD_W, height: CARD_H, borderRadius: 22, overflow: 'hidden', position: 'relative' },
+    cardRing: { ...StyleSheet.absoluteFillObject, borderRadius: 22, borderWidth: 1, zIndex: 10 },
+    cardStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, zIndex: 9 },
+    cardArc1: { position: 'absolute', width: CARD_W * 0.78, height: CARD_W * 0.78, borderRadius: 999, borderWidth: 1, top: -(CARD_W * 0.36), right: -(CARD_W * 0.28), zIndex: 1 },
+    cardArc2: { position: 'absolute', width: CARD_W * 1.05, height: CARD_W * 1.05, borderRadius: 999, borderWidth: 1, top: -(CARD_W * 0.52), right: -(CARD_W * 0.46), zIndex: 1 },
+    frontContent: { flex: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 17, justifyContent: 'space-between', zIndex: 5 },
+    row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    brandGroup: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+    brandMark: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    brandName: { fontSize: 10.5, fontWeight: '900', color: 'rgba(255,255,255,0.92)', letterSpacing: 1.6 },
+    brandSub: { fontSize: 8, color: 'rgba(255,255,255,0.40)', letterSpacing: 0.4, marginTop: 1 },
+    cardBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99, borderWidth: 1 },
+    cardBadgeTx: { fontSize: 10.5, fontWeight: '800' },
+    chipRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    chipBody: { width: 36, height: 28, borderRadius: 5, borderWidth: 1, padding: 5, justifyContent: 'center' },
+    chipLine: { height: 1.5, borderRadius: 1, width: '100%' },
+    chipDivider: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
+    cardNum: { fontSize: 15.5, fontWeight: '700', letterSpacing: 1.2, color: 'rgba(255,255,255,0.88)', fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
+    metaLbl: { fontSize: 7, fontWeight: '700', color: 'rgba(255,255,255,0.36)', letterSpacing: 1.0 },
+    cardHolder: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.90)', letterSpacing: 0.6, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
+    cardSub: { fontSize: 8.5, color: 'rgba(255,255,255,0.38)', letterSpacing: 0.3, marginTop: 1 },
+    cardValidTx: { fontSize: 14, fontWeight: '800', color: 'rgba(255,255,255,0.88)', letterSpacing: 1.0, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
+    qrFlipBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+    qrFlipBtnTx: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.4 },
+    backContent: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 18, gap: 16, zIndex: 5 },
+    backLeft: { flex: 1, gap: 9, justifyContent: 'space-between', alignSelf: 'stretch' },
+    backAvatar: { width: 40, height: 40, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+    backAvatarTx: { fontSize: 15, fontWeight: '900' },
+    backMetaLbl: { fontSize: 7, fontWeight: '700', color: 'rgba(255,255,255,0.32)', letterSpacing: 1.0 },
+    backName: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.90)', letterSpacing: 0.4, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
+    backClass: { fontSize: 8.5, color: 'rgba(255,255,255,0.38)', letterSpacing: 0.2, marginTop: 1 },
+    backCardNum: { fontSize: 9.5, fontWeight: '700', color: 'rgba(255,255,255,0.70)', letterSpacing: 0.4, fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' },
+    backStatus: { fontSize: 11, fontWeight: '800' },
+    qrBox: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 2, padding: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 14 }, android: { elevation: 10 } }) },
+});
 
-const styles = StyleSheet.create({
-    container: {
-        paddingHorizontal: spacing.screenH,
-        paddingTop: spacing[6],
-        paddingBottom: spacing[10],
-        gap: spacing[4],
-    },
-
-    // ── Header ────────────────────────────────────────────────────────
-    header: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-    },
-    pageTitle: {
-        ...typography.h2,
-        color: colors.textPrimary,
-    },
-    pageSubtitle: {
-        ...typography.bodySm,
-        color: colors.textTertiary,
-        marginTop: 2,
-    },
-    shareBtn: {
-        width: 38,
-        height: 38,
-        backgroundColor: colors.surface,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-    },
-
-    // ── Toast ─────────────────────────────────────────────────────────
-    toast: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[2],
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        padding: spacing[3],
-    },
-    toastText: {
-        ...typography.labelSm,
-        fontWeight: '600',
-    },
-
-    // ── Status pill ───────────────────────────────────────────────────
-    statusPillRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[3],
-    },
-    statusPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[1.5],
-        paddingHorizontal: spacing[3],
-        paddingVertical: spacing[1.5],
-        borderRadius: radius.chipFull,
-        borderWidth: 1,
-    },
-    statusDot: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
-    },
-    statusPillText: {
-        ...typography.labelSm,
-        fontWeight: '700',
-    },
-    statusDesc: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        flex: 1,
-    },
-
-    // ── Section label ─────────────────────────────────────────────────
-    sectionLabel: {
-        ...typography.overline,
-        color: colors.textTertiary,
-        marginBottom: spacing[2],
-        paddingLeft: spacing[0.5],
-    },
-
-    // ── Actions ───────────────────────────────────────────────────────
-    actionsSection: {
-        gap: 0,
-    },
-    actionsList: {
-        gap: spacing[2],
-    },
-    actionBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[3],
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        padding: spacing[4],
-    },
-    actionBtnDisabled: {
-        opacity: 0.4,
-    },
-    actionBtnIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: radius.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-    },
-    actionBtnLabel: {
-        ...typography.labelLg,
-        fontWeight: '700',
-    },
-    actionBtnSublabel: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        marginTop: 3,
-        lineHeight: 15,
-    },
-
-    // ── Revoked notice ────────────────────────────────────────────────
-    revokedNotice: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: spacing[2.5],
-        backgroundColor: colors.primaryBg,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: `rgba(232,52,42,0.2)`,
-        padding: spacing[3.5],
-    },
-    revokedNoticeText: {
-        ...typography.bodySm,
-        color: colors.textSecondary,
-        flex: 1,
-        lineHeight: 18,
-    },
-
-    // ── Card details ──────────────────────────────────────────────────
-    detailsCard: {
-        gap: 0,
-    },
-    detailsBlock: {
-        backgroundColor: colors.surface,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: 'hidden',
-    },
-    detailRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: spacing[4],
-        paddingVertical: spacing[3],
-    },
-    detailRowBorder: {
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    detailLabel: {
-        ...typography.labelSm,
-        color: colors.textTertiary,
-    },
-    detailValue: {
-        ...typography.labelMd,
-        color: colors.textPrimary,
-        fontWeight: '600',
-    },
-
-    // ── Safety tip ────────────────────────────────────────────────────
-    safetyTip: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: spacing[2.5],
-        backgroundColor: colors.successBg,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: `rgba(22,163,74,0.2)`,
-        padding: spacing[3.5],
-    },
-    safetyTipText: {
-        ...typography.labelXs,
-        color: colors.textSecondary,
-        flex: 1,
-        lineHeight: 16,
-    },
-
-    // ── Glossary ──────────────────────────────────────────────────────
-    glossary: {
-        backgroundColor: colors.surface,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: 'hidden',
-        padding: spacing[4],
-        gap: spacing[1],
-    },
-    glossaryTitle: {
-        ...typography.overline,
-        color: colors.textTertiary,
-        marginBottom: spacing[2],
-    },
-    glossaryRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: spacing[2.5],
-        paddingVertical: spacing[2],
-    },
-    glossaryRowBorder: {
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    glossaryDot: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
-        marginTop: 5,
-        flexShrink: 0,
-    },
-    glossaryLabel: {
-        ...typography.labelSm,
-        fontWeight: '700',
-        width: 88,
-        flexShrink: 0,
-    },
-    glossaryDesc: {
-        ...typography.labelXs,
-        color: colors.textTertiary,
-        flex: 1,
-        lineHeight: 16,
-    },
-
-    // ── Confirm modal ─────────────────────────────────────────────────
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: spacing[5],
-    },
-    modalSheet: {
-        backgroundColor: colors.surface,
-        borderRadius: radius.cardLg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: spacing[6],
-        width: '100%',
-        gap: spacing[3],
-        alignItems: 'center',
-    },
-    modalIconWrap: {
-        width: 60,
-        height: 60,
-        borderRadius: radius.cardSm,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: spacing[1],
-    },
-    modalTitle: {
-        ...typography.h3,
-        color: colors.textPrimary,
-        textAlign: 'center',
-    },
-    modalBody: {
-        ...typography.bodyMd,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        lineHeight: 22,
-    },
-    modalWarning: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: spacing[2],
-        backgroundColor: colors.warningBg,
-        borderRadius: radius.cardSm,
-        borderWidth: 1,
-        borderColor: `rgba(245,158,11,0.25)`,
-        padding: spacing[3],
-        width: '100%',
-    },
-    modalWarningText: {
-        ...typography.labelXs,
-        color: colors.warning,
-        flex: 1,
-        lineHeight: 16,
-    },
-    modalActions: {
-        flexDirection: 'row',
-        gap: spacing[2],
-        width: '100%',
-        marginTop: spacing[1],
-    },
-    modalCancelBtn: {
-        flex: 1,
-        paddingVertical: spacing[3.5],
-        borderRadius: radius.btn,
-        backgroundColor: colors.surface3,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center',
-    },
-    modalCancelText: {
-        ...typography.btnSm,
-        color: colors.textSecondary,
-        fontWeight: '600',
-    },
-    modalConfirmBtn: {
-        flex: 1,
-        paddingVertical: spacing[3.5],
-        borderRadius: radius.btn,
-        alignItems: 'center',
-    },
-    modalConfirmText: {
-        ...typography.btnSm,
-        color: colors.white,
-        fontWeight: '700',
-    },
+// ─── Theme-aware styles ───────────────────────────────────────────────────────
+const s = StyleSheet.create({
+    scroll: { paddingHorizontal: 24, paddingTop: Platform.OS === 'ios' ? 12 : 18, paddingBottom: 56, gap: 16 },
+    header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+    pageTitle: { fontSize: 23, fontWeight: '900', letterSpacing: -0.5 },
+    pageSub: { fontSize: 13, marginTop: 3, fontWeight: '500' },
+    shareBtn: { width: 40, height: 40, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 5, borderRadius: 99, borderWidth: 1 },
+    statusPillTx: { fontSize: 12, fontWeight: '800', letterSpacing: 0.1 },
+    statusDesc: { fontSize: 12.5, flex: 1, fontWeight: '500' },
+    tabRow: { flexDirection: 'row', borderRadius: 16, borderWidth: 1, padding: 4, gap: 4 },
+    tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 12 },
+    tabTx: { fontSize: 13 },
+    dragHint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: -4 },
+    dragHintTx: { fontSize: 11, fontWeight: '500' },
+    section: { gap: 10 },
+    sectionHead: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.1 },
+    actionList: { gap: 10 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 17, borderWidth: 1, padding: 16 },
+    actionBtnDim: { opacity: 0.4 },
+    actionBtnIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    actionBtnLabel: { fontSize: 15, fontWeight: '800' },
+    actionBtnSub: { fontSize: 12.5, marginTop: 3, lineHeight: 17, opacity: 0.6 },
+    revokedNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 14, borderWidth: 1, padding: 14 },
+    revokedNoticeTx: { fontSize: 13.5, flex: 1, lineHeight: 20 },
+    detailsBlock: { borderRadius: 17, borderWidth: 1, overflow: 'hidden' },
+    detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 17, paddingVertical: 14 },
+    detailLabel: { fontSize: 14, fontWeight: '500' },
+    detailValue: { fontSize: 14, fontWeight: '700', maxWidth: '58%', textAlign: 'right' },
+    safetyTip: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, borderRadius: 16, borderWidth: 1, padding: 15 },
+    safetyIconBox: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    safetyTx: { fontSize: 13, flex: 1, lineHeight: 19, fontWeight: '500', paddingTop: 5 },
+    glossary: { borderRadius: 17, borderWidth: 1, overflow: 'hidden', paddingVertical: 4, paddingHorizontal: 4 },
+    glossaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 13, paddingVertical: 12 },
+    glossaryDot: { width: 7, height: 7, borderRadius: 3.5, marginTop: 5.5, flexShrink: 0 },
+    glossaryLabel: { fontSize: 13, fontWeight: '800', width: 105, flexShrink: 0 },
+    glossaryDesc: { fontSize: 12.5, flex: 1, lineHeight: 18 },
+    toast: { flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 14, borderWidth: 1, padding: 13 },
+    toastIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    toastTx: { fontSize: 13.5, fontWeight: '700', flex: 1 },
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.68)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    modalSheet: { borderRadius: 26, borderWidth: 1, padding: 28, width: '100%', gap: 12, alignItems: 'center', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 24 }, shadowOpacity: 0.45, shadowRadius: 40 }, android: { elevation: 24 } }) },
+    modalIconBox: { width: 66, height: 66, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+    modalTitle: { fontSize: 21, fontWeight: '900', textAlign: 'center', letterSpacing: -0.3 },
+    modalBody: { fontSize: 14.5, textAlign: 'center', lineHeight: 22 },
+    modalWarn: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, borderRadius: 13, borderWidth: 1, padding: 13, width: '100%' },
+    modalWarnTx: { fontSize: 12.5, flex: 1, lineHeight: 18 },
+    modalBtns: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
+    modalCancelBtn: { flex: 1, paddingVertical: 15, borderRadius: 15, borderWidth: 1, alignItems: 'center' },
+    modalCancelTx: { fontSize: 15, fontWeight: '700' },
+    modalConfirmBtn: { flex: 1, paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
+    modalConfirmTx: { fontSize: 15, fontWeight: '800', color: '#fff' },
+    loadingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, alignItems: 'center', justifyContent: 'center' },
+    loadingBox: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 24, paddingVertical: 16 },
+    loadingTx: { fontSize: 14, fontWeight: '600' },
 });

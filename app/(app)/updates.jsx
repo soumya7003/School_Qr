@@ -1,385 +1,300 @@
 /**
- * UpdatesScreen — Optimized
- *
- * Architecture:
- *  - NO school approval queue — all changes save instantly to DB
- *  - Single API call updates student + emergency profile together
- *  - Contacts save independently in real time
- *  - Clean 3-tab layout: Child · Medical · Contacts
- *  - OTP removed from update flow entirely (session token is sufficient)
+ * app/(app)/updates.jsx — fully i18n-wired
  */
 
 import Screen from '@/components/common/Screen';
+import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
-import { colors, radius, spacing, typography } from '@/theme';
-import { useEffect, useRef, useState } from 'react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { spacing, typography } from '@/theme';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  Alert, Animated, KeyboardAvoidingView, Modal,
+  Platform, Pressable, ScrollView, StyleSheet,
+  Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 
-// ─── Icons ─────────────────────────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
+const CheckSvg = ({ c = '#fff', s = 16 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M20 6L9 17l-5-5" stroke={c} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+const ChevRight = ({ c, s = 16 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M9 18l6-6-6-6" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+const ChevLeft = ({ c, s = 16 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M15 18l-6-6 6-6" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+const PlusSvg = ({ c = '#fff', s = 18 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M12 5v14M5 12h14" stroke={c} strokeWidth={2.2} strokeLinecap="round" />
+  </Svg>
+);
+const XSvg = ({ c, s = 14 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M18 6L6 18M6 6l12 12" stroke={c} strokeWidth={2} strokeLinecap="round" />
+  </Svg>
+);
+const TrashSvg = ({ c, s = 14 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke={c} strokeWidth={1.7} strokeLinecap="round" />
+  </Svg>
+);
+const EditSvg = ({ c, s = 14 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke={c} strokeWidth={1.7} strokeLinecap="round" />
+    <Path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke={c} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
-const Ic = {
-  User: ({ c = colors.textTertiary, s = 18 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-      <Circle cx={12} cy={7} r={4} stroke={c} strokeWidth={1.8} />
-    </Svg>
-  ),
-  Heart: ({ c = colors.primary, s = 18 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  ),
-  Phone: ({ c = colors.textTertiary, s = 18 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.66A2 2 0 012 .99h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  ),
-  Plus: ({ c = colors.white, s = 16 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M12 5v14M5 12h14" stroke={c} strokeWidth={2.2} strokeLinecap="round" />
-    </Svg>
-  ),
-  Edit: ({ c = colors.textSecondary, s = 14 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-      <Path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  ),
-  Trash: ({ c = colors.primary, s = 14 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" />
-    </Svg>
-  ),
-  Check: ({ c = colors.white, s = 16 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M20 6L9 17l-5-5" stroke={c} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  ),
-  Flash: ({ c = '#10B981', s = 14 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  ),
-  Camera: ({ c = colors.primary, s = 20 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={12} cy={13} r={4} stroke={c} strokeWidth={1.8} />
-    </Svg>
-  ),
-  Drop: ({ c = '#ef4444', s = 16 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M12 2C6 9 4 13 4 16a8 8 0 0016 0c0-3-2-7-8-14z"
-        stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  ),
-  X: ({ c = colors.primary, s = 14 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M18 6L6 18M6 6l12 12" stroke={c} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  ),
-  ChevronRight: ({ c = colors.textTertiary, s = 14 }) => (
-    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <Path d="M9 18l6-6-6-6" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  ),
-};
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
+// ── Constants ─────────────────────────────────────────────────────────────────
 const BLOOD_GROUPS = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−', 'Unknown'];
-const PRIORITY_COLORS = ['#E8342A', '#F59E0B', '#3B82F6', '#8B5CF6', '#10B981'];
+const BLOOD_GROUP_TO_ENUM = {
+  'A+': 'A_POS', 'A−': 'A_NEG', 'A-': 'A_NEG', 'B+': 'B_POS', 'B−': 'B_NEG', 'B-': 'B_NEG',
+  'O+': 'O_POS', 'O−': 'O_NEG', 'O-': 'O_NEG', 'AB+': 'AB_POS', 'AB−': 'AB_NEG', 'AB-': 'AB_NEG',
+  'Unknown': 'UNKNOWN', 'A_POS': 'A_POS', 'A_NEG': 'A_NEG', 'B_POS': 'B_POS', 'B_NEG': 'B_NEG',
+  'O_POS': 'O_POS', 'O_NEG': 'O_NEG', 'AB_POS': 'AB_POS', 'AB_NEG': 'AB_NEG', 'UNKNOWN': 'UNKNOWN',
+};
+const BLOOD_GROUP_FROM_ENUM = {
+  'A_POS': 'A+', 'A_NEG': 'A−', 'B_POS': 'B+', 'B_NEG': 'B−',
+  'O_POS': 'O+', 'O_NEG': 'O−', 'AB_POS': 'AB+', 'AB_NEG': 'AB−', 'UNKNOWN': 'Unknown',
+};
+const PRIORITY_COLORS = ['#F97316', '#FBBF24', '#60A5FA', '#A78BFA', '#22C55E'];
 
-const TABS = [
-  { id: 'child', label: 'Child', icon: '👤' },
-  { id: 'medical', label: 'Medical', icon: '🏥' },
-  { id: 'contacts', label: 'Contacts', icon: '📞' },
-];
-
-// ─── Animated Save Toast ────────────────────────────────────────────────────
-
-function SaveToast({ visible }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.spring(opacity, { toValue: 1, useNativeDriver: true }),
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 10, duration: 200, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [visible]);
-
+// ── Step bar ──────────────────────────────────────────────────────────────────
+function StepBar({ current, completed, C }) {
+  const { t } = useTranslation();
+  const STEPS = [
+    { id: 0, label: t('updates_extra.stepStudent'), short: '01' },
+    { id: 1, label: t('updates_extra.stepMedical'),  short: '02' },
+    { id: 2, label: t('updates_extra.stepContacts'), short: '03' },
+    { id: 3, label: t('updates_extra.stepReview'),   short: '04' },
+  ];
   return (
-    <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }] }]}>
-      <View style={styles.toastDot} />
-      <Text style={styles.toastText}>Saved to your child's card</Text>
-    </Animated.View>
-  );
-}
-
-// ─── Tab Bar ────────────────────────────────────────────────────────────────
-
-function TabBar({ active, onChange, dirtyTabs }) {
-  return (
-    <View style={styles.tabBar}>
-      {TABS.map(tab => {
-        const isActive = active === tab.id;
-        const isDirty = dirtyTabs.includes(tab.id);
+    <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
+      {STEPS.map((step, i) => {
+        const isActive = i === current;
+        const isDone   = completed.includes(i);
         return (
-          <TouchableOpacity
-            key={tab.id}
-            style={[styles.tabItem, isActive && styles.tabItemActive]}
-            onPress={() => onChange(tab.id)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-              {tab.label}
-            </Text>
-            {isDirty && !isActive && <View style={styles.tabDirtyDot} />}
-          </TouchableOpacity>
+          <View key={step.id} style={sb.stepGroup}>
+            {i > 0 && <View style={[sb.line, { backgroundColor: C.bd2 }, (isDone || isActive) && { backgroundColor: C.primary }]} />}
+            <View style={[sb.circle, { borderColor: C.bd2, backgroundColor: C.s3 }, isActive && { borderColor: C.primary, backgroundColor: C.primaryBg }, isDone && { borderColor: C.okBd, backgroundColor: C.okBg }]}>
+              {isDone ? <CheckSvg c="#22C55E" s={10} /> : <Text style={[sb.circleNum, { color: isActive ? C.primary : C.tx3 }]}>{step.short}</Text>}
+            </View>
+            <Text style={[sb.label, { color: isDone ? C.ok : isActive ? C.tx : C.tx3 }]}>{step.label}</Text>
+          </View>
         );
       })}
     </View>
   );
 }
+const sb = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', paddingHorizontal: spacing.screenH, paddingVertical: spacing[4], borderBottomWidth: 1, gap: 0 },
+  stepGroup: { alignItems: 'center', flex: 1, position: 'relative' },
+  line: { position: 'absolute', top: 13, right: '50%', left: '-50%', height: 1 },
+  circle: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginBottom: 6, zIndex: 1 },
+  circleNum: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
+  label: { fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
+});
 
-// ─── Field ──────────────────────────────────────────────────────────────────
-
-function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint }) {
-  const [focused, setFocused] = useState(false);
-  const borderAnim = useRef(new Animated.Value(0)).current;
-
-  const handleFocus = () => {
-    setFocused(true);
-    Animated.timing(borderAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
-  };
-  const handleBlur = () => {
-    setFocused(false);
-    Animated.timing(borderAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
-  };
-
-  const borderColor = borderAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.border, colors.primary],
-  });
-
+// ── Field ─────────────────────────────────────────────────────────────────────
+function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint, required, C }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const animate = (to) => Animated.timing(anim, { toValue: to, duration: 160, useNativeDriver: false }).start();
+  const borderColor = anim.interpolate({ inputRange: [0, 1], outputRange: [C.bd2, C.primary] });
   return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Animated.View style={[styles.fieldBox, { borderColor }]}>
+    <View style={fld.wrap}>
+      <View style={fld.labelRow}>
+        <Text style={[fld.label, { color: C.tx3 }]}>{label}</Text>
+        {required && <View style={[fld.reqDot, { backgroundColor: C.primary }]} />}
+      </View>
+      <Animated.View style={[fld.box, { borderColor, backgroundColor: C.s2 }]}>
         <TextInput
-          style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
+          style={[fld.input, { color: C.tx }, multiline && fld.inputMulti]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={C.tx3}
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}
           keyboardType={keyboardType ?? 'default'}
           textAlignVertical={multiline ? 'top' : 'center'}
-          selectionColor={colors.primary}
-          cursorColor={colors.primary}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
+          selectionColor={C.primary}
+          onFocus={() => animate(1)}
+          onBlur={() => animate(0)}
         />
       </Animated.View>
-      {hint && (
-        <Text style={styles.fieldHint}>{hint}</Text>
-      )}
+      {hint && <Text style={[fld.hint, { color: C.tx3 }]}>{hint}</Text>}
     </View>
   );
 }
+const fld = StyleSheet.create({
+  wrap: { gap: 6 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  reqDot: { width: 4, height: 4, borderRadius: 2, marginTop: 1 },
+  box: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 },
+  input: { ...typography.bodyMd, height: 44, paddingVertical: 0, fontSize: 14.5 },
+  inputMulti: { height: 84, paddingTop: 12, paddingBottom: 10, textAlignVertical: 'top' },
+  hint: { fontSize: 11, fontStyle: 'italic' },
+});
 
-// ─── Row (two fields side by side) ─────────────────────────────────────────
-
-function FieldRow({ children }) {
-  return <View style={styles.fieldRow}>{children}</View>;
-}
-
-// ─── Section ────────────────────────────────────────────────────────────────
-
-function Section({ emoji, title, subtitle, children }) {
+// ── Section card ──────────────────────────────────────────────────────────────
+function SectionCard({ icon, title, subtitle, children, accent, C }) {
+  const ac = accent ?? C.primary;
   return (
-    <View style={styles.section}>
-      <View style={styles.sectionHead}>
-        <View style={styles.sectionEmojiWrap}>
-          <Text style={styles.sectionEmoji}>{emoji}</Text>
-        </View>
+    <View style={[sc.card, { backgroundColor: C.s2, borderColor: C.bd }]}>
+      <View style={[sc.head, { borderLeftColor: ac, borderBottomColor: C.bd }]}>
+        <View style={[sc.iconWrap, { backgroundColor: ac + '12', borderColor: ac + '30' }]}>{icon}</View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          {subtitle && <Text style={styles.sectionSub}>{subtitle}</Text>}
+          <Text style={[sc.title, { color: C.tx }]}>{title}</Text>
+          {subtitle && <Text style={[sc.sub, { color: C.tx3 }]}>{subtitle}</Text>}
         </View>
       </View>
-      <View style={styles.sectionBody}>{children}</View>
+      <View style={sc.body}>{children}</View>
     </View>
   );
 }
+const sc = StyleSheet.create({
+  card: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderLeftWidth: 3 },
+  iconWrap: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 13.5, fontWeight: '700' },
+  sub: { fontSize: 11, marginTop: 1 },
+  body: { padding: 16, gap: 14 },
+});
 
-// ─── Blood Group Picker ─────────────────────────────────────────────────────
-
-function BloodPicker({ value, onChange }) {
+// ── Blood picker ──────────────────────────────────────────────────────────────
+function BloodPicker({ value, onChange, C }) {
+  const { t } = useTranslation();
   return (
-    <View style={styles.bloodWrap}>
-      <View style={styles.bloodRow}>
-        {BLOOD_GROUPS.map(bg => {
+    <View style={{ gap: 10 }}>
+      <View style={bl.grid}>
+        {BLOOD_GROUPS.map((bg) => {
           const sel = value === bg;
           return (
             <TouchableOpacity
               key={bg}
-              style={[styles.bloodChip, sel && styles.bloodChipSel]}
+              style={[bl.chip, { borderColor: C.bd2, backgroundColor: C.s3 }, sel && { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
               onPress={() => onChange(bg)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.bloodChipText, sel && styles.bloodChipTextSel]}>{bg}</Text>
-              {sel && <View style={styles.bloodDot} />}
+              <Text style={[bl.text, { color: sel ? C.primary : C.tx2 }]}>{bg}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
       {!value && (
-        <Text style={styles.bloodWarning}>⚠ Select blood group — critical for emergencies</Text>
+        <View style={[bl.warn, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
+          <Text style={[bl.warnText, { color: C.amb }]}>{t('updates_extra.bloodGroupWarn')}</Text>
+        </View>
       )}
     </View>
   );
 }
+const bl = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, minWidth: 54, justifyContent: 'center' },
+  text: { fontSize: 13, fontWeight: '700' },
+  warn: { borderRadius: 8, borderWidth: 1, padding: 10 },
+  warnText: { fontSize: 12, fontWeight: '600' },
+});
 
-// ─── Photo Row ──────────────────────────────────────────────────────────────
-
-function PhotoRow({ photoUrl, onPress }) {
-  return (
-    <TouchableOpacity style={styles.photoRow} onPress={onPress} activeOpacity={0.75}>
-      <View style={styles.photoAvatar}>
-        <Ic.User c={colors.textTertiary} s={26} />
-        <View style={styles.photoBadge}>
-          <Ic.Camera c={colors.white} s={9} />
-        </View>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.photoLabel}>{photoUrl ? 'Change Photo' : 'Add Photo'}</Text>
-        <Text style={styles.photoSub}>
-          {photoUrl ? 'Tap to update' : 'Helps responders identify your child instantly'}
-        </Text>
-      </View>
-      <Ic.ChevronRight c={colors.textTertiary} s={16} />
-    </TouchableOpacity>
-  );
-}
-
-// ─── Contact Card ───────────────────────────────────────────────────────────
-
-function ContactCard({ contact, onEdit, onDelete, index }) {
+// ── Contact card ──────────────────────────────────────────────────────────────
+function ContactCard({ contact, index, onEdit, onDelete, C }) {
+  const { t } = useTranslation();
   const pc = PRIORITY_COLORS[(contact.priority - 1) % PRIORITY_COLORS.length];
   const scaleAnim = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      delay: index * 60,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 8,
-    }).start();
+    Animated.spring(scaleAnim, { toValue: 1, delay: index * 55, useNativeDriver: true, tension: 85, friction: 8 }).start();
   }, []);
-
   return (
-    <Animated.View style={[styles.contactCard, { transform: [{ scale: scaleAnim }] }]}>
-      <View style={[styles.contactPriority, { backgroundColor: `${pc}18`, borderColor: `${pc}40` }]}>
-        <Text style={[styles.contactPriorityText, { color: pc }]}>{contact.priority}</Text>
+    <Animated.View style={[ccc.card, { backgroundColor: C.s3, borderColor: C.bd, transform: [{ scale: scaleAnim }] }]}>
+      <View style={[ccc.priority, { backgroundColor: pc + '18', borderColor: pc + '35' }]}>
+        <Text style={[ccc.priorityNum, { color: pc }]}>{contact.priority}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <View style={styles.contactTop}>
-          <Text style={styles.contactName}>{contact.name}</Text>
+        <View style={ccc.top}>
+          <Text style={[ccc.name, { color: C.tx }]}>{contact.name}</Text>
           {contact.priority === 1 && (
-            <View style={[styles.contactBadge, { backgroundColor: `${pc}15`, borderColor: `${pc}30` }]}>
-              <Text style={[styles.contactBadgeText, { color: pc }]}>First call</Text>
+            <View style={[ccc.firstTag, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+              <Text style={[ccc.firstTagText, { color: C.primary }]}>{t('updates_extra.firstCall')}</Text>
             </View>
           )}
         </View>
-        <Text style={styles.contactMeta}>
-          {contact.relationship ?? 'Guardian'} · {contact.phone}
-        </Text>
+        <Text style={[ccc.meta, { color: C.tx3 }]}>{contact.relationship || t('home.guardian')} · {contact.phone}</Text>
       </View>
-      <View style={styles.contactActions}>
-        <TouchableOpacity style={styles.contactBtn} onPress={() => onEdit(contact)} activeOpacity={0.7}>
-          <Ic.Edit c={colors.textSecondary} s={13} />
+      <View style={ccc.actions}>
+        <TouchableOpacity style={[ccc.btn, { backgroundColor: C.s4, borderColor: C.bd }]} onPress={() => onEdit(contact)} activeOpacity={0.7}>
+          <EditSvg c={C.tx2} s={12} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.contactBtn, styles.contactBtnRed]} onPress={() => onDelete(contact)} activeOpacity={0.7}>
-          <Ic.Trash c={colors.primary} s={13} />
+        <TouchableOpacity style={[ccc.btn, { backgroundColor: C.redBg, borderColor: C.redBd }]} onPress={() => onDelete(contact)} activeOpacity={0.7}>
+          <TrashSvg c={C.red} s={12} />
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
+const ccc = StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, borderWidth: 1, padding: 14 },
+  priority: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  priorityNum: { fontSize: 13, fontWeight: '900' },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  name: { fontSize: 13.5, fontWeight: '700' },
+  firstTag: { borderRadius: 4, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
+  firstTagText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  meta: { fontSize: 11.5, marginTop: 3 },
+  actions: { flexDirection: 'row', gap: 6 },
+  btn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+});
 
-// ─── Contact Modal ──────────────────────────────────────────────────────────
-
-function ContactModal({ visible, contact, onSave, onClose }) {
-  const [name, setName] = useState('');
+// ── Contact modal ─────────────────────────────────────────────────────────────
+function ContactModal({ visible, contact, onSave, onClose, C }) {
+  const { t } = useTranslation();
+  const [name, setName]   = useState('');
   const [phone, setPhone] = useState('');
-  const [relationship, setRelationship] = useState('');
-
+  const [rel, setRel]     = useState('');
   useEffect(() => {
-    if (visible) {
-      setName(contact?.name ?? '');
-      setPhone(contact?.phone ?? '');
-      setRelationship(contact?.relationship ?? '');
-    }
+    if (visible) { setName(contact?.name ?? ''); setPhone(contact?.phone ?? ''); setRel(contact?.relationship ?? ''); }
   }, [visible, contact]);
-
   const handleSave = () => {
-    if (!name.trim() || !phone.trim()) {
-      Alert.alert('Missing Info', 'Name and phone are required.');
-      return;
-    }
-    onSave({ name: name.trim(), phone: phone.trim(), relationship: relationship.trim() });
+    if (!name.trim() || !phone.trim()) { Alert.alert(t('updates_extra.contactRequiredAlert'), t('updates_extra.contactRequiredMsg')); return; }
+    if (!/^[6-9]\d{9}$/.test(phone.trim())) { Alert.alert(t('updates_extra.contactInvalidPhone'), t('updates_extra.contactInvalidPhoneMsg')); return; }
+    onSave({ name: name.trim(), phone: phone.trim(), relationship: rel.trim() });
     onClose();
   };
-
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={cm.overlay} onPress={onClose}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Pressable style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>
-              {contact?.id ? 'Edit Contact' : 'Add Contact'}
-            </Text>
-            <Text style={styles.sheetSub}>Called immediately when QR is scanned</Text>
-            <View style={styles.sheetFields}>
-              <Field label="Full Name" value={name} onChangeText={setName} placeholder="e.g. Priya Sharma" />
-              <Field label="Phone Number" value={phone} onChangeText={setPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" />
-              <Field label="Relationship" value={relationship} onChangeText={setRelationship} placeholder="Mother / Father / Uncle…" />
+          <Pressable style={[cm.sheet, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
+            <View style={[cm.handle, { backgroundColor: C.s4 }]} />
+            <View style={cm.sheetHead}>
+              <View>
+                <Text style={[cm.sheetTitle, { color: C.tx }]}>{contact?.id ? t('updates_extra.contactModalEditTitle') : t('updates_extra.contactModalAddTitle')}</Text>
+                <Text style={[cm.sheetSub, { color: C.tx3 }]}>{t('updates_extra.contactModalSub')}</Text>
+              </View>
+              <TouchableOpacity style={[cm.closeBtn, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={onClose}>
+                <XSvg c={C.tx3} s={14} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.sheetSaveBtn} onPress={handleSave} activeOpacity={0.85}>
-              <Ic.Check c={colors.white} s={15} />
-              <Text style={styles.sheetSaveBtnText}>
-                {contact?.id ? 'Save Changes' : 'Add Contact'}
-              </Text>
+            <View style={cm.fields}>
+              <Field label={t('updates_extra.fieldContactName')}  value={name}  onChangeText={setName}  placeholder={t('updates_extra.fieldContactNamePlaceholder')}  required C={C} />
+              <Field label={t('updates_extra.fieldContactPhone')} value={phone} onChangeText={setPhone} placeholder={t('updates_extra.fieldContactPhonePlaceholder')} keyboardType="phone-pad" required C={C} />
+              <Field label={t('updates_extra.fieldContactRel')}   value={rel}   onChangeText={setRel}   placeholder={t('updates_extra.fieldContactRelPlaceholder')}   C={C} />
+            </View>
+            <TouchableOpacity style={[cm.saveBtn, { backgroundColor: C.primary }]} onPress={handleSave} activeOpacity={0.85}>
+              <CheckSvg c="#fff" s={14} />
+              <Text style={cm.saveBtnText}>{contact?.id ? t('updates_extra.contactSaveEdit') : t('updates_extra.contactSaveAdd')}</Text>
             </TouchableOpacity>
           </Pressable>
         </KeyboardAvoidingView>
@@ -387,739 +302,401 @@ function ContactModal({ visible, contact, onSave, onClose }) {
     </Modal>
   );
 }
+const cm = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, padding: 20, paddingBottom: 36, gap: 16 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
+  sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  sheetTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  sheetSub: { fontSize: 12, marginTop: 2 },
+  closeBtn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  fields: { gap: 12 },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 15, marginTop: 4 },
+  saveBtnText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+});
 
-// ─── Save Button ────────────────────────────────────────────────────────────
-
-function SaveButton({ dirty, saving, onPress }) {
-  if (!dirty && !saving) return null;
+// ── Review row ────────────────────────────────────────────────────────────────
+function ReviewRow({ label, value, C }) {
+  const empty = !value;
   return (
-    <View style={styles.saveBar}>
+    <View style={[rv.row, { borderBottomColor: C.bd }]}>
+      <Text style={[rv.label, { color: C.tx3 }]}>{label}</Text>
+      <Text style={[rv.value, { color: empty ? C.tx3 : C.tx }, empty && rv.empty]}>{value || '—'}</Text>
+    </View>
+  );
+}
+const rv = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 9, borderBottomWidth: 1 },
+  label: { fontSize: 12, flex: 1, fontWeight: '600' },
+  value: { fontSize: 13, flex: 2, textAlign: 'right', fontWeight: '600' },
+  empty: { fontStyle: 'italic', fontWeight: '400' },
+});
+
+// ── Nav footer ────────────────────────────────────────────────────────────────
+function NavFooter({ step, onBack, onNext, nextLabel, saving, canProceed, C }) {
+  const { t } = useTranslation();
+  const isFirst = step === 0;
+  return (
+    <View style={[nf.bar, { backgroundColor: C.s2, borderTopColor: C.bd }]}>
+      <TouchableOpacity style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]} onPress={onBack} disabled={isFirst} activeOpacity={0.7}>
+        <ChevLeft c={C.tx2} s={16} />
+        <Text style={[nf.backText, { color: C.tx2 }]}>{t('updates_extra.back')}</Text>
+      </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.saveBtn, saving && styles.saveBtnBusy]}
-        onPress={onPress}
+        style={[nf.nextBtn, { backgroundColor: C.primary }, saving && { opacity: 0.6 }, !canProceed && { opacity: 0.4 }]}
+        onPress={onNext}
+        disabled={saving || !canProceed}
         activeOpacity={0.85}
-        disabled={saving}
       >
-        <Text style={styles.saveBtnText}>
-          {saving ? 'Saving…' : 'Save Changes'}
-        </Text>
-        {!saving && <Ic.Flash c={colors.white} s={14} />}
+        <Text style={nf.nextText}>{saving ? t('updates_extra.saving') : nextLabel}</Text>
+        {!saving && (nextLabel === t('updates_extra.next') ? <ChevRight c="#fff" s={15} /> : <Text style={{ fontSize: 14 }}>⚡</Text>)}
       </TouchableOpacity>
     </View>
   );
 }
+const nf = StyleSheet.create({
+  bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.screenH, paddingTop: 14, paddingBottom: spacing[6], borderTopWidth: 1, gap: 10 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 13, paddingHorizontal: 18, borderRadius: 12, borderWidth: 1 },
+  backText: { fontSize: 14, fontWeight: '600' },
+  nextBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 15 },
+  nextText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+});
 
-// ─── Note ───────────────────────────────────────────────────────────────────
-
-function Note({ children }) {
-  return (
-    <View style={styles.note}>
-      <Text style={styles.noteText}>{children}</Text>
-    </View>
-  );
-}
-
-// ─── Main Screen ─────────────────────────────────────────────────────────────
-
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function UpdatesScreen() {
-  const {
-    student,
-    emergencyProfile,
-    contacts: rawContacts,
-    updateStudentProfile,  // PATCH /student/:id — saves directly, no queue
-    updateContact,
-    addContact,
-    deleteContact,
-  } = useProfileStore();
+  const { colors: C } = useTheme();
+  const { t } = useTranslation();
+  const isNewUser    = useAuthStore((s) => s.isNewUser);
+  const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
+  const patchStudent    = useProfileStore((s) => s.patchStudent);
+  const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
+  const student = useProfileStore(
+    useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
+  );
+  const ep = student?.emergency ?? null;
+  const rawContacts = useMemo(() => student?.emergency?.contacts ?? [], [student?.emergency?.contacts]);
 
-  // ── Tab state
-  const [activeTab, setActiveTab] = useState('child');
+  const [step, setStep]           = useState(0);
+  const [completed, setCompleted] = useState([]);
+  const [saving, setSaving]       = useState(false);
 
-  // ── Child fields
-  const [firstName, setFirstName] = useState(student?.first_name ?? '');
-  const [lastName, setLastName] = useState(student?.last_name ?? '');
-  const [cls, setCls] = useState(student?.class ?? '');
-  const [section, setSection] = useState(student?.section ?? '');
+  const [firstName,   setFirstName]   = useState(student?.first_name ?? '');
+  const [lastName,    setLastName]    = useState(student?.last_name  ?? '');
+  const [cls,         setCls]         = useState(student?.class      ?? '');
+  const [section,     setSection]     = useState(student?.section    ?? '');
+  const [bloodGroup,  setBloodGroup]  = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
+  const [allergies,   setAllergies]   = useState(ep?.allergies   ?? '');
+  const [conditions,  setConditions]  = useState(ep?.conditions  ?? '');
+  const [medications, setMedications] = useState(ep?.medications ?? '');
+  const [doctorName,  setDoctorName]  = useState(ep?.doctor_name  ?? '');
+  const [doctorPhone, setDoctorPhone] = useState(ep?.doctor_phone ?? '');
+  const [notes,       setNotes]       = useState(ep?.notes ?? '');
+  const [contacts,    setContacts]    = useState(rawContacts ?? []);
+  const [modalVisible,   setModalVisible]  = useState(false);
+  const [editingContact, setEditContact]   = useState(null);
 
-  // ── Medical fields
-  const [bloodGroup, setBloodGroup] = useState(emergencyProfile?.blood_group ?? '');
-  const [allergies, setAllergies] = useState(emergencyProfile?.allergies ?? '');
-  const [conditions, setConditions] = useState(emergencyProfile?.conditions ?? '');
-  const [medications, setMedications] = useState(emergencyProfile?.medications ?? '');
-  const [doctorName, setDoctorName] = useState(emergencyProfile?.doctor_name ?? '');
-  const [doctorPhone, setDoctorPhone] = useState(emergencyProfile?.doctor_phone ?? '');
-  const [notes, setNotes] = useState(emergencyProfile?.notes ?? '');
+  useEffect(() => { setFirstName(student?.first_name ?? ''); setLastName(student?.last_name ?? ''); setCls(student?.class ?? ''); setSection(student?.section ?? ''); }, [student]);
+  useEffect(() => { setBloodGroup(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? ''); setAllergies(ep?.allergies ?? ''); setConditions(ep?.conditions ?? ''); setMedications(ep?.medications ?? ''); setDoctorName(ep?.doctor_name ?? ''); setDoctorPhone(ep?.doctor_phone ?? ''); setNotes(ep?.notes ?? ''); }, [ep]);
+  useEffect(() => { setContacts(rawContacts ?? []); }, [rawContacts]);
 
-  // ── Contacts
-  const [contacts, setContacts] = useState(rawContacts ?? []);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingContact, setEditingContact] = useState(null);
+  const scrollRef = useRef(null);
+  const scrollTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
+  const canProceed = step === 0 ? firstName.trim().length > 0 && lastName.trim().length > 0 : true;
 
-  // ── Save states
-  const [saving, setSaving] = useState(false);
-  const [toastVisible, setToastVisible] = useState(false);
-
-  // ── Dirty tracking
-  const childDirty =
-    firstName !== (student?.first_name ?? '') ||
-    lastName !== (student?.last_name ?? '') ||
-    cls !== (student?.class ?? '') ||
-    section !== (student?.section ?? '');
-
-  const medDirty =
-    bloodGroup !== (emergencyProfile?.blood_group ?? '') ||
-    allergies !== (emergencyProfile?.allergies ?? '') ||
-    conditions !== (emergencyProfile?.conditions ?? '') ||
-    medications !== (emergencyProfile?.medications ?? '') ||
-    doctorName !== (emergencyProfile?.doctor_name ?? '') ||
-    doctorPhone !== (emergencyProfile?.doctor_phone ?? '') ||
-    notes !== (emergencyProfile?.notes ?? '');
-
-  const currentTabDirty = activeTab === 'child' ? childDirty : activeTab === 'medical' ? medDirty : false;
-  const dirtyTabs = [...(childDirty ? ['child'] : []), ...(medDirty ? ['medical'] : [])];
-
-  // ── Show toast helper
-  const showToast = () => {
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2500);
+  const fadeAnim  = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const transitionStep = (n) => {
+    Animated.parallel([
+      Animated.timing(fadeAnim,  { toValue: 0,  duration: 100, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 20, duration: 100, useNativeDriver: true }),
+    ]).start(() => {
+      setStep(n); slideAnim.setValue(-20);
+      Animated.parallel([
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start();
+    });
   };
 
-  // ── Save child + medical together (single API call)
-  const handleSave = async () => {
-    if (!currentTabDirty) return;
+  const goNext = () => {
+    if (step === 0 && (!firstName.trim() || !lastName.trim())) {
+      Alert.alert(t('updates_extra.requiredAlert'), t('updates_extra.requiredAlertMsg'));
+      return;
+    }
+    if (step < 3) { setCompleted((p) => p.includes(step) ? p : [...p, step]); transitionStep(step + 1); scrollTop(); }
+    else handleSubmitAll();
+  };
+  const goBack = () => { if (step > 0) { transitionStep(step - 1); scrollTop(); } };
+
+  const handleSubmitAll = async () => {
     setSaving(true);
     try {
-      if (activeTab === 'child') {
-        await updateStudentProfile?.({
-          student: { first_name: firstName, last_name: lastName, class: cls, section },
-        });
-      } else if (activeTab === 'medical') {
-        await updateStudentProfile?.({
-          emergency: { blood_group: bloodGroup, allergies, conditions, medications, doctor_name: doctorName, doctor_phone: doctorPhone, notes },
-        });
+      await patchStudent(student.id, {
+        student: { first_name: firstName.trim(), last_name: lastName.trim(), class: cls.trim(), section: section.trim() },
+        emergency: {
+          blood_group: (BLOOD_GROUP_TO_ENUM[bloodGroup] ?? bloodGroup) || undefined,
+          allergies: allergies.trim(), conditions: conditions.trim(),
+          medications: medications.trim(), doctor_name: doctorName.trim(),
+          ...(doctorPhone.trim() ? { doctor_phone: doctorPhone.trim().startsWith('+') ? doctorPhone.trim() : `+91${doctorPhone.trim().replace(/^0/, '')}` } : {}),
+          notes: notes.trim(),
+        },
+        contacts: contacts.map((c, i) => ({
+          ...(c.id && !c.id.startsWith('tmp_') ? { id: c.id } : {}),
+          name: c.name,
+          phone: c.phone?.startsWith('+') ? c.phone : `+91${c.phone?.replace(/^0/, '') ?? ''}`,
+          relationship: c.relationship,
+          priority: i + 1,
+        })),
+      });
+      setCompleted([0, 1, 2, 3]);
+      if (isNewUser) {
+        await setIsNewUser(false);
+        fetchAndPersist?.().catch(() => {});
+      } else {
+        Alert.alert(t('updates_extra.saveSuccess'), t('updates_extra.saveSuccessMsg'));
       }
-      showToast();
-    } catch (e) {
-      Alert.alert('Error', 'Could not save. Please try again.');
+    } catch {
+      Alert.alert(t('updates_extra.saveError'), t('updates_extra.saveErrorMsg'));
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Contact handlers
   const handleSaveContact = (data) => {
-    if (editingContact?.id) {
-      const updated = contacts.map(c =>
-        c.id === editingContact.id ? { ...c, ...data } : c
-      );
-      setContacts(updated);
-      updateContact?.({ ...editingContact, ...data });
-    } else {
-      const newContact = {
-        id: `temp_${Date.now()}`,
-        ...data,
-        priority: contacts.length + 1,
-        is_active: true,
-      };
-      setContacts(prev => [...prev, newContact]);
-      addContact?.(newContact);
-    }
-    showToast();
+    if (editingContact?.id) setContacts((p) => p.map((c) => c.id === editingContact.id ? { ...c, ...data } : c));
+    else setContacts((p) => [...p, { id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`, ...data, priority: p.length + 1, is_active: true }]);
   };
-
   const handleDeleteContact = (contact) => {
-    Alert.alert('Remove Contact', `Remove ${contact.name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove', style: 'destructive', onPress: () => {
-          const updated = contacts
-            .filter(c => c.id !== contact.id)
-            .map((c, i) => ({ ...c, priority: i + 1 }));
-          setContacts(updated);
-          deleteContact?.(contact.id);
-          showToast();
-        },
-      },
+    Alert.alert(t('updates_extra.removeContact'), t('updates_extra.removeContactMsg', { name: contact.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => setContacts((p) => p.filter((c) => c.id !== contact.id).map((c, i) => ({ ...c, priority: i + 1 }))) },
     ]);
   };
-
   const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
 
-  return (
-    <Screen bg={colors.screenBg} edges={['top', 'left', 'right']}>
-      <ContactModal
-        visible={modalVisible}
-        contact={editingContact}
-        onSave={handleSaveContact}
-        onClose={() => setModalVisible(false)}
-      />
+  const nextLabel = step === 3
+    ? (isNewUser ? t('updates_extra.activateCardBtn') : t('updates_extra.saveAll'))
+    : t('updates_extra.next');
 
-      {/* ── HEADER */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>
-            {student?.first_name ? `${student.first_name}'s Card` : 'Update Card'}
-          </Text>
-          <Text style={styles.headerSub}>Changes save instantly · no approvals needed</Text>
-        </View>
-        <SaveToast visible={toastVisible} />
+  return (
+    <Screen bg={C.bg} edges={['top', 'left', 'right']}>
+      <ContactModal visible={modalVisible} contact={editingContact} onSave={handleSaveContact} onClose={() => setModalVisible(false)} C={C} />
+
+      {/* Header */}
+      <View style={[s.header, { borderBottomColor: C.bd }]}>
+        <Text style={[s.headerTitle, { color: C.tx }]}>
+          {isNewUser ? t('updates_extra.activateCard') : (student?.first_name ? t('updates.title', { name: student.first_name }) : t('updates_extra.updateProfile'))}
+        </Text>
+        {isNewUser && (
+          <View style={[s.newBadge, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
+            <View style={[s.newDot, { backgroundColor: C.ok }]} />
+            <Text style={[s.newText, { color: C.ok }]}>{t('updates_extra.newBadge')}</Text>
+          </View>
+        )}
       </View>
 
-      {/* ── TABS */}
-      <TabBar active={activeTab} onChange={setActiveTab} dirtyTabs={dirtyTabs} />
+      <StepBar current={step} completed={completed} C={C} />
 
-      {/* ── CONTENT */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-        {/* ══ CHILD TAB ══ */}
-        {activeTab === 'child' && (
-          <View style={styles.tabContent}>
-
-            <Section emoji="📷" title="Profile Photo" subtitle="Helps emergency responders identify your child">
-              <PhotoRow
-                photoUrl={student?.photo_url}
-                onPress={() => { /* wire expo-image-picker */ }}
-              />
-            </Section>
-
-            <Section emoji="👤" title="Name">
-              <FieldRow>
-                <View style={{ flex: 1 }}>
-                  <Field label="First Name" value={firstName} onChangeText={setFirstName} placeholder="Aanya" />
+          {/* Step 0 — Student */}
+          {step === 0 && (
+            <View style={s.stepContent}>
+              {isNewUser && (
+                <View style={[s.onboardBanner, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
+                  <Text style={{ fontSize: 15 }}>🛡️</Text>
+                  <Text style={[s.onboardBannerText, { color: C.ok }]}>{t('updates_extra.onboardBanner')}</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Last Name" value={lastName} onChangeText={setLastName} placeholder="Sharma" />
+              )}
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title={t('updates_extra.studentNameTitle')} subtitle={t('updates_extra.studentNameSub')} C={C}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldFirstName')} value={firstName} onChangeText={setFirstName} placeholder={t('updates_extra.fieldFirstNamePlaceholder')} required C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldLastName')}  value={lastName}  onChangeText={setLastName}  placeholder={t('updates_extra.fieldLastNamePlaceholder')}  required C={C} /></View>
                 </View>
-              </FieldRow>
-            </Section>
-
-            <Section emoji="🏫" title="Class & Section">
-              <FieldRow>
-                <View style={{ flex: 1 }}>
-                  <Field label="Class" value={cls} onChangeText={setCls} placeholder="e.g. 6" />
+              </SectionCard>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title={t('updates_extra.classSectionTitle')} accent={C.blue} C={C}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldClass')}   value={cls}     onChangeText={setCls}     placeholder={t('updates_extra.fieldClassPlaceholder')}   C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldSection')} value={section} onChangeText={setSection} placeholder={t('updates_extra.fieldSectionPlaceholder')} C={C} /></View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Section" value={section} onChangeText={setSection} placeholder="e.g. A" />
+              </SectionCard>
+              <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                <Text style={[s.noteText, { color: C.tx3 }]}>{t('updates_extra.requiredNote')}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Step 1 — Medical */}
+          {step === 1 && (
+            <View style={s.stepContent}>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>🩸</Text>} title={t('updates_extra.bloodGroupTitle')} subtitle={t('updates_extra.bloodGroupSub')} C={C}>
+                <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
+              </SectionCard>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>⚠️</Text>} title={t('updates_extra.allergiesTitle')} subtitle={t('updates_extra.allergiesSub')} accent={C.amb} C={C}>
+                <Field label={t('updates_extra.fieldAllergies')} value={allergies} onChangeText={setAllergies} placeholder={t('updates_extra.fieldAllergiesPlaceholder')} multiline hint={t('updates_extra.allergiesHint')} C={C} />
+              </SectionCard>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title={t('updates_extra.conditionsTitle')} accent={C.blue} C={C}>
+                <Field label={t('updates_extra.fieldConditions')} value={conditions} onChangeText={setConditions} placeholder={t('updates_extra.fieldConditionsPlaceholder')} multiline C={C} />
+              </SectionCard>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title={t('updates_extra.medicationsTitle')} accent={C.blue} C={C}>
+                <Field label={t('updates_extra.fieldMedications')} value={medications} onChangeText={setMedications} placeholder={t('updates_extra.fieldMedicationsPlaceholder')} multiline C={C} />
+              </SectionCard>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title={t('updates_extra.doctorTitle')} accent={C.ok} C={C}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorName')}  value={doctorName}  onChangeText={setDoctorName}  placeholder={t('updates_extra.fieldDoctorNamePlaceholder')}  C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorPhone')} value={doctorPhone} onChangeText={setDoctorPhone} placeholder={t('updates_extra.fieldDoctorPhone')} keyboardType="phone-pad" C={C} /></View>
                 </View>
-              </FieldRow>
-            </Section>
+              </SectionCard>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>📋</Text>} title={t('updates_extra.responderNotesTitle')} subtitle={t('updates_extra.responderNotesSub')} C={C}>
+                <Field label={t('updates_extra.fieldNotes')} value={notes} onChangeText={setNotes} placeholder={t('updates_extra.fieldNotesPlaceholder')} multiline C={C} />
+              </SectionCard>
+            </View>
+          )}
 
-          </View>
-        )}
-
-        {/* ══ MEDICAL TAB ══ */}
-        {activeTab === 'medical' && (
-          <View style={styles.tabContent}>
-
-            <Section emoji="🩸" title="Blood Group" subtitle="Shown immediately when card is scanned">
-              <BloodPicker value={bloodGroup} onChange={setBloodGroup} />
-            </Section>
-
-            <Section emoji="⚠️" title="Allergies" subtitle="Food, medication, environmental">
-              <Field
-                label="Known Allergies"
-                value={allergies}
-                onChangeText={setAllergies}
-                placeholder="e.g. Peanuts, Penicillin, Dust…"
-                multiline
-                hint="Separate with commas"
-              />
-            </Section>
-
-            <Section emoji="🫁" title="Medical Conditions">
-              <Field
-                label="Conditions"
-                value={conditions}
-                onChangeText={setConditions}
-                placeholder="e.g. Asthma, Diabetes, Epilepsy…"
-                multiline
-              />
-            </Section>
-
-            <Section emoji="💊" title="Medications" subtitle="Include dosage if possible">
-              <Field
-                label="Current Medications"
-                value={medications}
-                onChangeText={setMedications}
-                placeholder="e.g. Salbutamol inhaler, Metformin 500mg…"
-                multiline
-              />
-            </Section>
-
-            <Section emoji="👨‍⚕️" title="Family Doctor">
-              <FieldRow>
-                <View style={{ flex: 1 }}>
-                  <Field label="Doctor's Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Full Name" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field label="Phone" value={doctorPhone} onChangeText={setDoctorPhone} placeholder="+91 …" keyboardType="phone-pad" />
-                </View>
-              </FieldRow>
-            </Section>
-
-            <Section emoji="📝" title="Notes for Responders" subtitle="Shown on card when scanned">
-              <Field
-                label="Special Instructions"
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="e.g. Carries inhaler in bag. Do NOT give nuts."
-                multiline
-              />
-            </Section>
-
-          </View>
-        )}
-
-        {/* ══ CONTACTS TAB ══ */}
-        {activeTab === 'contacts' && (
-          <View style={styles.tabContent}>
-
-            {/* Call order info */}
-            <View style={styles.callOrderCard}>
-              <Text style={styles.callOrderTitle}>How emergency calls work</Text>
-              <View style={styles.callOrderList}>
-                {['#1 called immediately when card is scanned', '#2 called if #1 doesn\'t answer', '#3 and beyond as backup'].map((step, i) => (
-                  <View key={i} style={styles.callOrderItem}>
-                    <View style={[styles.callOrderDot, { backgroundColor: PRIORITY_COLORS[i] }]} />
-                    <Text style={styles.callOrderText}>{step}</Text>
+          {/* Step 2 — Contacts */}
+          {step === 2 && (
+            <View style={s.stepContent}>
+              <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                <Text style={[s.callInfoTitle, { color: C.tx }]}>{t('updates_extra.howCallsWork')}</Text>
+                {[
+                  { color: PRIORITY_COLORS[0], text: t('updates_extra.callInfo1') },
+                  { color: PRIORITY_COLORS[1], text: t('updates_extra.callInfo2') },
+                  { color: PRIORITY_COLORS[2], text: t('updates_extra.callInfo3') },
+                ].map((item, i) => (
+                  <View key={i} style={s.callInfoRow}>
+                    <View style={[s.callInfoDot, { backgroundColor: item.color }]} />
+                    <Text style={[s.callInfoText, { color: C.tx2 }]}>{item.text}</Text>
                   </View>
                 ))}
               </View>
+
+              {sortedContacts.length === 0 ? (
+                <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <Text style={{ fontSize: 28 }}>📵</Text>
+                  <Text style={[s.emptyTitle, { color: C.tx }]}>{t('updates_extra.noContactsTitle')}</Text>
+                  <Text style={[s.emptySub, { color: C.tx3 }]}>{t('updates_extra.noContactsSub')}</Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {sortedContacts.map((c, i) => (
+                    <ContactCard key={c.id ?? `contact_${i}`} contact={c} index={i} onEdit={(con) => { setEditContact(con); setModalVisible(true); }} onDelete={handleDeleteContact} C={C} />
+                  ))}
+                </View>
+              )}
+
+              {contacts.length < 5 && (
+                <TouchableOpacity style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]} onPress={() => { setEditContact(null); setModalVisible(true); }} activeOpacity={0.75}>
+                  <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}><PlusSvg c="#fff" s={18} /></View>
+                  <View>
+                    <Text style={[s.addBtnLabel, { color: C.primary }]}>{t('updates_extra.addContact')}</Text>
+                    <Text style={[s.addBtnSub, { color: C.tx3 }]}>{t('updates_extra.contactsCount', { count: contacts.length })}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
+          )}
 
-            {/* Contact list */}
-            {sortedContacts.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyEmoji}>📵</Text>
-                <Text style={styles.emptyTitle}>No contacts yet</Text>
-                <Text style={styles.emptySub}>Add at least one contact — they'll be called the moment the card is scanned.</Text>
-              </View>
-            ) : (
-              <View style={styles.contactList}>
-                {sortedContacts.map((c, i) => (
-                  <ContactCard
-                    key={c.id}
-                    contact={c}
-                    index={i}
-                    onEdit={(contact) => { setEditingContact(contact); setModalVisible(true); }}
-                    onDelete={handleDeleteContact}
-                  />
-                ))}
-              </View>
-            )}
-
-            {contacts.length < 5 && (
-              <TouchableOpacity
-                style={styles.addContactBtn}
-                onPress={() => { setEditingContact(null); setModalVisible(true); }}
-                activeOpacity={0.75}
-              >
-                <View style={styles.addContactIcon}>
-                  <Ic.Plus c={colors.white} s={18} />
+          {/* Step 3 — Review */}
+          {step === 3 && (
+            <View style={s.stepContent}>
+              <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+                  <Text style={[s.reviewAvatarText, { color: C.primary }]}>{firstName ? firstName[0].toUpperCase() : '?'}</Text>
                 </View>
                 <View>
-                  <Text style={styles.addContactLabel}>Add Emergency Contact</Text>
-                  <Text style={styles.addContactSub}>{contacts.length}/5 contacts</Text>
+                  <Text style={[s.reviewName, { color: C.tx }]}>{`${firstName} ${lastName}`.trim() || t('updates.title', { name: '' }).trim()}</Text>
+                  <Text style={[s.reviewClass, { color: C.tx3 }]}>
+                    {cls && section ? `Class ${cls}-${section}` : cls ? `Class ${cls}` : t('updates_extra.classNotSet')}
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            )}
+                <View style={[s.reviewStatus, { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd }]}>
+                  <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
+                  <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
+                    {completed.length >= 3 ? t('updates_extra.statusReady') : t('updates_extra.statusDraft')}
+                  </Text>
+                </View>
+              </View>
 
-            <Note>⚡ Contact changes are live instantly on your child's card.</Note>
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title={t('updates_extra.reviewStudentTitle')} C={C}>
+                <ReviewRow label={t('updates_extra.reviewFieldFirstName')} value={firstName}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldLastName')}  value={lastName}   C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldClass')}     value={cls}        C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldSection')}   value={section}    C={C} />
+              </SectionCard>
 
-          </View>
-        )}
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title={t('updates_extra.reviewMedicalTitle')} C={C}>
+                <ReviewRow label={t('updates_extra.reviewFieldBloodGroup')}  value={bloodGroup}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldAllergies')}   value={allergies}   C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldConditions')}  value={conditions}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldMedications')} value={medications} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldDoctor')}      value={doctorName}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldDoctorPhone')} value={doctorPhone} C={C} />
+              </SectionCard>
 
-        <View style={{ height: currentTabDirty ? 80 : 24 }} />
+              <SectionCard icon={<Text style={{ fontSize: 15 }}>📞</Text>} title={t('updates_extra.reviewContactsTitle', { count: contacts.length })} accent={C.blue} C={C}>
+                {contacts.length === 0
+                  ? <Text style={[s.noContacts, { color: C.tx3 }]}>{t('updates_extra.reviewNoContacts')}</Text>
+                  : sortedContacts.map((c, i) => (
+                    <ReviewRow
+                      key={c.id ?? `review_${i}`}
+                      label={t('updates_extra.reviewContactLabel', { priority: c.priority, relationship: c.relationship || t('home.guardian') })}
+                      value={`${c.name} · ${c.phone}`}
+                      C={C}
+                    />
+                  ))
+                }
+              </SectionCard>
+
+              <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
+                <Text style={{ fontSize: 14 }}>🛡️</Text>
+                <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
+                  {isNewUser ? t('updates_extra.reviewNoteNew') : t('updates_extra.reviewNoteEdit')}
+                </Text>
+              </View>
+            </View>
+          )}
+
+        </Animated.View>
+        <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* ── SAVE BAR (only child + medical tabs) */}
-      {activeTab !== 'contacts' && (
-        <SaveButton
-          dirty={currentTabDirty}
-          saving={saving}
-          onPress={handleSave}
-        />
-      )}
+      <NavFooter step={step} onBack={goBack} onNext={goNext} nextLabel={nextLabel} saving={saving} canProceed={canProceed} C={C} />
     </Screen>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.screenH,
-    paddingTop: spacing[5],
-    paddingBottom: spacing[3],
-  },
-  headerTitle: { ...typography.h2, color: colors.textPrimary },
-  headerSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 2 },
-
-  // Toast
-  toast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ECFDF5',
-    borderRadius: radius.chipFull,
-    borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.3)',
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1.5],
-  },
-  toastDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  toastText: { ...typography.labelXs, color: '#10B981', fontWeight: '700' },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.screenH,
-    gap: spacing[2],
-    paddingBottom: spacing[3],
-  },
-  tabItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[1.5],
-    paddingVertical: spacing[2.5],
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    position: 'relative',
-  },
-  tabItemActive: {
-    backgroundColor: colors.primaryBg,
-    borderColor: `${colors.primary}50`,
-  },
-  tabIcon: { fontSize: 13 },
-  tabLabel: { ...typography.labelSm, color: colors.textTertiary, fontWeight: '600' },
-  tabLabelActive: { color: colors.primary },
-  tabDirtyDot: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.warning,
-    borderWidth: 1.5,
-    borderColor: colors.surface,
-  },
-
-  // Scroll
-  scroll: { paddingHorizontal: spacing.screenH },
-  tabContent: { gap: spacing[4] },
-
-  // Section
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  sectionHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[3.5],
-    paddingBottom: spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  sectionEmojiWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionEmoji: { fontSize: 16 },
-  sectionTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  sectionSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 1 },
-  sectionBody: { padding: spacing[4], gap: spacing[3] },
-
-  // Field
-  field: { gap: spacing[1.5] },
-  fieldLabel: { ...typography.labelXs, color: colors.textTertiary, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', fontSize: 10 },
-  fieldBox: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[3],
-    backgroundColor: colors.screenBg,
-  },
-  fieldInput: {
-    ...typography.bodyMd,
-    color: colors.textPrimary,
-    height: 42,
-    paddingVertical: 0,
-  },
-  fieldInputMulti: {
-    height: 80,
-    paddingTop: spacing[2.5],
-    paddingBottom: spacing[2],
-    textAlignVertical: 'top',
-  },
-  fieldHint: { ...typography.labelXs, color: colors.textTertiary, fontStyle: 'italic' },
-  fieldRow: { flexDirection: 'row', gap: spacing[2] },
-
-  // Blood picker
-  bloodWrap: { gap: spacing[2.5] },
-  bloodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  bloodChip: {
-    paddingHorizontal: spacing[3.5],
-    paddingVertical: spacing[2],
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.screenBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 56,
-    position: 'relative',
-  },
-  bloodChipSel: {
-    backgroundColor: 'rgba(232,52,42,0.07)',
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  bloodChipText: { ...typography.labelMd, color: colors.textSecondary, fontWeight: '700' },
-  bloodChipTextSel: { color: colors.primary },
-  bloodDot: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  bloodWarning: { ...typography.labelXs, color: colors.warning, fontWeight: '600' },
-
-  // Photo row
-  photoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  photoAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.surface3,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  photoBadge: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoLabel: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  photoSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 2, lineHeight: 16 },
-
-  // Contact card
-  contactList: { gap: spacing[2] },
-  contactCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing[3.5],
-  },
-  contactPriority: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  contactPriorityText: { ...typography.labelLg, fontWeight: '900' },
-  contactTop: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap' },
-  contactName: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  contactBadge: {
-    borderRadius: radius.chipFull,
-    borderWidth: 1,
-    paddingHorizontal: spacing[1.5],
-    paddingVertical: 2,
-  },
-  contactBadgeText: { ...typography.labelXs, fontWeight: '700', fontSize: 9 },
-  contactMeta: { ...typography.labelXs, color: colors.textTertiary, marginTop: 3 },
-  contactActions: { flexDirection: 'row', gap: spacing[1.5] },
-  contactBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contactBtnRed: { backgroundColor: colors.primaryBg },
-
-  // Call order card
-  callOrderCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing[4],
-    gap: spacing[3],
-  },
-  callOrderTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  callOrderList: { gap: spacing[2] },
-  callOrderItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] },
-  callOrderDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  callOrderText: { ...typography.bodyMd, color: colors.textSecondary },
-
-  // Add contact button
-  addContactBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    padding: spacing[4],
-    borderRadius: radius.cardSm,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: `${colors.primary}40`,
-    backgroundColor: colors.surface,
-  },
-  addContactIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addContactLabel: { ...typography.labelLg, color: colors.primary, fontWeight: '700' },
-  addContactSub: { ...typography.labelXs, color: colors.textTertiary, marginTop: 2 },
-
-  // Empty contacts
-  emptyWrap: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing[8],
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  emptyEmoji: { fontSize: 36 },
-  emptyTitle: { ...typography.labelLg, color: colors.textPrimary, fontWeight: '700' },
-  emptySub: { ...typography.bodySm, color: colors.textTertiary, textAlign: 'center', lineHeight: 18 },
-
-  // Note
-  note: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.25)',
-    padding: spacing[3.5],
-  },
-  noteText: { ...typography.bodySm, color: '#059669', lineHeight: 18 },
-
-  // Save bar
-  saveBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.screenH,
-    paddingTop: spacing[3],
-    paddingBottom: spacing[6],
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    backgroundColor: colors.primary,
-    borderRadius: radius.btn,
-    paddingVertical: spacing[4],
-  },
-  saveBtnBusy: { opacity: 0.6 },
-  saveBtnText: { ...typography.btnMd, color: colors.white, fontWeight: '700' },
-
-  // Contact modal / sheet
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.cardLg,
-    borderTopRightRadius: radius.cardLg,
-    padding: spacing[5],
-    paddingBottom: spacing[8],
-    gap: spacing[3],
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: spacing[1],
-  },
-  sheetTitle: { ...typography.h4, color: colors.textPrimary },
-  sheetSub: { ...typography.bodySm, color: colors.textTertiary },
-  sheetFields: { gap: spacing[2] },
-  sheetSaveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    backgroundColor: colors.primary,
-    borderRadius: radius.btn,
-    paddingVertical: spacing[4],
-    marginTop: spacing[1],
-  },
-  sheetSaveBtnText: { ...typography.btnMd, color: colors.white, fontWeight: '700' },
+const s = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[3], borderBottomWidth: 1 },
+  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  newBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  newDot: { width: 5, height: 5, borderRadius: 3 },
+  newText: { fontSize: 11, fontWeight: '700' },
+  onboardBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
+  onboardBannerText: { fontSize: 13, lineHeight: 18, flex: 1, fontWeight: '500' },
+  scroll: { paddingHorizontal: spacing.screenH, paddingTop: 18, gap: 14 },
+  stepContent: { gap: 14 },
+  note: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
+  noteText: { fontSize: 11.5 },
+  callInfoBox: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
+  callInfoTitle: { fontSize: 13, fontWeight: '700' },
+  callInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  callInfoDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
+  callInfoText: { fontSize: 12.5, flex: 1 },
+  emptyContacts: { borderRadius: 14, borderWidth: 1, padding: 32, alignItems: 'center', gap: 8 },
+  emptyTitle: { fontSize: 15, fontWeight: '700' },
+  emptySub: { fontSize: 12.5, textAlign: 'center', lineHeight: 18 },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed' },
+  addBtnIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  addBtnLabel: { fontSize: 14, fontWeight: '700' },
+  addBtnSub: { fontSize: 11.5, marginTop: 2 },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 14, borderWidth: 1, padding: 16 },
+  reviewAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  reviewAvatarText: { fontSize: 20, fontWeight: '900' },
+  reviewName: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  reviewClass: { fontSize: 12, marginTop: 2 },
+  reviewStatus: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  reviewStatusDot: { width: 5, height: 5, borderRadius: 3 },
+  reviewStatusText: { fontSize: 11, fontWeight: '700' },
+  noContacts: { fontSize: 13, fontStyle: 'italic' },
 });

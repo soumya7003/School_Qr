@@ -1,27 +1,36 @@
 import { colors } from "@/theme";
+import * as Application from "expo-application";
+import * as Device from "expo-device";
+import { Platform } from "react-native";
 
 export function tokenStatusMeta(status) {
   switch (status) {
     case "ACTIVE":
       return { label: "Active", color: colors.success, bg: colors.successBg };
+
     case "INACTIVE":
       return {
         label: "Inactive",
         color: colors.textTertiary,
         bg: colors.surface3,
       };
+
     case "ISSUED":
       return { label: "Issued", color: colors.warning, bg: colors.warningBg };
+
     case "REVOKED":
       return { label: "Revoked", color: colors.primary, bg: colors.primaryBg };
+
     case "EXPIRED":
       return { label: "Expired", color: colors.primary, bg: colors.primaryBg };
+
     case "UNASSIGNED":
       return {
         label: "Unassigned",
         color: colors.textTertiary,
         bg: colors.surface3,
       };
+
     default:
       return {
         label: status ?? "—",
@@ -55,4 +64,14 @@ export function fmtDate(iso) {
     month: "short",
     year: "numeric",
   });
+}
+
+// check for single login device
+export async function getDeviceInfo() {
+  return {
+    deviceId: await Application.getAndroidId(),
+    deviceName: Device.deviceName,
+    platform: Platform.OS,
+    osVersion: Device.osVersion,
+  };
 }
