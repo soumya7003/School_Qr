@@ -15,6 +15,15 @@ import Svg, { Path } from 'react-native-svg';
 const APP_VERSION = '1.0.0';
 const APP_BUILD   = '100';
 
+// Fallback FAQs in case translation file is missing
+const DEFAULT_FAQS = [
+    { q: 'How do I create a QR code?', a: 'Go to the QR section and follow the steps to generate your unique safety QR code.' },
+    { q: 'Is my data secure?', a: 'Yes, we use end-to-end encryption to protect all your personal information.' },
+    { q: 'How do I enable biometric login?', a: 'Go to Settings and enable fingerprint or face recognition for your device.' },
+    { q: 'Can I scan QR codes offline?', a: 'QR scanning requires an internet connection for real-time verification.' },
+    { q: 'How do I update my emergency contacts?', a: 'Navigate to Settings > Emergency Contacts to add or edit your emergency numbers.' },
+];
+
 const BackIcon = ({ c }) => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path d="M19 12H5M12 5l-7 7 7 7" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -75,8 +84,10 @@ export default function SupportScreen() {
     const { colors: C } = useTheme();
     const { t } = useTranslation();
 
-    // Returns the FAQs array from the translation file
-    const faqs = t('support.faqs', { returnObjects: true });
+    // Get FAQs from translation with fallback to DEFAULT_FAQS
+    const faqs = Array.isArray(t('support.faqs', { returnObjects: true }))
+        ? t('support.faqs', { returnObjects: true })
+        : DEFAULT_FAQS;
 
     return (
         <Screen bg={C.bg} edges={['top', 'left', 'right']}>
@@ -126,9 +137,15 @@ export default function SupportScreen() {
                 </Animated.View>
 
                 <View style={[su.faqList, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                    {faqs.map((faq, i) => (
-                        <FaqItem key={i} faq={faq} delay={200 + i * 25} C={C} />
-                    ))}
+                    {faqs && faqs.length > 0 ? (
+                        faqs.map((faq, i) => (
+                            <FaqItem key={i} faq={faq} delay={200 + i * 25} C={C} />
+                        ))
+                    ) : (
+                        <View style={su.emptyFaq}>
+                            <Text style={[su.emptyFaqText, { color: C.tx3 }]}>No FAQs available</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* ── Legal ── */}
@@ -179,6 +196,8 @@ const su = StyleSheet.create({
     faqHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
     faqQ: { fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
     faqA: { fontSize: 13, lineHeight: 18, marginTop: 12 },
+    emptyFaq: { padding: 16, alignItems: 'center', justifyContent: 'center' },
+    emptyFaqText: { fontSize: 13, fontStyle: 'italic' },
     legalRow: { flexDirection: 'row', gap: 8 },
     legalBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 13, borderWidth: 1, padding: 14 },
     legalBtnText: { fontSize: 13, fontWeight: '600', flex: 1 },
