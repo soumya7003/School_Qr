@@ -463,7 +463,16 @@ export default function HomeScreen() {
   const anomalyRaw = useProfileStore((s) => s.anomaly);
 
   const hour = new Date().getHours();
-  const greetingText = hour < 12 ? t('home.goodMorning') : hour < 17 ? t('home.goodAfternoon') : t('home.goodEvening');
+
+  // ✅ FIX 1: correct i18n keys (greetingMorning not goodMorning)
+  const greetingText = hour < 12
+    ? t('home.greetingMorning')
+    : hour < 17
+      ? t('home.greetingAfternoon')
+      : t('home.greetingEvening');
+
+  // ✅ FIX 2: name comes first, then greeting
+  const firstName = activeStudent?.first_name ?? '';
 
   const school = activeStudent?.school ?? null;
   const token = activeStudent?.token ?? null;
@@ -481,11 +490,14 @@ export default function HomeScreen() {
         {/* Greeting */}
         <Animated2.View entering={FadeInDown.delay(0).duration(400)} style={s.greetWrap}>
           <View>
+            {/* ✅ "Soumya, Good afternoon 👋" */}
             <Text style={[s.greetLine, { color: C.tx }]}>
-              {greetingText}{parentUser?.phone ? ' 👋' : ''}
+              {firstName ? `${firstName}, ` : ''}{greetingText} 👋
             </Text>
             <Text style={[s.greetSub, { color: C.tx3 }]}>
-              {activeStudent?.first_name ? t('home.subtitleNamed', { name: activeStudent.first_name }) : t('home.subtitle')}
+              {activeStudent?.first_name
+                ? t('home.subtitleNamed', { name: activeStudent.first_name })
+                : t('home.subtitle')}
             </Text>
           </View>
           <TouchableOpacity

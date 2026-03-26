@@ -1,63 +1,110 @@
 /**
- * app/(app)/_layout.jsx
+ * app/(app)/_layout.jsx - DEBUG VERSION
  *
- * BUGS FIXED:
- *
- *   [FIX-1] Double-redirect conflict with AuthProvider:
- *           The original had BOTH a render-time <Redirect> AND AuthProvider's
- *           useEffect guard doing navigation. When isNewUser=true, the layout
- *           rendered <Redirect href="/(app)/updates"> at the same time
- *           AuthProvider fired router.replace('/(app)/updates'). This caused
- *           a race/double-navigation that could land the user on a blank screen
- *           or loop. Fixed: removed all <Redirect> calls from this layout.
- *           AuthProvider is the single source of truth for routing — this
- *           layout only handles rendering (null while loading).
- *
- *   [FIX-2] isNewUser check blocked /updates rendering:
- *           `if (isNewUser && !onUpdates) return <Redirect href="/(app)/updates" />`
- *           ran on EVERY render including the initial mount of /updates itself.
- *           While onUpdates was correctly checked, the render-time redirect fired
- *           before the screen could mount, causing a flash. AuthProvider's reactive
- *           useEffect handles this more gracefully.
- *
- *   [FIX-3] Removed isNewUser and segments dependencies entirely from this layout.
- *           This component should be purely structural — BiometricGate + TabBar.
- *           All auth/routing logic belongs in AuthProvider.
+ * This version logs everything to help identify the blank screen issue.
  */
 
-import BiometricGate from "@/components/auth/BiometricGate.jsx";
-import TabBar from "@/components/navigation/TabBar";
-import { useAuthStore } from "@/features/auth/auth.store";
-import { useInactivityLock } from "@/hooks/useInactivityLock";
-import { Tabs } from "expo-router";
-import { View } from "react-native";
+import TabBar from '@/components/navigation/TabBar';
+import { useAuthStore } from '@/features/auth/auth.store';
+import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 
 export default function AppLayout() {
-  const isHydrated = useAuthStore((s) => s.isHydrated);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const isHydrated = useAuthStore((s) => s.isHydrated);
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const inactivityHandlers = useInactivityLock();
+    // Log state on every render
+    useEffect(() => {
+        console.log('════════════════════════════════════════');
+        console.log('[AppLayout] Render state:', {
+            isHydrated,
+            isAuthenticated,
+            timestamp: new Date().toISOString(),
+        });
+        console.log('════════════════════════════════════════');
+    });
 
-  // [FIX-1,2,3] No Redirect calls here — AuthProvider owns all routing.
-  // Just block render until hydrated + authenticated to prevent screens
-  // from flashing with empty state.
-  if (!isHydrated || !isAuthenticated) return null;
+    // Show diagnostic info instead of spinner
+    if (!isHydrated) {
+        console.log('[AppLayout] BLOCKING: Not hydrated');
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={styles.debugText}>🔄 Hydrating store...</Text>
+                <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 16 }} />
+            </View>
+        );
+    }
 
-  return (
-    <BiometricGate>
-      <View style={{ flex: 1 }} {...inactivityHandlers}>
-        <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
-          <Tabs.Screen name="home" />
-          <Tabs.Screen name="qr" />
-          <Tabs.Screen name="emergency" />
-          <Tabs.Screen name="updates" />
-          <Tabs.Screen name="settings" />
-          <Tabs.Screen name="visibility" options={{ href: null }} />
-          <Tabs.Screen name="scan-history" options={{ href: null }} />
-          <Tabs.Screen name="support" options={{ href: null }} />
-          <Tabs.Screen name="change-phone" options={{ href: null }} />
-        </Tabs>
-      </View>
-    </BiometricGate>
-  );
+    if (!isAuthenticated) {
+        console.log('[AppLayout] BLOCKING: Not authenticated');
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={styles.debugText}>🔐 Not authenticated</Text>
+                <Text style={styles.debugSubtext}>AuthProvider should redirect to login</Text>
+            </View>
+        );
+    }
+
+    console.log('[AppLayout] ✅ RENDERING TABS');
+
+    return (
+        <View style={styles.container}>
+            {/* Debug overlay to confirm tabs are rendering */}
+
+            <Tabs
+                tabBar={(props) => <TabBar {...props} />}
+                screenOptions={{ headerShown: false }}
+            >
+                <Tabs.Screen name="home" />
+                <Tabs.Screen name="qr" />
+                <Tabs.Screen name="emergency" />
+                <Tabs.Screen name="updates" />
+                <Tabs.Screen name="settings" />
+                <Tabs.Screen name="visibility" options={{ href: null }} />
+                <Tabs.Screen name="scan-history" options={{ href: null }} />
+                <Tabs.Screen name="support" options={{ href: null }} />
+                <Tabs.Screen name="change-phone" options={{ href: null }} />
+            </Tabs>
+        </View>
+    );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    loadingContainer: {
+        flex: 1,
+        backgroundColor: '#1a1a1a',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    debugText: {
+        color: '#FFFFFF',
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 8,
+    },
+    debugSubtext: {
+        color: '#888888',
+        fontSize: 14,
+        textAlign: 'center',
+    },
+    debugOverlay: {
+        position: 'absolute',
+        top: 50,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0, 255, 0, 0.8)',
+        padding: 8,
+        alignItems: 'center',
+        zIndex: 9999,
+    },
+    overlayText: {
+        color: '#000000',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+});
