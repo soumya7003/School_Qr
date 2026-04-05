@@ -1,40 +1,47 @@
-import { useLogout } from "@/providers/AuthProvider";
-import { useEffect, useRef } from "react";
-import { AppState, PanResponder } from "react-native";
+// src/hooks/useInactivityLock.js
+import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
+import { useBiometricStore } from '../store/biometricStore';
 
-const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes
-
-export const useInactivityLock = () => {
-  const timer = useRef(null);
-  const logout = useLogout();
-
-  const resetTimer = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      logout();
-    }, INACTIVITY_TIMEOUT);
-  };
-
-  // Reset timer on any touch
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponderCapture: () => {
-      resetTimer();
-      return false; // don't consume touch
-    },
-  });
+/**
+ * useInactivityLock
+ *
+ * Listens to AppState changes. When the app moves to the background
+ * and then returns to the foreground, it sets isLocked = true so that
+ * BiometricGate fires the biometric prompt automatically.
+ *
+ * Place this hook ONCE in the root _layout.jsx — it will protect every page.
+ */
+export function useInactivityLock() {
+  const appStateRef = useRef(AppState.currentState);
+  const { isBiometricEnabled, isLocked, setLocked } = useBiometricStore();
 
   useEffect(() => {
-    resetTimer();
-    // Also reset on app foreground
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") resetTimer();
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const prevState = appStateRef.current;
+
+      // App went to background or became inactive
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        appStateRef.current = nextAppState;
+        return;
+      }
+
+      // App came back to foreground from background/inactive
+      if (
+        (prevState === 'background' || prevState === 'inactive') &&
+        nextAppState === 'active'
+      ) {
+        if (isBiometricEnabled && !isLocked) {
+          // Lock the app — BiometricGate will show the prompt
+          setLocked(true);
+        }
+      }
+
+      appStateRef.current = nextAppState;
     });
 
     return () => {
-      clearTimeout(timer.current);
-      sub.remove();
+      subscription.remove();
     };
-  }, []);
-
-  return panResponder.panHandlers;
-};
+  }, [isBiometricEnabled, isLocked, setLocked]);
+}
