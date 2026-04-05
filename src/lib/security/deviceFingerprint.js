@@ -16,20 +16,11 @@
  *     Survives factory reset only as long as SecureStore data persists.
  *
  *   Final fingerprint = SHA256( hashA + uuidB )
- *   Combining both makes it resistant to:
- *     - androidId reset (factory reset)
- *     - Non-unique androidId across apps
- *     - App reinstall
  *
  * WHY NOT JUST UUID:
  *   Pure UUID resets on app uninstall + reinstall.
  *   Hardware composite alone resets on factory reset.
- *   Combined = most stable possible fingerprint on Android.
- *
- * SECURITY NOTE:
- *   No fingerprint is 100% permanent on Android due to OS restrictions.
- *   The goal is not permanence — it is making session hijacking hard enough
- *   that an attacker would need physical access to the exact device.
+ *   Combined = most stable possible fingerprint.
  */
 
 import * as Application from "expo-application";
@@ -53,11 +44,6 @@ const sha256 = async (input) => {
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input);
 };
 
-/**
- * Get or generate a persistent UUID stored in SecureStore.
- * Survives app updates and device reboots.
- * Resets only if user clears app data or uninstalls.
- */
 const getOrCreateUUID = async () => {
   try {
     const existing = await SecureStore.getItemAsync(UUID_KEY, SECURE_OPT);
@@ -67,25 +53,28 @@ const getOrCreateUUID = async () => {
     await SecureStore.setItemAsync(UUID_KEY, newUUID, SECURE_OPT);
     return newUUID;
   } catch {
-    // Fallback — generate without persisting (rare SecureStore failure)
     return Crypto.randomUUID();
   }
 };
 
-/**
- * Build hardware composite string from device properties.
- * Each value falls back to 'unknown' if unavailable.
- */
 const buildHardwareComposite = async () => {
   const parts = [];
 
-  // androidId — may reset on factory reset but still useful as one factor
+  // ✅ FIX: iOS has no getAndroidId() – handle gracefully
   if (Platform.OS === "android") {
     try {
       const androidId = await Application.getAndroidId();
       parts.push(androidId ?? "no-android-id");
     } catch {
       parts.push("no-android-id");
+    }
+  } else {
+    // iOS: use identifierForVendor instead
+    try {
+      const iosId = await Application.getIosIdForVendorAsync();
+      parts.push(iosId ?? "no-ios-id");
+    } catch {
+      parts.push("no-ios-id");
     }
   }
 
@@ -102,48 +91,28 @@ const buildHardwareComposite = async () => {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/**
- * Returns a stable device fingerprint.
- *
- * First call: generates + stores fingerprint (~10ms).
- * Subsequent calls: reads from SecureStore (~2ms).
- *
- * @returns {Promise<string>} 64-char hex SHA256 fingerprint
- */
 export const getDeviceFingerprint = async () => {
   try {
-    // Return cached fingerprint if exists
     const cached = await SecureStore.getItemAsync(FINGERPRINT_KEY, SECURE_OPT);
     if (cached) return cached;
 
-    // Generate both components in parallel
     const [hardwareComposite, uuid] = await Promise.all([
       buildHardwareComposite(),
       getOrCreateUUID(),
     ]);
 
-    // Hash hardware composite
     const hardwareHash = await sha256(hardwareComposite);
-
-    // Final fingerprint = hash of both combined
     const fingerprint = await sha256(`${hardwareHash}:${uuid}`);
 
-    // Persist for future calls
     await SecureStore.setItemAsync(FINGERPRINT_KEY, fingerprint, SECURE_OPT);
 
     return fingerprint;
   } catch (error) {
     if (__DEV__) console.warn("[deviceFingerprint] failed:", error.message);
-
-    // Last resort fallback — UUID only (not persisted on this error path)
     return sha256(Crypto.randomUUID());
   }
 };
 
-/**
- * Force regenerate fingerprint.
- * Call this after factory reset detection or when backend rejects fingerprint.
- */
 export const resetDeviceFingerprint = async () => {
   try {
     await SecureStore.deleteItemAsync(FINGERPRINT_KEY, SECURE_OPT);
@@ -153,10 +122,6 @@ export const resetDeviceFingerprint = async () => {
   }
 };
 
-/**
- * Returns device metadata to send alongside fingerprint to backend.
- * Backend can use this for display in "active sessions" screen.
- */
 export const getDeviceMeta = () => ({
   deviceName: Device.deviceName ?? "Unknown Device",
   brand: Device.brand ?? "Unknown",

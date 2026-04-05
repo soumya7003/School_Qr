@@ -1,14 +1,23 @@
 /**
  * app/(app)/settings.jsx
- * Settings — the central control hub of RESQID
- * All colors from useTheme().colors — zero hardcoded values
+ * Settings — Multi-child support with Notion-style avatars
+ * Production ready with mock data support
  */
 
 import Screen from '@/components/common/Screen';
 import {
-    IconBell, IconEye, IconGlobe, IconInfo,
-    IconMapPin, IconMoon, IconPhone, IconScan,
-    IconShield, IconWarning,
+    IconBell,
+    IconChevronRight,
+    IconEye,
+    IconGlobe,
+    IconInfo,
+    IconMapPin,
+    IconMoon,
+    IconPhone,
+    IconScan,
+    IconShield,
+    IconUser,
+    IconWarning,
 } from '@/components/icon/AllIcon';
 import BiometricRow from '@/components/settings/BiometricRow';
 import CardStatusBlock from '@/components/settings/CardStatusBlock';
@@ -22,11 +31,13 @@ import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
 import { visibilityLabel } from '@/utils/helpers';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
+    Dimensions,
     ScrollView,
     StyleSheet,
     Switch,
@@ -35,175 +46,279 @@ import {
     View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 
-// ── Inline icons ──────────────────────────────────────────────────────────────
-const ChevronRight = ({ c, size = 14 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M9 18l6-6-6-6" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-const AlertTriangle = ({ c, size = 16 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke={c} strokeWidth={1.7} strokeLinejoin="round" />
-        <Path d="M12 9v4M12 17h.01" stroke={c} strokeWidth={1.7} strokeLinecap="round" />
-    </Svg>
-);
-const LogOut = ({ c, size = 16 }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke={c} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
+const { width } = Dimensions.get('window');
 
-// ── Section label ─────────────────────────────────────────────────────────────
-function SectionLabel({ label, accent }) {
+// ── Notion-style Avatar Colors ────────────────────────────────────────────────
+const AVATAR_PALETTE = [
+    { bg: '#EEF2FF', text: '#4F46E5' },
+    { bg: '#E6F7EC', text: '#059669' },
+    { bg: '#FFF1F0', text: '#DC2626' },
+    { bg: '#FEF3C7', text: '#D97706' },
+    { bg: '#F3E8FF', text: '#9333EA' },
+    { bg: '#FFE4E6', text: '#E11D48' },
+    { bg: '#E0F2FE', text: '#0284C7' },
+    { bg: '#FCE7F3', text: '#DB2777' },
+];
+
+// ── Notion-style Avatar ────────────────────────────────────────────────────────
+function NotionAvatar({ name, size = 48, colorIndex = 0 }) {
+    const initial = name?.charAt(0)?.toUpperCase() ?? '?';
+    const colors = AVATAR_PALETTE[colorIndex % AVATAR_PALETTE.length];
+
     return (
-        <View style={sl.wrap}>
-            <View style={[sl.line, { backgroundColor: accent }]} />
-            <Text style={[sl.text, { color: accent }]}>{label.toUpperCase()}</Text>
+        <View style={[avatar.container, { width: size, height: size, borderRadius: size * 0.3, backgroundColor: colors.bg }]}>
+            <Text style={[avatar.text, { fontSize: size * 0.4, color: colors.text, fontWeight: '600' }]}>
+                {initial}
+            </Text>
         </View>
     );
 }
-const sl = StyleSheet.create({
-    wrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2, marginBottom: 7 },
-    line: { width: 3, height: 12, borderRadius: 2 },
-    text: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+
+const avatar = StyleSheet.create({
+    container: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    text: { fontWeight: '600' },
 });
 
-// ── Card container ────────────────────────────────────────────────────────────
+// ── Child Card Component ───────────────────────────────────────────────────────
+function ChildCard({ student, isActive, onPress, colorIndex, C }) {
+    const name = student.first_name || student.last_name || 'Child';
+    const hasActiveCard = student.token?.status === 'ACTIVE';
+
+    return (
+        <TouchableOpacity
+            style={[
+                childCard.container,
+                {
+                    backgroundColor: isActive ? C.primaryBg : C.s2,
+                    borderColor: isActive ? C.primaryBd : C.bd,
+                    borderWidth: isActive ? 1.5 : 1,
+                }
+            ]}
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <NotionAvatar name={name} size={48} colorIndex={colorIndex} />
+            <Text style={[childCard.name, { color: isActive ? C.primary : C.tx }]} numberOfLines={1}>
+                {name}
+            </Text>
+            {student.class && (
+                <Text style={[childCard.class, { color: C.tx3 }]} numberOfLines={1}>
+                    {student.class}{student.section ? ` • ${student.section}` : ''}
+                </Text>
+            )}
+            {hasActiveCard && (
+                <View style={[childCard.badge, { backgroundColor: C.okBg }]}>
+                    <View style={[childCard.dot, { backgroundColor: C.ok }]} />
+                    <Text style={[childCard.badgeText, { color: C.ok }]}>Active</Text>
+                </View>
+            )}
+        </TouchableOpacity>
+    );
+}
+
+const childCard = StyleSheet.create({
+    container: {
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderRadius: 20,
+        borderWidth: 1,
+        minWidth: 100,
+        gap: 6,
+    },
+    name: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+    class: { fontSize: 11, textAlign: 'center' },
+    badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, marginTop: 4 },
+    dot: { width: 5, height: 5, borderRadius: 3 },
+    badgeText: { fontSize: 9, fontWeight: '600' },
+});
+
+// ── Add Child Button ──────────────────────────────────────────────────────────
+function AddChildButton({ onPress, canAdd, C }) {
+    return (
+        <TouchableOpacity
+            style={[addChild.container, { borderColor: C.bd, backgroundColor: C.s2, borderStyle: 'dashed' }]}
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <View style={[addChild.iconWrap, { backgroundColor: C.s3 }]}>
+                <Text style={[addChild.icon, { color: C.tx3 }]}>+</Text>
+            </View>
+            <Text style={[addChild.text, { color: C.tx3 }]}>
+                {canAdd ? 'Add Child' : 'Upgrade'}
+            </Text>
+        </TouchableOpacity>
+    );
+}
+
+const addChild = StyleSheet.create({
+    container: {
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderRadius: 20,
+        borderWidth: 1,
+        minWidth: 100,
+        gap: 6,
+    },
+    iconWrap: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    icon: { fontSize: 24, fontWeight: '300' },
+    text: { fontSize: 12, fontWeight: '500', textAlign: 'center' },
+});
+
+// ── Section Header ────────────────────────────────────────────────────────────
+function SectionHeader({ title, accent }) {
+    return (
+        <View style={section.container}>
+            <View style={[section.line, { backgroundColor: accent }]} />
+            <Text style={[section.title, { color: accent }]}>{title.toUpperCase()}</Text>
+        </View>
+    );
+}
+
+const section = StyleSheet.create({
+    container: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    line: { width: 3, height: 14, borderRadius: 2 },
+    title: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+});
+
+// ── Settings Card ─────────────────────────────────────────────────────────────
 function SettingsCard({ children, C }) {
     return (
-        <View style={[card.wrap, { backgroundColor: C.s2, borderColor: C.bd }]}>
+        <View style={[card.container, { backgroundColor: C.s2, borderColor: C.bd }]}>
             {children}
         </View>
     );
 }
+
 const card = StyleSheet.create({
-    wrap: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+    container: { borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
 });
 
-// ── Row ───────────────────────────────────────────────────────────────────────
-function Row({ C, iconEl, iconBg, iconBd, title, subtitle, onPress, toggle, toggleVal, onToggle, danger, isLast, right, noChevron }) {
-    const Wrapper = (onPress && !toggle) ? TouchableOpacity : View;
+// ── Settings Row ──────────────────────────────────────────────────────────────
+function SettingsRow({ C, icon, iconBg, iconBorder, title, subtitle, onPress, isLast, rightElement, danger }) {
+    const Wrapper = onPress ? TouchableOpacity : View;
+
     return (
         <Wrapper
-            style={[r.row, !isLast && { borderBottomWidth: 1, borderBottomColor: C.bd }]}
+            style={[row.container, !isLast && { borderBottomWidth: 1, borderBottomColor: C.bd }]}
             onPress={onPress}
-            activeOpacity={0.65}
+            activeOpacity={0.7}
         >
-            <View style={[r.iconWrap, { backgroundColor: iconBg, borderColor: iconBd }]}>
-                {iconEl}
+            <View style={[row.iconWrap, { backgroundColor: iconBg, borderColor: iconBorder }]}>
+                {icon}
             </View>
-            <View style={r.body}>
-                <Text style={[r.title, { color: danger ? C.red : C.tx }]}>{title}</Text>
-                {subtitle ? <Text style={[r.sub, { color: C.tx3 }]}>{subtitle}</Text> : null}
+            <View style={row.content}>
+                <Text style={[row.title, { color: danger ? C.red : C.tx }]}>{title}</Text>
+                {subtitle && <Text style={[row.subtitle, { color: C.tx3 }]}>{subtitle}</Text>}
             </View>
-            {toggle ? (
-                <Switch
-                    value={toggleVal}
-                    onValueChange={onToggle}
-                    trackColor={{ false: C.s5, true: C.primary + '80' }}
-                    thumbColor={toggleVal ? C.primary : C.tx3}
-                    ios_backgroundColor={C.s5}
-                />
-            ) : right ? right
-                : (onPress && !noChevron) ? (
-                    <View style={r.chevron}>
-                        <ChevronRight c={C.tx3} size={13} />
-                    </View>
-                ) : null}
+            {rightElement ? rightElement : (onPress && <IconChevronRight color={C.tx3} size={14} />)}
         </Wrapper>
     );
 }
-const r = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
-    iconWrap: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    body: { flex: 1, gap: 2 },
-    title: { fontSize: 14, fontWeight: '600' },
-    sub: { fontSize: 12, lineHeight: 16 },
-    chevron: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+
+const row = StyleSheet.create({
+    container: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
+    iconWrap: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    content: { flex: 1, gap: 2 },
+    title: { fontSize: 15, fontWeight: '600' },
+    subtitle: { fontSize: 12 },
 });
 
-// ── Parent card ───────────────────────────────────────────────────────────────
-function ParentCard({ parentUser, C }) {
-    const { t } = useTranslation();
-    const initial = parentUser?.phone?.[0] ?? 'P';
-    const lastFour = parentUser?.phone?.slice(-4) ?? '••••';
+// ── Parent Profile Header ─────────────────────────────────────────────────────
+function ParentHeader({ parentUser, C }) {
     const verified = parentUser?.is_phone_verified;
+    const phoneNumber = parentUser?.phone ?? '+91 •••• ••••';
+    const name = parentUser?.name || 'Parent';
 
     return (
-        <View style={[pc.card, { backgroundColor: C.s2, borderColor: C.bd }]}>
-            <View style={[pc.stripe, { backgroundColor: verified ? C.ok : C.amb }]} />
-            <View style={[pc.avatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                <Text style={[pc.avatarText, { color: C.primary }]}>{initial.toUpperCase()}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[pc.phone, { color: C.tx }]}>{parentUser?.phone ?? '—'}</Text>
-                <View style={pc.statusRow}>
-                    {verified ? (
-                        <>
-                            <View style={[pc.dot, { backgroundColor: C.ok }]} />
-                            <Text style={[pc.statusText, { color: C.ok }]}>{t('settings.verifiedAccount')}</Text>
-                        </>
-                    ) : (
-                        <>
-                            <AlertTriangle c={C.amb} size={11} />
-                            <Text style={[pc.statusText, { color: C.amb }]}>{t('settings.phoneNotVerified')}</Text>
-                        </>
-                    )}
+        <LinearGradient
+            colors={[C.s2, C.s3]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[parent.container, { borderColor: C.bd }]}
+        >
+            <View style={[parent.stripe, { backgroundColor: verified ? C.ok : C.amb }]} />
+            <View style={parent.content}>
+                <NotionAvatar name={name} size={56} colorIndex={0} />
+                <View style={parent.info}>
+                    <Text style={[parent.name, { color: C.tx }]}>{name}</Text>
+                    <View style={parent.phoneRow}>
+                        <Text style={[parent.phone, { color: C.tx2 }]}>{phoneNumber}</Text>
+                        {verified ? (
+                            <View style={[parent.verifiedBadge, { backgroundColor: C.okBg }]}>
+                                <Text style={[parent.verifiedText, { color: C.ok }]}>Verified</Text>
+                            </View>
+                        ) : (
+                            <View style={[parent.verifiedBadge, { backgroundColor: C.ambBg }]}>
+                                <Text style={[parent.verifiedText, { color: C.amb }]}>Unverified</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
             </View>
-            <View style={pc.ending}>
-                <Text style={[pc.endingLabel, { color: C.tx3 }]}>{t('settings.endsIn')}</Text>
-                <Text style={[pc.endingNum, { color: C.tx2 }]}>{lastFour}</Text>
-            </View>
-        </View>
+        </LinearGradient>
     );
 }
-const pc = StyleSheet.create({
-    card: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, borderWidth: 1, paddingVertical: 16, paddingRight: 16, paddingLeft: 0, overflow: 'hidden' },
-    stripe: { width: 3, alignSelf: 'stretch', marginRight: -2 },
-    avatar: { width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 14 },
-    avatarText: { fontSize: 18, fontWeight: '900' },
-    phone: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
-    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-    dot: { width: 5, height: 5, borderRadius: 3 },
-    statusText: { fontSize: 11.5, fontWeight: '600' },
-    ending: { alignItems: 'flex-end' },
-    endingLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
-    endingNum: { fontSize: 15, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+
+const parent = StyleSheet.create({
+    container: { flexDirection: 'row', borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 20 },
+    stripe: { width: 4 },
+    content: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
+    info: { flex: 1, gap: 4 },
+    name: { fontSize: 18, fontWeight: '700' },
+    phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    phone: { fontSize: 13 },
+    verifiedBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    verifiedText: { fontSize: 10, fontWeight: '700' },
 });
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
+    console.log('[SettingsScreen] students count:', students?.length);
+    console.log('[SettingsScreen] activeStudentId:', activeStudentId);
+    console.log('[SettingsScreen] parentUser:', parentUser);
     const router = useRouter();
     const { t, i18n } = useTranslation();
     const { colors: C } = useTheme();
     const { parentUser, logout } = useAuthStore();
 
     const {
-        student, token, card, emergencyProfile,
-        recentScans, anomalies, updateRequests,
-        locationConsent, updateLocationConsent,
-        updateNotificationPref, notificationPrefs,
+        students,
+        activeStudentId,
+        setActiveStudent,
+        student,
+        token,
+        card,
+        emergencyProfile,
+        recentScans,
+        anomalies,
+        updateRequests,
+        locationConsent,
+        updateLocationConsent,
+        updateNotificationPref,
+        notificationPrefs,
     } = useProfile();
 
     const currentLang = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0];
     const [langModalOpen, setLangModal] = useState(false);
-    const [scanAlerts, setScanAlerts] = useState(notificationPrefs?.scanAlerts ?? true);
-    const [anomalyAlerts, setAnomalyAlerts] = useState(notificationPrefs?.anomalyAlerts ?? true);
+    const [scanAlerts, setScanAlerts] = useState(notificationPrefs?.scan_notify_enabled ?? true);
+    const [anomalyAlerts, setAnomalyAlerts] = useState(notificationPrefs?.anomaly_notify_enabled ?? true);
     const [locationEnabled, setLocation] = useState(locationConsent?.enabled ?? false);
 
     const unresolvedAnomalies = (anomalies ?? []).filter((a) => !a.resolved);
+    const MAX_FREE_CHILDREN = 3;
+    const canAddMore = students.length < MAX_FREE_CHILDREN;
 
     const handleLogout = () => {
         Alert.alert(
-            t('common.logout'),
+            'Logout',
             'Are you sure you want to log out?',
             [
-                { text: t('common.cancel'), style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: t('common.logout'),
+                    text: 'Logout',
                     style: 'destructive',
                     onPress: async () => {
                         await logout();
@@ -214,70 +329,110 @@ export default function SettingsScreen() {
         );
     };
 
-    const handleExport = () =>
-        Alert.alert('Export Data', 'A download link will be sent to your registered phone number within a few minutes.');
+    const handleAddChild = () => {
+        if (!canAddMore) {
+            Alert.alert(
+                'Premium Feature',
+                `You have ${MAX_FREE_CHILDREN} children already. Upgrade to Premium to add more.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'View Plans', onPress: () => router.push('/(app)/plans') },
+                ]
+            );
+        } else {
+            router.push('/(app)/add-child');
+        }
+    };
+
+    const activeStudent = student;
+    const activeToken = token;
+    const activeCard = card;
+    const activeEmergency = emergencyProfile;
 
     return (
         <Screen bg={C.bg} edges={['top', 'left', 'right']}>
             <LanguageModal visible={langModalOpen} onClose={() => setLangModal(false)} />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.scroll, { gap: spacing[4] }]}>
-
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+            >
                 {/* Header */}
-                <Animated.View entering={FadeInDown.delay(40).duration(350)} style={s.header}>
-                    <View>
-                        <Text style={[s.pageTitle, { color: C.tx }]}>{t('settings.title')}</Text>
-                        <Text style={[s.pageSub, { color: C.tx3 }]}>
-                            {student?.first_name ? `${student.first_name}'s emergency card` : t('settings.subtitle')}
-                        </Text>
-                    </View>
-                    {token?.status && (
-                        <View style={[
-                            s.statusPill,
-                            token.status === 'ACTIVE'
-                                ? { backgroundColor: C.okBg, borderColor: C.okBd }
-                                : { backgroundColor: C.ambBg, borderColor: C.ambBd },
-                        ]}>
-                            <View style={[s.statusDot, { backgroundColor: token.status === 'ACTIVE' ? C.ok : C.amb }]} />
-                            <Text style={[s.statusText, { color: token.status === 'ACTIVE' ? C.ok : C.amb }]}>
-                                {token.status === 'ACTIVE' ? t('settings.cardLive') : token.status}
-                            </Text>
-                        </View>
-                    )}
+                <Animated.View entering={FadeInDown.delay(40).duration(350)}>
+                    <Text style={[styles.pageTitle, { color: C.tx }]}>Settings</Text>
+                    <Text style={[styles.pageSubtitle, { color: C.tx3 }]}>
+                        Manage your account and children
+                    </Text>
                 </Animated.View>
 
-                {/* Parent identity */}
-                <Animated.View entering={FadeInDown.delay(70).duration(350)}>
-                    <ParentCard parentUser={parentUser} C={C} />
+                {/* Parent Header */}
+                <Animated.View entering={FadeInDown.delay(80).duration(350)}>
+                    <ParentHeader parentUser={parentUser} C={C} />
                 </Animated.View>
 
-                {/* Pending updates */}
+                {/* Child Switcher */}
+                {students.length > 0 && (
+                    <Animated.View entering={FadeInDown.delay(120).duration(350)} style={styles.switcherSection}>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.switcherScroll}
+                        >
+                            {students.map((s, idx) => (
+                                <ChildCard
+                                    key={s.id}
+                                    student={s}
+                                    isActive={s.id === activeStudentId}
+                                    onPress={() => setActiveStudent(s.id)}
+                                    colorIndex={idx}
+                                    C={C}
+                                />
+                            ))}
+                            <AddChildButton onPress={handleAddChild} canAdd={canAddMore} C={C} />
+                        </ScrollView>
+                    </Animated.View>
+                )}
+
+                {/* Pending Updates Banner */}
                 {(updateRequests?.length ?? 0) > 0 && (
-                    <Animated.View entering={FadeInDown.delay(85).duration(350)}>
+                    <Animated.View entering={FadeInDown.delay(140).duration(350)}>
                         <PendingUpdatesBanner requests={updateRequests} />
                     </Animated.View>
                 )}
 
-                {/* Physical card */}
-                <Animated.View entering={FadeInDown.delay(110).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.physicalCard')} accent={C.primary} />
+                {/* Active Child Indicator */}
+                {activeStudent && (
+                    <Animated.View entering={FadeInDown.delay(160).duration(350)}>
+                        <View style={styles.activeIndicator}>
+                            <Text style={[styles.activeText, { color: C.tx2 }]}>
+                                Active: {activeStudent.first_name || 'Child'}
+                            </Text>
+                            <View style={[styles.activeLine, { backgroundColor: C.bd }]} />
+                        </View>
+                    </Animated.View>
+                )}
+
+                {/* Physical Card Section */}
+                <Animated.View entering={FadeInDown.delay(200).duration(350)}>
+                    <SectionHeader title="Physical Card" accent={C.primary} />
                     <SettingsCard C={C}>
-                        <CardStatusBlock token={token} card={card} />
-                        <Row
+                        <CardStatusBlock token={activeToken} card={activeCard} />
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconScan color={C.primary} />}
-                            iconBg={C.primaryBg} iconBd={C.primaryBd}
-                            title={t('settings.deactivateCard')}
-                            subtitle={t('settings.deactivateCardSub')}
+                            icon={<IconScan color={C.primary} size={20} />}
+                            iconBg={C.primaryBg}
+                            iconBorder={C.primaryBd}
+                            title="View QR Code"
+                            subtitle="Scan to access emergency info"
                             onPress={() => router.push('/(app)/qr')}
                             isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Scan history */}
-                <Animated.View entering={FadeInDown.delay(140).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.scanActivity')} accent={C.blue} />
+                {/* Scan Activity Section */}
+                <Animated.View entering={FadeInDown.delay(240).duration(350)}>
+                    <SectionHeader title="Scan Activity" accent={C.blue} />
                     <SettingsCard C={C}>
                         <ScanHistoryPreview
                             scans={recentScans ?? []}
@@ -287,122 +442,158 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Emergency profile */}
-                <Animated.View entering={FadeInDown.delay(170).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.emergencyProfile')} accent={C.primary} />
+                {/* Emergency Profile Section */}
+                <Animated.View entering={FadeInDown.delay(280).duration(350)}>
+                    <SectionHeader title="Emergency Profile" accent={C.primary} />
                     <SettingsCard C={C}>
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconEye color={C.blue} />}
-                            iconBg={C.blueBg} iconBd={C.blueBd}
-                            title={t('settings.visibilityControls')}
-                            subtitle={visibilityLabel(emergencyProfile?.visibility)}
+                            icon={<IconEye color={C.blue} size={20} />}
+                            iconBg={C.blueBg}
+                            iconBorder={C.blueBd}
+                            title="Visibility Controls"
+                            subtitle={visibilityLabel(activeEmergency?.visibility)}
                             onPress={() => router.push('/(app)/visibility')}
                         />
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconShield color={C.primary} />}
-                            iconBg={C.primaryBg} iconBd={C.primaryBd}
-                            title={t('settings.emergencyInfo')}
-                            subtitle={`${t('settings.emergencyInfoSub')} · ${student?.first_name ?? 'child'}'s card`}
+                            icon={<IconShield color={C.primary} size={20} />}
+                            iconBg={C.primaryBg}
+                            iconBorder={C.primaryBd}
+                            title="Emergency Info"
+                            subtitle="Blood group, allergies, contacts"
                             onPress={() => router.push('/(app)/updates')}
                             isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Security */}
-                <Animated.View entering={FadeInDown.delay(200).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.security')} accent={C.purp} />
+                {/* Security Section */}
+                <Animated.View entering={FadeInDown.delay(320).duration(350)}>
+                    <SectionHeader title="Security" accent={C.purp} />
                     <SettingsCard C={C}>
                         <BiometricRow isLast />
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Notifications */}
-                <Animated.View entering={FadeInDown.delay(230).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.notifications')} accent={C.ok} />
+                {/* Notifications Section */}
+                <Animated.View entering={FadeInDown.delay(360).duration(350)}>
+                    <SectionHeader title="Notifications" accent={C.ok} />
                     <SettingsCard C={C}>
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconBell color={C.ok} />}
-                            iconBg={C.okBg} iconBd={C.okBd}
-                            title={t('settings.scanAlerts')}
-                            subtitle={t('settings.scanAlertsSub')}
-                            toggle toggleVal={scanAlerts}
-                            onToggle={(v) => { setScanAlerts(v); updateNotificationPref?.('scanAlerts', v); }}
+                            icon={<IconBell color={C.ok} size={20} />}
+                            iconBg={C.okBg}
+                            iconBorder={C.okBd}
+                            title="Scan Alerts"
+                            subtitle="Get notified when card is scanned"
+                            rightElement={
+                                <Switch
+                                    value={scanAlerts}
+                                    onValueChange={(v) => {
+                                        setScanAlerts(v);
+                                        updateNotificationPref?.('scan_notify_enabled', v);
+                                    }}
+                                    trackColor={{ false: C.s5, true: C.primary + '80' }}
+                                    thumbColor={scanAlerts ? C.primary : C.tx3}
+                                />
+                            }
                         />
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconWarning color={C.amb} />}
-                            iconBg={C.ambBg} iconBd={C.ambBd}
-                            title={t('settings.anomalyAlerts')}
-                            subtitle={t('settings.anomalyAlertsSub')}
-                            toggle toggleVal={anomalyAlerts}
-                            onToggle={(v) => { setAnomalyAlerts(v); updateNotificationPref?.('anomalyAlerts', v); }}
+                            icon={<IconWarning color={C.amb} size={20} />}
+                            iconBg={C.ambBg}
+                            iconBorder={C.ambBd}
+                            title="Anomaly Alerts"
+                            subtitle="Suspicious activity notifications"
+                            rightElement={
+                                <Switch
+                                    value={anomalyAlerts}
+                                    onValueChange={(v) => {
+                                        setAnomalyAlerts(v);
+                                        updateNotificationPref?.('anomaly_notify_enabled', v);
+                                    }}
+                                    trackColor={{ false: C.s5, true: C.primary + '80' }}
+                                    thumbColor={anomalyAlerts ? C.primary : C.tx3}
+                                />
+                            }
                         />
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconMapPin color={C.blue} />}
-                            iconBg={C.blueBg} iconBd={C.blueBd}
-                            title={t('settings.locationOnScan')}
-                            subtitle={t('settings.locationOnScanSub')}
-                            toggle toggleVal={locationEnabled}
-                            onToggle={(v) => { setLocation(v); updateLocationConsent?.(v); }}
+                            icon={<IconMapPin color={C.blue} size={20} />}
+                            iconBg={C.blueBg}
+                            iconBorder={C.blueBd}
+                            title="Location on Scan"
+                            subtitle="Share scan location anonymously"
+                            rightElement={
+                                <Switch
+                                    value={locationEnabled}
+                                    onValueChange={(v) => {
+                                        setLocation(v);
+                                        updateLocationConsent?.(v);
+                                    }}
+                                    trackColor={{ false: C.s5, true: C.primary + '80' }}
+                                    thumbColor={locationEnabled ? C.primary : C.tx3}
+                                />
+                            }
                             isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Appearance */}
-                <Animated.View entering={FadeInDown.delay(260).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.appearance')} accent={C.tx3} />
+                {/* Appearance Section */}
+                <Animated.View entering={FadeInDown.delay(400).duration(350)}>
+                    <SectionHeader title="Appearance" accent={C.tx3} />
                     <SettingsCard C={C}>
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconGlobe color={C.blue} />}
-                            iconBg={C.blueBg} iconBd={C.blueBd}
-                            title={t('settings.language')}
+                            icon={<IconGlobe color={C.blue} size={20} />}
+                            iconBg={C.blueBg}
+                            iconBorder={C.blueBd}
+                            title="Language"
                             subtitle={`${currentLang.native} · ${currentLang.label}`}
                             onPress={() => setLangModal(true)}
                         />
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconMoon color={C.tx3} />}
-                            iconBg={C.s4} iconBd={C.bd2}
-                            title={t('settings.theme')}
-                            subtitle={t('settings.themeSub')}
-                            noChevron
-                            right={<ThemeSegment />}
+                            icon={<IconMoon color={C.tx3} size={20} />}
+                            iconBg={C.s4}
+                            iconBorder={C.bd2}
+                            title="Theme"
+                            subtitle="Light / Dark / System"
+                            rightElement={<ThemeSegment />}
                             isLast
                         />
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Account */}
-                <Animated.View entering={FadeInDown.delay(290).duration(350)} style={s.group}>
-                    <SectionLabel label={t('settings.account')} accent={C.tx3} />
+                {/* Account Section */}
+                <Animated.View entering={FadeInDown.delay(440).duration(350)}>
+                    <SectionHeader title="Account" accent={C.tx3} />
                     <SettingsCard C={C}>
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconPhone color={C.amb} />}
-                            iconBg={C.ambBg} iconBd={C.ambBd}
-                            title={t('settings.changePhone')}
-                            subtitle={t('settings.changePhoneSub')}
+                            icon={<IconPhone color={C.amb} size={20} />}
+                            iconBg={C.ambBg}
+                            iconBorder={C.ambBd}
+                            title="Change Phone Number"
+                            subtitle="Update your registered mobile"
                             onPress={() => router.push('/(app)/change-phone')}
                         />
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<IconInfo color={C.blue} />}
-                            iconBg={C.blueBg} iconBd={C.blueBd}
-                            title={t('settings.support')}
+                            icon={<IconUser color={C.blue} size={20} />}
+                            iconBg={C.blueBg}
+                            iconBorder={C.blueBd}
+                            title="Help & Support"
                             onPress={() => router.push('/(app)/support')}
                         />
-                        <Row
+                        <SettingsRow
                             C={C}
-                            iconEl={<LogOut c={C.red} size={16} />}
-                            iconBg={C.redBg} iconBd={C.redBd}
-                            title={t('settings.logout')}
+                            icon={<IconInfo color={C.red} size={20} />}
+                            iconBg={C.redBg}
+                            iconBorder={C.redBd}
+                            title="Log Out"
                             onPress={handleLogout}
                             danger
                             isLast
@@ -411,28 +602,73 @@ export default function SettingsScreen() {
                 </Animated.View>
 
                 {/* Footer */}
-                <Animated.View entering={FadeInDown.delay(320).duration(350)} style={s.footer}>
-                    <View style={[s.footerDivider, { backgroundColor: C.bd2 }]} />
-                    <Text style={[s.footerApp, { color: C.tx3 }]}>RESQID · v1.0.0</Text>
-                    <Text style={[s.footerSub, { color: C.tx3 }]}>Emergency ID Card Platform</Text>
+                <Animated.View entering={FadeInDown.delay(480).duration(350)} style={styles.footer}>
+                    <View style={[styles.footerDivider, { backgroundColor: C.bd2 }]} />
+                    <Text style={[styles.footerText, { color: C.tx3 }]}>RESQID · v1.0.0</Text>
+                    <Text style={[styles.footerSubtext, { color: C.tx3 }]}>Emergency ID Card Platform</Text>
                 </Animated.View>
-
             </ScrollView>
         </Screen>
     );
 }
 
-const s = StyleSheet.create({
-    scroll: { paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[12] },
-    header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingBottom: spacing[1] },
-    pageTitle: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-    pageSub: { fontSize: 12.5, marginTop: 3 },
-    statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, marginTop: 4 },
-    statusDot: { width: 5, height: 5, borderRadius: 3 },
-    statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-    group: { gap: 8 },
-    footer: { alignItems: 'center', gap: 4, paddingTop: spacing[2] },
-    footerDivider: { width: 32, height: 1, borderRadius: 1, marginBottom: 8 },
-    footerApp: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-    footerSub: { fontSize: 11 },
+const styles = StyleSheet.create({
+    scrollContent: {
+        paddingHorizontal: spacing.screenH,
+        paddingTop: spacing[5],
+        paddingBottom: spacing[12],
+        gap: 24,
+    },
+    pageTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+        marginBottom: 4,
+    },
+    pageSubtitle: {
+        fontSize: 13,
+    },
+    switcherSection: {
+        marginVertical: 4,
+    },
+    switcherScroll: {
+        gap: 12,
+        paddingHorizontal: 4,
+    },
+    activeIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginTop: 8,
+        marginBottom: 4,
+    },
+    activeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    activeLine: {
+        flex: 1,
+        height: 1,
+    },
+    footer: {
+        alignItems: 'center',
+        gap: 6,
+        paddingTop: 16,
+        paddingBottom: 32,
+    },
+    footerDivider: {
+        width: 40,
+        height: 1,
+        borderRadius: 1,
+        marginBottom: 8,
+    },
+    footerText: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 1,
+    },
+    footerSubtext: {
+        fontSize: 10,
+    },
 });

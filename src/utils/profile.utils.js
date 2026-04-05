@@ -97,7 +97,9 @@ export function fmtDate(iso) {
 }
 
 // ─── Emergency profile completeness (0–100) ───────────────────────────────────
-// Fields: blood_group, allergies, conditions, medications, doctor_name, doctor_phone, ≥1 contact
+// ✅ FIX: doctor_phone is optional – removed from denominator
+// Fields: blood_group, allergies, conditions, medications, doctor_name, ≥1 contact
+// doctor_phone is nice-to-have but not required for completeness
 
 export function profileCompleteness(ep, contacts) {
   const fields = [
@@ -106,20 +108,23 @@ export function profileCompleteness(ep, contacts) {
     ep?.conditions,
     ep?.medications,
     ep?.doctor_name,
-    ep?.doctor_phone,
     contacts?.length > 0 ? "ok" : null,
   ];
-  return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+  const filledCount = fields.filter(Boolean).length;
+  const totalFields = fields.length; // 6 fields (doctor_phone excluded)
+  return Math.round((filledCount / totalFields) * 100);
 }
 
 // ─── Missing emergency profile fields (for nudge UI) ─────────────────────────
 // Returns string[] of human-readable missing field names
+// ✅ FIX: doctor_phone is optional – only show if user wants to add it
 
 export function missingFields(ep, contacts) {
   const m = [];
   if (!ep?.blood_group) m.push("Blood group");
   if (!ep?.allergies) m.push("Allergies");
-  if (!ep?.doctor_phone) m.push("Doctor phone");
+  if (!ep?.doctor_name) m.push("Doctor name");
   if (!contacts?.length) m.push("Emergency contact");
+  // doctor_phone is optional – not included in missing fields
   return m;
 }

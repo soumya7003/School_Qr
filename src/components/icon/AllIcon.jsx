@@ -237,3 +237,18 @@ export const StatusDot = () => {
     const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
     return <Animated.View style={[styles.statusDot, animStyle]} />;
 };
+
+// Add this export to AllIcon.js
+export const IconChevronRight = ({ color, size = 16 }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+
+// Add to AllIcon.jsx
+export const IconUser = ({ color = colors.info }) => (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+        <Circle cx={12} cy={8} r={4} stroke={color} strokeWidth={1.8} />
+        <Path d="M5 20v-2a7 7 0 0114 0v2" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+);

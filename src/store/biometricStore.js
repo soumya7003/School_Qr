@@ -1,29 +1,41 @@
 // src/store/biometricStore.js
-import { create } from 'zustand';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
-export const useBiometricStore = create((set) => ({
-  // Is the app currently locked (biometric gate showing)?
-  isLocked: false,
-
-  // Has the user turned on biometric app lock in settings?
-  isBiometricEnabled: false,
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // DEFAULT IS TRUE — we assume the device supports biometrics until proven
-  // otherwise. This prevents the toggle from being permanently disabled on
-  // devices where expo-local-authentication hasn't initialized yet.
-  // The real check happens inside BiometricRow when the user taps the toggle.
-  // ─────────────────────────────────────────────────────────────────────────
-  isBiometricAvailable: true,
-
-  setLocked: (val) => set({ isLocked: val }),
-  setBiometricEnabled: (val) => set({ isBiometricEnabled: val }),
-  setBiometricAvailable: (val) => set({ isBiometricAvailable: val }),
-
-  reset: () =>
-    set({
+export const useBiometricStore = create(
+  persist(
+    (set) => ({
+      // ── CRITICAL: always false on startup ──
+      // App should NEVER start in a locked state.
+      // Lock only triggers when app returns FROM background.
       isLocked: false,
+
+      // Has the user enabled biometric lock in settings?
       isBiometricEnabled: false,
-      isBiometricAvailable: true, // reset to true, not false
+
+      // Has the app fully mounted and the navigator is ready?
+      // Lock will NOT trigger until this is true.
+      isAppReady: false,
+
+      setLocked: (val) => set({ isLocked: val }),
+      setBiometricEnabled: (val) => set({ isBiometricEnabled: val }),
+      setAppReady: (val) => set({ isAppReady: val }),
+
+      reset: () =>
+        set({
+          isLocked: false,
+          isBiometricEnabled: false,
+          isAppReady: false,
+        }),
     }),
-}));
+    {
+      name: "biometric-store",
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only persist the user preference, not runtime state
+      partialize: (state) => ({
+        isBiometricEnabled: state.isBiometricEnabled,
+      }),
+    },
+  ),
+);

@@ -66,12 +66,27 @@ export function fmtDate(iso) {
   });
 }
 
-// check for single login device
+// ✅ FIX: Add fallback for devices that cannot get AndroidId
 export async function getDeviceInfo() {
+  let deviceId = null;
+
+  try {
+    if (Platform.OS === "android") {
+      deviceId = await Application.getAndroidId();
+    } else {
+      deviceId = await Application.getIosIdForVendorAsync();
+    }
+  } catch (error) {
+    console.warn("[getDeviceInfo] Failed to get device ID:", error);
+  }
+
+  // ✅ FIX: Generate fallback ID if native ID not available
+  const fallbackId = `fallback_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
   return {
-    deviceId: await Application.getAndroidId(),
-    deviceName: Device.deviceName,
+    deviceId: deviceId ?? fallbackId,
+    deviceName: Device.deviceName ?? "Unknown Device",
     platform: Platform.OS,
-    osVersion: Device.osVersion,
+    osVersion: Device.osVersion ?? "Unknown",
   };
 }

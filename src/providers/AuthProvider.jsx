@@ -8,7 +8,9 @@ import { createContext, useCallback, useEffect } from 'react';
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    const __DEV_BYPASS__ = true;
+    // ✅ FIX: Only bypass in development, never in production
+    const __DEV_BYPASS__ = __DEV__;
+
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const isHydrated = useAuthStore((s) => s.isHydrated);
 
@@ -16,22 +18,20 @@ export function AuthProvider({ children }) {
     const students = useProfileStore((s) => s.students);
 
     const segments = useSegments();
-
-    // ✅ Wait for expo-router's root navigator to be fully mounted
     const navigationState = useRootNavigationState();
 
-    const isProfileComplete =
+    // ✅ FIX: Profile complete check includes basic student info
+    const isProfileComplete = __DEV_BYPASS__ ? true : (
         students.length > 0 &&
-        students.some(
-            (s) =>
-                s.emergency?.blood_group &&
-                (s.emergency?.contacts?.length ?? 0) > 0
-        );
+        students.some((s) =>
+            s.first_name?.trim() &&
+            s.class?.trim() &&
+            s.setup_stage === 'COMPLETE'
+        )
+    );
 
     useEffect(() => {
-        // ✅ CRITICAL: bail out until the root navigator is ready
         if (!navigationState?.key) return;
-
         if (!isHydrated || !profileHydrated) return;
 
         const inAuthGroup = segments[0] === '(auth)';
@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
         }
 
         // ─── AUTHENTICATED BUT PROFILE NOT COMPLETE ───────
-        if (!__DEV_BYPASS__ && !isProfileComplete) {
+        if (!isProfileComplete) {
             if (segments[1] !== 'updates') {
                 router.replace('/(app)/updates');
             }
@@ -60,7 +60,7 @@ export function AuthProvider({ children }) {
         }
 
     }, [
-        navigationState?.key,   // ✅ added as dependency
+        navigationState?.key,
         isAuthenticated,
         isHydrated,
         profileHydrated,
@@ -75,9 +75,6 @@ export function AuthProvider({ children }) {
     );
 }
 
-/**
- * LOGIN SUCCESS
- */
 export function useLoginSuccess() {
     const loginSuccess = useAuthStore((s) => s.loginSuccess);
     const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
@@ -94,17 +91,14 @@ export function useLoginSuccess() {
 
             try {
                 await fetchAndPersist();
-            } catch {
-                // non-fatal
+            } catch (err) {
+                console.warn('[useLoginSuccess] Profile fetch failed:', err?.message);
             }
         },
         [loginSuccess, fetchAndPersist]
     );
 }
 
-/**
- * REGISTRATION SUCCESS
- */
 export function useRegistrationSuccess() {
     const loginSuccess = useAuthStore((s) => s.loginSuccess);
     const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
@@ -121,17 +115,14 @@ export function useRegistrationSuccess() {
 
             try {
                 await fetchAndPersist();
-            } catch {
-                // non-fatal
+            } catch (err) {
+                console.warn('[useRegistrationSuccess] Profile fetch failed:', err?.message);
             }
         },
         [loginSuccess, fetchAndPersist]
     );
 }
 
-/**
- * LOGOUT
- */
 export function useLogout() {
     const logout = useAuthStore((s) => s.logout);
     const clearProfile = useProfileStore((s) => s.clear);

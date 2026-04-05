@@ -1,25 +1,6 @@
-/**
- * features/auth/auth.api.js
- *
- * Covers the LOGIN flow only (existing parent or auto-register on first login).
- * REGISTRATION flow (new card) lives in features/profile/profile.api.js.
- *
- * Backend response shapes (verified against auth.controller.js):
- *
- * POST /auth/send-otp
- *   → { success, data: { isNewUser } }
- *
- * POST /auth/verify-otp
- *   → { success, data: { accessToken, refreshToken, expiresAt, isNewUser, parent: { id } } }
- *   NOTE: expiresAt = Unix seconds (backend calls jwt.decode().exp directly)
- *
- * POST /auth/refresh  ← handled by tokenRefresh.js, not here
- *
- * POST /auth/logout
- *   → { success, message }
- */
-
 import { authClient } from "@/lib/api/apiClient";
+import { mockApi } from "@/services/mockService";
+const USE_MOCK = __DEV__;
 
 // ── Validators (fail-fast on unexpected shapes) ───────────────────────────────
 
@@ -38,10 +19,10 @@ export const authApi = {
    * but does NOT use isNewUser for routing here (that comes after verifyOtp).
    */
   sendOtp: async (phone) => {
+    if (USE_MOCK) return mockApi.sendOtp(phone);
     const res = await authClient.post("/auth/send-otp", { phone });
     return res?.data?.data ?? res?.data;
   },
-
   /**
    * POST /auth/verify-otp
    *

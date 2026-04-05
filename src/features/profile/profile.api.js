@@ -1,84 +1,6 @@
-/**
- * features/profile/profile.api.js
- *
- * ALL endpoints verified against:
- *   auth.routes.js       → mounted at /api/auth
- *   parent.routes.js     → mounted at /api/parents
- *   parent.service.js    → exact response shapes
- *   parent.validation.js → exact request shapes
- *
- * ── Registration (unauthenticated — authClient) ──────────────────────────────
- *
- * POST /api/auth/register/init
- *   body: { card_number, phone }
- *   → { success, data: { nonce, masked_phone, student_first_name? } }
- *
- * POST /api/auth/register/verify
- *   body: { nonce, otp, phone }
- *   → { success, data: { accessToken, refreshToken, expiresAt,
- *                         isNewUser, parent_id, student_id } }
- *
- * ── Profile (authenticated — apiClient with Bearer token) ───────────────────
- *
- * GET /api/parents/me
- *   → { success, data: {
- *         parent: { id, name, is_phone_verified, notification_prefs },
- *         students: [{
- *           id, first_name, last_name, class, section, photo_url,
- *           setup_stage, relationship, is_primary,
- *           school: { id, name, code, city },
- *           token: { id, status, expires_at, card_number, qr_url } | null,
- *           emergency: {
- *             blood_group, allergies, conditions, medications,
- *             doctor_name, doctor_phone, notes, visibility,
- *             is_visible, contacts: [{ id, name, phone, relationship,
- *                                      priority, display_order,
- *                                      call_enabled, whatsapp_enabled }]
- *           } | null,
- *           card_visibility: { visibility, hidden_fields, updated_by_parent } | null,
- *           location_consent: { enabled } | null,
- *         }],
- *         last_scan: { id, result, ip_city, ip_region, ip_country,
- *                       scan_purpose, created_at, latitude, longitude } | null,
- *         scan_count: number,
- *         anomaly: { id, anomaly_type, severity, reason, created_at } | null,
- *         cache_ttl_days: 30,
- *       }
- *     }
- *
- * PATCH /api/parents/me/profile
- *   body: { student_id (required), student?, emergency?, contacts? }
- *   → { success, data: { cache_invalidated: true } }
- *
- * PATCH /api/parents/me/visibility
- *   body: { student_id, visibility, hidden_fields }
- *   → { success, data: { cache_invalidated: true } }
- *
- * PATCH /api/parents/me/notifications
- *   body: any subset of notification pref fields
- *   → { success, data: { cache_invalidated: true } }
- *
- * PATCH /api/parents/me/location-consent
- *   body: { student_id, enabled }
- *   → { success, data: { cache_invalidated: true } }
- *
- * POST /api/parents/me/lock-card
- *   body: { student_id, confirmation: "LOCK" }
- *   → { success, data: { locked: true, count: number, cache_invalidated: true } }
- *
- * POST /api/parents/me/request-replace
- *   body: { student_id, reason }
- *   → { success, data: { id, created_at } }
- *
- * DELETE /api/parents/me
- *   → { success, message: "Account deleted" }
- *
- * GET /api/parents/me/scans
- *   query: { cursor?, limit?, filter? }
- *   → { success, data: { scans, anomalies, hasMore, nextCursor } }
- */
-
 import { apiClient, authClient } from "@/lib/api/apiClient";
+import { mockApi } from "@/services/mockService";
+const USE_MOCK = __DEV__;
 
 // ── Guards ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +67,7 @@ export const profileApi = {
    * Re-fetched when stale OR when any write returns { cache_invalidated: true }.
    */
   getFullProfile: async () => {
+    if (USE_MOCK) return mockApi.getFullProfile();
     const res = await apiClient.get("/parents/me");
     return res?.data?.data ?? res?.data;
   },

@@ -329,13 +329,14 @@ function CardTabs({ isFlipped, onFlip, C }) {
 }
 
 // ─── Action button ────────────────────────────────────────────────────────────
+// ─── Action button ────────────────────────────────────────────────────────────
 function ActionBtn({ icon, label, sublabel, onPress, color, bg, border, disabled }) {
     return (
         <TouchableOpacity style={[s.actionBtn, { backgroundColor: bg, borderColor: border }, disabled && s.actionBtnDim]} onPress={onPress} activeOpacity={disabled ? 1 : 0.75} disabled={disabled}>
             <View style={[s.actionBtnIcon, { backgroundColor: color + '18' }]}>{icon}</View>
             <View style={{ flex: 1 }}>
                 <Text style={[s.actionBtnLabel, { color }]}>{label}</Text>
-                {sublabel ? <Text style={s.actionBtnSub}>{sublabel}</Text> : null}
+                {sublabel ? <Text style={[s.actionBtnSub, { color: color }]}>{sublabel}</Text> : null}
             </View>
             <Feather name="chevron-right" size={14} color={color + '55'} />
         </TouchableOpacity>

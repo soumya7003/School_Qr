@@ -1,47 +1,103 @@
 // src/hooks/useInactivityLock.js
-import { useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
-import { useBiometricStore } from '../store/biometricStore';
+import { authenticateForAppResume } from "@/services/biometricService";
+import { useBiometricStore } from "@/store/biometricStore";
+import { useCallback, useEffect, useRef } from "react";
+import { AppState, PanResponder } from "react-native";
+
+const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes
 
 /**
- * useInactivityLock
+ * Combines two lock strategies:
+ * 1. Touch inactivity → lock screen with biometric
+ * 2. Background → foreground → biometric lock
  *
- * Listens to AppState changes. When the app moves to the background
- * and then returns to the foreground, it sets isLocked = true so that
- * BiometricGate fires the biometric prompt automatically.
- *
- * Place this hook ONCE in the root _layout.jsx — it will protect every page.
+ * Returns panHandlers to spread onto the root view.
  */
 export function useInactivityLock() {
+  const { isBiometricEnabled, isAppReady, setLocked, isLocked } =
+    useBiometricStore();
+
+  // --- Inactivity timer ---
+  const timerRef = useRef(null);
+
+  const lockApp = useCallback(() => {
+    if (isBiometricEnabled && !isLocked) {
+      setLocked(true);
+    }
+  }, [isBiometricEnabled, isLocked, setLocked]);
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      lockApp();
+    }, INACTIVITY_TIMEOUT);
+  }, [lockApp]);
+
+  // Handle biometric unlock when app is locked
+  const handleUnlock = useCallback(async () => {
+    if (!isLocked) return;
+
+    const success = await authenticateForAppResume();
+    if (success) {
+      setLocked(false);
+      resetTimer(); // Reset inactivity timer after unlock
+    }
+  }, [isLocked, setLocked, resetTimer]);
+
+  // Listen for app state changes to trigger unlock
+  useEffect(() => {
+    if (isLocked && isAppReady) {
+      handleUnlock();
+    }
+  }, [isLocked, isAppReady, handleUnlock]);
+
+  // Stable pan responder — created once
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => {
+        if (!isLocked) {
+          resetTimer();
+        }
+        return false; // don't consume the touch
+      },
+    }),
+  ).current;
+
+  // Start inactivity timer on mount
+  useEffect(() => {
+    if (!isLocked) {
+      resetTimer();
+    }
+    return () => clearTimeout(timerRef.current);
+  }, [resetTimer, isLocked]);
+
+  // --- Background → foreground biometric lock ---
   const appStateRef = useRef(AppState.currentState);
-  const { isBiometricEnabled, isLocked, setLocked } = useBiometricStore();
+  const wentToBackgroundRef = useRef(false);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
       const prevState = appStateRef.current;
 
-      // App went to background or became inactive
-      if (nextAppState === 'background' || nextAppState === 'inactive') {
-        appStateRef.current = nextAppState;
-        return;
+      if (nextState === "background") {
+        wentToBackgroundRef.current = true;
+        clearTimeout(timerRef.current);
       }
 
-      // App came back to foreground from background/inactive
-      if (
-        (prevState === 'background' || prevState === 'inactive') &&
-        nextAppState === 'active'
-      ) {
-        if (isBiometricEnabled && !isLocked) {
-          // Lock the app — BiometricGate will show the prompt
+      if (nextState === "active") {
+        if (wentToBackgroundRef.current && isBiometricEnabled && isAppReady) {
           setLocked(true);
+        } else if (!isLocked) {
+          resetTimer();
         }
+        wentToBackgroundRef.current = false;
       }
 
-      appStateRef.current = nextAppState;
+      appStateRef.current = nextState;
     });
 
-    return () => {
-      subscription.remove();
-    };
-  }, [isBiometricEnabled, isLocked, setLocked]);
+    return () => subscription.remove();
+  }, [isBiometricEnabled, isAppReady, setLocked, resetTimer, isLocked]);
+
+  return panResponder.panHandlers;
 }
