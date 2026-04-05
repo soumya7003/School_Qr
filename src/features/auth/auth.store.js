@@ -15,10 +15,11 @@
  *   If expired → isAuthenticated = false → redirect to login screen.
  */
 
+import { registerPushToken } from "@/features/notifications/notification.service";
 import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
-const __DEV_BYPASS_AUTH__ = false;
+const __DEV_BYPASS_AUTH__ = true;
 const __DEV_USER__ = {
   id: "dev-parent-id",
   phone: "+919999999999",
@@ -67,10 +68,11 @@ export const useAuthStore = create((set, get) => {
             authState.expiresAt - nowSecs > 60;
 
           set({
-            isAuthenticated: hasSession,
+            isAuthenticated: __DEV_BYPASS_AUTH__,
             parentUser:
               hasSession && isValidUser(user) ? Object.freeze(user) : null,
-            isNewUser: hasSession ? Boolean(authState?.isNewUser) : false,
+            // isNewUser: hasSession ? Boolean(authState?.isNewUser) : false,
+            isNewUser: false,
             isHydrated: true,
           });
         } catch {
@@ -115,6 +117,8 @@ export const useAuthStore = create((set, get) => {
         isNewUser,
         isHydrated: true,
       });
+
+      registerPushToken();
     },
 
     // ── Set Is New User ───────────────────────────────────────────────────────

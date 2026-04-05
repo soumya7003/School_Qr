@@ -15,6 +15,7 @@ import { setLogoutHandler } from "@/lib/api/apiClient";
 import { isDeviceRooted } from "@/lib/security/deviceSecurity";
 import { checkAppIntegrity } from "@/lib/security/integrityCheck";
 import AppProviders from "@/providers";
+import * as Notification from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { Component, useCallback, useEffect, useRef, useState } from "react";
@@ -37,6 +38,14 @@ if (typeof ErrorUtils !== "undefined") {
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
 const I18N_TIMEOUT_MS = 5_000;
+
+Notification.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true
+    })
+})
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 // Sits INSIDE AppProviders so the error screen has access to theme + i18n

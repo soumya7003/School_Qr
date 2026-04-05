@@ -7,15 +7,14 @@ import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing, typography } from '@/theme';
-import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert, Animated, KeyboardAvoidingView, Modal,
   Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -75,15 +74,15 @@ function StepBar({ current, completed, C }) {
   const { t } = useTranslation();
   const STEPS = [
     { id: 0, label: t('updates_extra.stepStudent'), short: '01' },
-    { id: 1, label: t('updates_extra.stepMedical'),  short: '02' },
+    { id: 1, label: t('updates_extra.stepMedical'), short: '02' },
     { id: 2, label: t('updates_extra.stepContacts'), short: '03' },
-    { id: 3, label: t('updates_extra.stepReview'),   short: '04' },
+    { id: 3, label: t('updates_extra.stepReview'), short: '04' },
   ];
   return (
     <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
       {STEPS.map((step, i) => {
         const isActive = i === current;
-        const isDone   = completed.includes(i);
+        const isDone = completed.includes(i);
         return (
           <View key={step.id} style={sb.stepGroup}>
             {i > 0 && <View style={[sb.line, { backgroundColor: C.bd2 }, (isDone || isActive) && { backgroundColor: C.primary }]} />}
@@ -260,9 +259,9 @@ const ccc = StyleSheet.create({
 // ── Contact modal ─────────────────────────────────────────────────────────────
 function ContactModal({ visible, contact, onSave, onClose, C }) {
   const { t } = useTranslation();
-  const [name, setName]   = useState('');
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [rel, setRel]     = useState('');
+  const [rel, setRel] = useState('');
   useEffect(() => {
     if (visible) { setName(contact?.name ?? ''); setPhone(contact?.phone ?? ''); setRel(contact?.relationship ?? ''); }
   }, [visible, contact]);
@@ -288,9 +287,9 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
               </TouchableOpacity>
             </View>
             <View style={cm.fields}>
-              <Field label={t('updates_extra.fieldContactName')}  value={name}  onChangeText={setName}  placeholder={t('updates_extra.fieldContactNamePlaceholder')}  required C={C} />
+              <Field label={t('updates_extra.fieldContactName')} value={name} onChangeText={setName} placeholder={t('updates_extra.fieldContactNamePlaceholder')} required C={C} />
               <Field label={t('updates_extra.fieldContactPhone')} value={phone} onChangeText={setPhone} placeholder={t('updates_extra.fieldContactPhonePlaceholder')} keyboardType="phone-pad" required C={C} />
-              <Field label={t('updates_extra.fieldContactRel')}   value={rel}   onChangeText={setRel}   placeholder={t('updates_extra.fieldContactRelPlaceholder')}   C={C} />
+              <Field label={t('updates_extra.fieldContactRel')} value={rel} onChangeText={setRel} placeholder={t('updates_extra.fieldContactRelPlaceholder')} C={C} />
             </View>
             <TouchableOpacity style={[cm.saveBtn, { backgroundColor: C.primary }]} onPress={handleSave} activeOpacity={0.85}>
               <CheckSvg c="#fff" s={14} />
@@ -366,9 +365,9 @@ const nf = StyleSheet.create({
 export default function UpdatesScreen() {
   const { colors: C } = useTheme();
   const { t } = useTranslation();
-  const isNewUser    = useAuthStore((s) => s.isNewUser);
+  const isNewUser = useAuthStore((s) => s.isNewUser);
   const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
-  const patchStudent    = useProfileStore((s) => s.patchStudent);
+  const patchStudent = useProfileStore((s) => s.patchStudent);
   const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
   const student = useProfileStore(
     useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
@@ -376,24 +375,24 @@ export default function UpdatesScreen() {
   const ep = student?.emergency ?? null;
   const rawContacts = useMemo(() => student?.emergency?.contacts ?? [], [student?.emergency?.contacts]);
 
-  const [step, setStep]           = useState(0);
+  const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState([]);
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [firstName,   setFirstName]   = useState(student?.first_name ?? '');
-  const [lastName,    setLastName]    = useState(student?.last_name  ?? '');
-  const [cls,         setCls]         = useState(student?.class      ?? '');
-  const [section,     setSection]     = useState(student?.section    ?? '');
-  const [bloodGroup,  setBloodGroup]  = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
-  const [allergies,   setAllergies]   = useState(ep?.allergies   ?? '');
-  const [conditions,  setConditions]  = useState(ep?.conditions  ?? '');
+  const [firstName, setFirstName] = useState(student?.first_name ?? '');
+  const [lastName, setLastName] = useState(student?.last_name ?? '');
+  const [cls, setCls] = useState(student?.class ?? '');
+  const [section, setSection] = useState(student?.section ?? '');
+  const [bloodGroup, setBloodGroup] = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
+  const [allergies, setAllergies] = useState(ep?.allergies ?? '');
+  const [conditions, setConditions] = useState(ep?.conditions ?? '');
   const [medications, setMedications] = useState(ep?.medications ?? '');
-  const [doctorName,  setDoctorName]  = useState(ep?.doctor_name  ?? '');
+  const [doctorName, setDoctorName] = useState(ep?.doctor_name ?? '');
   const [doctorPhone, setDoctorPhone] = useState(ep?.doctor_phone ?? '');
-  const [notes,       setNotes]       = useState(ep?.notes ?? '');
-  const [contacts,    setContacts]    = useState(rawContacts ?? []);
-  const [modalVisible,   setModalVisible]  = useState(false);
-  const [editingContact, setEditContact]   = useState(null);
+  const [notes, setNotes] = useState(ep?.notes ?? '');
+  const [contacts, setContacts] = useState(rawContacts ?? []);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingContact, setEditContact] = useState(null);
 
   useEffect(() => { setFirstName(student?.first_name ?? ''); setLastName(student?.last_name ?? ''); setCls(student?.class ?? ''); setSection(student?.section ?? ''); }, [student]);
   useEffect(() => { setBloodGroup(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? ''); setAllergies(ep?.allergies ?? ''); setConditions(ep?.conditions ?? ''); setMedications(ep?.medications ?? ''); setDoctorName(ep?.doctor_name ?? ''); setDoctorPhone(ep?.doctor_phone ?? ''); setNotes(ep?.notes ?? ''); }, [ep]);
@@ -403,16 +402,16 @@ export default function UpdatesScreen() {
   const scrollTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
   const canProceed = step === 0 ? firstName.trim().length > 0 && lastName.trim().length > 0 : true;
 
-  const fadeAnim  = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const transitionStep = (n) => {
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 0,  duration: 100, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 20, duration: 100, useNativeDriver: true }),
     ]).start(() => {
       setStep(n); slideAnim.setValue(-20);
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
         Animated.timing(slideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
       ]).start();
     });
@@ -451,7 +450,7 @@ export default function UpdatesScreen() {
       setCompleted([0, 1, 2, 3]);
       if (isNewUser) {
         await setIsNewUser(false);
-        fetchAndPersist?.().catch(() => {});
+        fetchAndPersist?.().catch(() => { });
       } else {
         Alert.alert(t('updates_extra.saveSuccess'), t('updates_extra.saveSuccessMsg'));
       }
@@ -512,12 +511,12 @@ export default function UpdatesScreen() {
               <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title={t('updates_extra.studentNameTitle')} subtitle={t('updates_extra.studentNameSub')} C={C}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldFirstName')} value={firstName} onChangeText={setFirstName} placeholder={t('updates_extra.fieldFirstNamePlaceholder')} required C={C} /></View>
-                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldLastName')}  value={lastName}  onChangeText={setLastName}  placeholder={t('updates_extra.fieldLastNamePlaceholder')}  required C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldLastName')} value={lastName} onChangeText={setLastName} placeholder={t('updates_extra.fieldLastNamePlaceholder')} required C={C} /></View>
                 </View>
               </SectionCard>
               <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title={t('updates_extra.classSectionTitle')} accent={C.blue} C={C}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldClass')}   value={cls}     onChangeText={setCls}     placeholder={t('updates_extra.fieldClassPlaceholder')}   C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldClass')} value={cls} onChangeText={setCls} placeholder={t('updates_extra.fieldClassPlaceholder')} C={C} /></View>
                   <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldSection')} value={section} onChangeText={setSection} placeholder={t('updates_extra.fieldSectionPlaceholder')} C={C} /></View>
                 </View>
               </SectionCard>
@@ -544,7 +543,7 @@ export default function UpdatesScreen() {
               </SectionCard>
               <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title={t('updates_extra.doctorTitle')} accent={C.ok} C={C}>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorName')}  value={doctorName}  onChangeText={setDoctorName}  placeholder={t('updates_extra.fieldDoctorNamePlaceholder')}  C={C} /></View>
+                  <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorName')} value={doctorName} onChangeText={setDoctorName} placeholder={t('updates_extra.fieldDoctorNamePlaceholder')} C={C} /></View>
                   <View style={{ flex: 1 }}><Field label={t('updates_extra.fieldDoctorPhone')} value={doctorPhone} onChangeText={setDoctorPhone} placeholder={t('updates_extra.fieldDoctorPhone')} keyboardType="phone-pad" C={C} /></View>
                 </View>
               </SectionCard>
@@ -619,18 +618,18 @@ export default function UpdatesScreen() {
               </View>
 
               <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title={t('updates_extra.reviewStudentTitle')} C={C}>
-                <ReviewRow label={t('updates_extra.reviewFieldFirstName')} value={firstName}  C={C} />
-                <ReviewRow label={t('updates_extra.reviewFieldLastName')}  value={lastName}   C={C} />
-                <ReviewRow label={t('updates_extra.reviewFieldClass')}     value={cls}        C={C} />
-                <ReviewRow label={t('updates_extra.reviewFieldSection')}   value={section}    C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldFirstName')} value={firstName} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldLastName')} value={lastName} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldClass')} value={cls} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldSection')} value={section} C={C} />
               </SectionCard>
 
               <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title={t('updates_extra.reviewMedicalTitle')} C={C}>
-                <ReviewRow label={t('updates_extra.reviewFieldBloodGroup')}  value={bloodGroup}  C={C} />
-                <ReviewRow label={t('updates_extra.reviewFieldAllergies')}   value={allergies}   C={C} />
-                <ReviewRow label={t('updates_extra.reviewFieldConditions')}  value={conditions}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldBloodGroup')} value={bloodGroup} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldAllergies')} value={allergies} C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldConditions')} value={conditions} C={C} />
                 <ReviewRow label={t('updates_extra.reviewFieldMedications')} value={medications} C={C} />
-                <ReviewRow label={t('updates_extra.reviewFieldDoctor')}      value={doctorName}  C={C} />
+                <ReviewRow label={t('updates_extra.reviewFieldDoctor')} value={doctorName} C={C} />
                 <ReviewRow label={t('updates_extra.reviewFieldDoctorPhone')} value={doctorPhone} C={C} />
               </SectionCard>
 
