@@ -185,11 +185,15 @@ export const useProfileStore = create((set, get) => ({
         await authState.setIsNewUser(false);
       }
 
+      // Inside fetchAndPersist, after setting parent
       set({
         parent: data.parent ?? null,
         students: data.students ?? [],
         activeStudentId:
-          get().activeStudentId ?? data.students?.[0]?.id ?? null,
+          data.parent?.active_student_id ??
+          get().activeStudentId ??
+          data.students?.[0]?.id ??
+          null,
         lastScan: data.last_scan ?? null,
         scanCount: data.scan_count ?? 0,
         anomaly: data.anomaly ?? null,
@@ -395,7 +399,59 @@ export const useProfileStore = create((set, get) => ({
   },
 
   // ── Active Student ───────────────────────────────────────────────────────────
+  // ── Active Student (Local only, no API call) ─────────────────────────────────
+  // Use this for quick UI updates without backend sync
+  // For persistent sync, use setActiveStudentWithSync
   setActiveStudent: (id) => set({ activeStudentId: id }),
+  // ── Multi-Child Support ───────────────────────────────────────────────────────
+
+  /**
+   * GET /api/parents/me/children
+   * Lightweight list of all children for switcher UI
+   * Returns simplified student list (id, name, class, token_status)
+   */
+  getChildrenList: async () => {
+    const data = await profileApi.getChildrenList();
+    return data?.children ?? data ?? [];
+  },
+
+  /**
+   * POST /api/parents/me/link-card
+   * Add a new child by scanning a new card
+   * body: { card_number, phone }
+   */
+  linkCard: async ({ card_number, phone }) => {
+    const result = await profileApi.linkCard({ card_number, phone });
+
+    // Refresh full profile after adding new child
+    await get().fetchAndPersist();
+
+    return result;
+  },
+
+  /**
+   * PATCH /api/parents/me/active-student
+   * Switch active student for this parent
+   * Updates local state AND syncs with backend
+   */
+  setActiveStudentWithSync: async (studentId) => {
+    // First verify student belongs to parent
+    const student = get().students.find((s) => s.id === studentId);
+    if (!student) {
+      throw new Error("Student not found in your account");
+    }
+
+    // Update backend
+    await profileApi.setActiveStudent(studentId);
+
+    // Update local state
+    set({ activeStudentId: studentId });
+
+    // Optionally persist to storage for offline support
+    await storage.setLastActiveChild?.(studentId);
+
+    return { success: true, activeStudentId: studentId };
+  },
 
   // ── Clear ────────────────────────────────────────────────────────────────────
   // ✅ FIX: Set isHydrated: false first to block reads during clear

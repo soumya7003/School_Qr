@@ -1,6 +1,6 @@
 /**
  * app/(app)/updates.jsx
- * FIXED: Input fields now show typed text properly
+ * FIXED: Keyboard handling + clear instructions for first-time users
  */
 
 import Screen from '@/components/common/Screen';
@@ -12,9 +12,20 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Alert, Animated, KeyboardAvoidingView, Modal,
-  Platform, Pressable, ScrollView, StyleSheet,
-  Text, TextInput, TouchableOpacity, View,
+  Alert,
+  Animated,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useShallow } from 'zustand/react/shallow';
@@ -57,7 +68,7 @@ const EditSvg = ({ c, s = 14 }) => (
   </Svg>
 );
 
-// ── Constants (unchanged) ─────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const BLOOD_GROUPS = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−', 'Unknown'];
 const BLOOD_GROUP_TO_ENUM = {
   'A+': 'A_POS', 'A−': 'A_NEG', 'A-': 'A_NEG', 'B+': 'B_POS', 'B−': 'B_NEG', 'B-': 'B_NEG',
@@ -71,7 +82,7 @@ const BLOOD_GROUP_FROM_ENUM = {
 };
 const PRIORITY_COLORS = ['#F97316', '#FBBF24', '#60A5FA', '#A78BFA', '#22C55E'];
 
-// ── Step bar (unchanged) ──────────────────────────────────────────────────────
+// ── Step Bar ──────────────────────────────────────────────────────────────────
 function StepBar({ current, completed, C }) {
   const { t } = useTranslation();
   const STEPS = [
@@ -108,9 +119,10 @@ const sb = StyleSheet.create({
   label: { fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
 });
 
-// ── FIXED Field component ─────────────────────────────────────────────────────
+// ── Field Component with better keyboard handling ─────────────────────────────
 function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint, required, C }) {
   const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const inputRef = useRef(null);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -126,27 +138,30 @@ function Field({ label, value, onChangeText, placeholder, multiline, keyboardTyp
   });
 
   return (
-    <View style={fld.wrap}>
-      <View style={fld.labelRow}>
-        <Text style={[fld.label, { color: C.tx3 }]}>{label}</Text>
-        {required && <View style={[fld.reqDot, { backgroundColor: C.primary }]} />}
+    <TouchableWithoutFeedback onPress={() => inputRef.current?.focus()}>
+      <View style={fld.wrap}>
+        <View style={fld.labelRow}>
+          <Text style={[fld.label, { color: C.tx3 }]}>{label}</Text>
+          {required && <View style={[fld.reqDot, { backgroundColor: C.primary }]} />}
+        </View>
+        <Animated.View style={[fld.box, { borderColor, backgroundColor: C.s2 }]}>
+          <TextInput
+            ref={inputRef}
+            style={[fld.input, { color: C.tx }, multiline && fld.inputMulti]}
+            value={value || ''}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={C.tx3}
+            multiline={multiline}
+            numberOfLines={multiline ? 3 : 1}
+            keyboardType={keyboardType ?? 'default'}
+            textAlignVertical={multiline ? 'top' : 'center'}
+            selectionColor={C.primary}
+          />
+        </Animated.View>
+        {hint && <Text style={[fld.hint, { color: C.tx3 }]}>{hint}</Text>}
       </View>
-      <Animated.View style={[fld.box, { borderColor, backgroundColor: C.s2 }]}>
-        <TextInput
-          style={[fld.input, { color: C.tx }, multiline && fld.inputMulti]}
-          value={value || ''}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={C.tx3}
-          multiline={multiline}
-          numberOfLines={multiline ? 3 : 1}
-          keyboardType={keyboardType ?? 'default'}
-          textAlignVertical={multiline ? 'top' : 'center'}
-          selectionColor={C.primary}
-        />
-      </Animated.View>
-      {hint && <Text style={[fld.hint, { color: C.tx3 }]}>{hint}</Text>}
-    </View>
+    </TouchableWithoutFeedback>
   );
 }
 const fld = StyleSheet.create({
@@ -160,7 +175,7 @@ const fld = StyleSheet.create({
   hint: { fontSize: 11, fontStyle: 'italic', marginTop: 2 },
 });
 
-// ── Section card (unchanged) ──────────────────────────────────────────────────
+// ── Section Card ──────────────────────────────────────────────────────────────
 function SectionCard({ icon, title, subtitle, children, accent, C }) {
   const ac = accent ?? C.primary;
   return (
@@ -185,7 +200,7 @@ const sc = StyleSheet.create({
   body: { padding: 16, gap: 14 },
 });
 
-// ── Blood picker (unchanged) ──────────────────────────────────────────────────
+// ── Blood Picker ──────────────────────────────────────────────────────────────
 function BloodPicker({ value, onChange, C }) {
   const { t } = useTranslation();
   return (
@@ -221,7 +236,7 @@ const bl = StyleSheet.create({
   warnText: { fontSize: 12, fontWeight: '600' },
 });
 
-// ── Contact card (unchanged) ──────────────────────────────────────────────────
+// ── Contact Card ──────────────────────────────────────────────────────────────
 function ContactCard({ contact, index, onEdit, onDelete, C }) {
   const { t } = useTranslation();
   const pc = PRIORITY_COLORS[(contact.priority - 1) % PRIORITY_COLORS.length];
@@ -269,7 +284,7 @@ const ccc = StyleSheet.create({
   btn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });
 
-// ── Contact modal (unchanged) ─────────────────────────────────────────────────
+// ── Contact Modal ─────────────────────────────────────────────────────────────
 function ContactModal({ visible, contact, onSave, onClose, C }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
@@ -366,7 +381,7 @@ const cm = StyleSheet.create({
   saveBtnText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
 
-// ── Review row (unchanged) ────────────────────────────────────────────────────
+// ── Review Row ────────────────────────────────────────────────────────────────
 function ReviewRow({ label, value, C }) {
   const empty = !value;
   return (
@@ -383,7 +398,7 @@ const rv = StyleSheet.create({
   empty: { fontStyle: 'italic', fontWeight: '400' },
 });
 
-// ── Nav footer (unchanged) ────────────────────────────────────────────────────
+// ── Nav Footer ────────────────────────────────────────────────────────────────
 function NavFooter({ step, onBack, onNext, nextLabel, saving, canProceed, C }) {
   const { t } = useTranslation();
   const isFirst = step === 0;
@@ -423,6 +438,52 @@ const nf = StyleSheet.create({
   nextText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
 
+// ── Instruction Banner for First-Time Users ───────────────────────────────────
+function InstructionBanner({ currentStep, C }) {
+  const { t } = useTranslation();
+
+  const instructions = {
+    0: { title: "📝 Add Student Details", message: "Enter your child's name and class information. This helps first responders identify them quickly." },
+    1: { title: "🏥 Medical Information", message: "Add blood group, allergies, and medications. This could save your child's life in an emergency." },
+    2: { title: "📞 Emergency Contacts", message: "Add at least 2 trusted contacts who will be called if your child's card is scanned." },
+    3: { title: "✅ Review & Activate", message: "Review all information before activating your child's RESQID card." },
+  };
+
+  const current = instructions[currentStep] || instructions[0];
+
+  return (
+    <View style={[ib.wrap, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
+      <Text style={[ib.title, { color: C.blue }]}>{current.title}</Text>
+      <Text style={[ib.message, { color: C.tx2 }]}>{current.message}</Text>
+    </View>
+  );
+}
+
+const ib = StyleSheet.create({
+  wrap: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 8, gap: 6 },
+  title: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
+  message: { fontSize: 12, lineHeight: 18 },
+});
+
+// ── Progress Indicator ────────────────────────────────────────────────────────
+function ProgressIndicator({ currentStep, totalSteps = 4, C }) {
+  const progress = ((currentStep + 1) / totalSteps) * 100;
+  return (
+    <View style={[pi.wrap, { backgroundColor: C.s3, borderColor: C.bd }]}>
+      <View style={[pi.bar, { width: `${progress}%`, backgroundColor: C.primary }]} />
+      <Text style={[pi.text, { color: C.tx3 }]}>
+        Step {currentStep + 1} of {totalSteps}
+      </Text>
+    </View>
+  );
+}
+
+const pi = StyleSheet.create({
+  wrap: { height: 32, borderRadius: 16, borderWidth: 1, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  bar: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 16 },
+  text: { fontSize: 11, fontWeight: '600', zIndex: 1 },
+});
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function UpdatesScreen() {
   const { colors: C } = useTheme();
@@ -460,6 +521,13 @@ export default function UpdatesScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingContact, setEditContact] = useState(null);
 
+  const scrollRef = useRef(null);
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [step]);
+
   useEffect(() => {
     setFirstName(student?.first_name ?? '');
     setLastName(student?.last_name ?? '');
@@ -479,9 +547,6 @@ export default function UpdatesScreen() {
 
   useEffect(() => { setContacts(rawContacts ?? []); }, [rawContacts]);
 
-  const scrollRef = useRef(null);
-  const scrollTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
-
   const canProceed = step === 0
     ? firstName.trim().length > 0 && lastName.trim().length > 0
     : true;
@@ -490,6 +555,7 @@ export default function UpdatesScreen() {
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const transitionStep = (n) => {
+    Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 20, duration: 100, useNativeDriver: true }),
@@ -505,20 +571,19 @@ export default function UpdatesScreen() {
 
   const goNext = () => {
     if (step === 0 && (!firstName.trim() || !lastName.trim())) {
-      Alert.alert(t('updates.requiredAlert'), t('updates.requiredAlertMsg'));
+      Alert.alert('Missing Information', 'Please enter your child\'s first and last name.');
       return;
     }
     if (step < 3) {
       setCompleted((p) => p.includes(step) ? p : [...p, step]);
       transitionStep(step + 1);
-      scrollTop();
     } else {
       handleSubmitAll();
     }
   };
 
   const goBack = () => {
-    if (step > 0) { transitionStep(step - 1); scrollTop(); }
+    if (step > 0) { transitionStep(step - 1); }
   };
 
   const handleSubmitAll = async () => {
@@ -556,12 +621,13 @@ export default function UpdatesScreen() {
       if (isNewUser) {
         await setIsNewUser(false);
         fetchAndPersist?.().catch(() => { });
+        // AuthProvider will redirect to home
       } else {
-        Alert.alert(t('updates.saveSuccess'), t('updates.saveSuccessMsg'));
+        Alert.alert('Profile Updated', 'Your child\'s information has been saved.');
       }
     } catch (err) {
       console.error('Save error:', err);
-      Alert.alert(t('updates.saveError'), t('updates.saveErrorMsg'));
+      Alert.alert('Save Failed', 'Something went wrong. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -580,12 +646,12 @@ export default function UpdatesScreen() {
 
   const handleDeleteContact = (contact) => {
     Alert.alert(
-      t('updates.removeContact'),
-      t('updates.removeContactMsg', { name: contact.name }),
+      'Remove Contact',
+      `Are you sure you want to remove ${contact.name}?`,
       [
-        { text: t('updates.removeContactCancel'), style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: t('updates.removeContactConfirm'),
+          text: 'Remove',
           style: 'destructive',
           onPress: () =>
             setContacts((p) =>
@@ -599,20 +665,20 @@ export default function UpdatesScreen() {
   const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
 
   const nextLabel = step === 3
-    ? (isNewUser ? t('updates.activateCardBtn') : t('updates.saveAll'))
-    : t('updates.next');
+    ? (isNewUser ? 'Activate Card' : 'Save Changes')
+    : 'Continue';
 
   const headerTitle = isNewUser
-    ? t('updates.headerNewUser')
+    ? 'Complete Your Profile'
     : student?.first_name
-      ? t('updates.headerExisting', { name: student.first_name })
-      : t('updates.headerFallback');
+      ? `Edit ${student.first_name}'s Profile`
+      : 'Edit Profile';
 
   const classLabel = cls && section
-    ? t('updates.classSection', { cls, section })
+    ? `${cls} · ${section}`
     : cls
-      ? t('updates.classOnly', { cls })
-      : t('updates.classNotSet');
+      ? cls
+      : 'Not set';
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
@@ -624,352 +690,364 @@ export default function UpdatesScreen() {
         C={C}
       />
 
+      {/* Header */}
       <View style={[s.header, { borderBottomColor: C.bd }]}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <ChevLeft c={C.tx} s={20} />
+        </TouchableOpacity>
         <Text style={[s.headerTitle, { color: C.tx }]}>{headerTitle}</Text>
         {isNewUser && (
           <View style={[s.newBadge, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
             <View style={[s.newDot, { backgroundColor: C.ok }]} />
-            <Text style={[s.newText, { color: C.ok }]}>{t('updates.newBadge')}</Text>
+            <Text style={[s.newText, { color: C.ok }]}>New</Text>
           </View>
         )}
       </View>
 
+      {/* Progress Indicator (for new users) */}
+      {isNewUser && <ProgressIndicator currentStep={step} C={C} />}
+
+      {/* Step Bar */}
       <StepBar current={step} completed={completed} C={C} />
 
-      <ScrollView
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
-        keyboardShouldPersistTaps="handled"
+      {/* Instruction Banner */}
+      {isNewUser && <InstructionBanner currentStep={step} C={C} />}
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-          {/* Step 0 — Student */}
-          {step === 0 && (
-            <View style={s.stepContent}>
-              {isNewUser && (
-                <View style={[s.onboardBanner, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
-                  <Text style={{ fontSize: 15 }}>🛡️</Text>
-                  <Text style={[s.onboardBannerText, { color: C.ok }]}>
-                    {t('updates.onboardBanner')}
-                  </Text>
-                </View>
-              )}
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>👤</Text>}
-                title={t('updates.studentNameTitle')}
-                subtitle={t('updates.studentNameSub')}
-                C={C}
-              >
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldFirstName')}
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholder={t('updates.fieldFirstNamePlaceholder')}
-                      required
-                      C={C}
-                    />
+            {/* Step 0 — Student */}
+            {step === 0 && (
+              <View style={s.stepContent}>
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>👤</Text>}
+                  title="Child's Name"
+                  subtitle="Required — as on school records"
+                  C={C}
+                >
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="First Name"
+                        value={firstName}
+                        onChangeText={setFirstName}
+                        placeholder="e.g., Arjun"
+                        required
+                        C={C}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Last Name"
+                        value={lastName}
+                        onChangeText={setLastName}
+                        placeholder="e.g., Sharma"
+                        required
+                        C={C}
+                      />
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldLastName')}
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholder={t('updates.fieldLastNamePlaceholder')}
-                      required
-                      C={C}
-                    />
-                  </View>
-                </View>
-              </SectionCard>
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>🏫</Text>}
-                title={t('updates.classSectionTitle')}
-                accent={C.blue}
-                C={C}
-              >
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldClass')}
-                      value={cls}
-                      onChangeText={setCls}
-                      placeholder={t('updates.fieldClassPlaceholder')}
-                      C={C}
-                    />
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>🏫</Text>}
+                  title="Class & Section"
+                  subtitle="Optional — helps identify your child"
+                  accent={C.blue}
+                  C={C}
+                >
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Class"
+                        value={cls}
+                        onChangeText={setCls}
+                        placeholder="e.g., 6"
+                        C={C}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Section"
+                        value={section}
+                        onChangeText={setSection}
+                        placeholder="e.g., B"
+                        C={C}
+                      />
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldSection')}
-                      value={section}
-                      onChangeText={setSection}
-                      placeholder={t('updates.fieldSectionPlaceholder')}
-                      C={C}
-                    />
-                  </View>
-                </View>
-              </SectionCard>
+                </SectionCard>
 
-              <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <Text style={[s.noteText, { color: C.tx3 }]}>{t('updates.requiredNote')}</Text>
+                <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <Text style={{ fontSize: 12 }}>📌</Text>
+                  <Text style={[s.noteText, { color: C.tx3 }]}>First and last name are required to proceed.</Text>
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* Step 1 — Medical */}
-          {step === 1 && (
-            <View style={s.stepContent}>
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>🩸</Text>}
-                title={t('updates.bloodGroupTitle')}
-                subtitle={t('updates.bloodGroupSub')}
-                C={C}
-              >
-                <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>⚠️</Text>}
-                title={t('updates.allergiesTitle')}
-                subtitle={t('updates.allergiesSub')}
-                accent={C.amb}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldAllergies')}
-                  value={allergies}
-                  onChangeText={setAllergies}
-                  placeholder={t('updates.fieldAllergiesPlaceholder')}
-                  multiline
-                  hint={t('updates.allergiesHint')}
+            {/* Step 1 — Medical */}
+            {step === 1 && (
+              <View style={s.stepContent}>
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>🩸</Text>}
+                  title="Blood Group"
+                  subtitle="Critical for emergency response"
                   C={C}
-                />
-              </SectionCard>
+                >
+                  <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>🫁</Text>}
-                title={t('updates.conditionsTitle')}
-                accent={C.blue}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldConditions')}
-                  value={conditions}
-                  onChangeText={setConditions}
-                  placeholder={t('updates.fieldConditionsPlaceholder')}
-                  multiline
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>⚠️</Text>}
+                  title="Allergies"
+                  subtitle="Any known allergies (medication, food, etc.)"
+                  accent={C.amb}
                   C={C}
-                />
-              </SectionCard>
+                >
+                  <Field
+                    label="Allergies"
+                    value={allergies}
+                    onChangeText={setAllergies}
+                    placeholder="e.g., Peanuts, Penicillin"
+                    multiline
+                    hint="List any allergies that responders should know"
+                    C={C}
+                  />
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>💊</Text>}
-                title={t('updates.medicationsTitle')}
-                accent={C.blue}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldMedications')}
-                  value={medications}
-                  onChangeText={setMedications}
-                  placeholder={t('updates.fieldMedicationsPlaceholder')}
-                  multiline
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>🫁</Text>}
+                  title="Medical Conditions"
+                  accent={C.blue}
                   C={C}
-                />
-              </SectionCard>
+                >
+                  <Field
+                    label="Conditions"
+                    value={conditions}
+                    onChangeText={setConditions}
+                    placeholder="e.g., Asthma, Diabetes"
+                    multiline
+                    C={C}
+                  />
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>}
-                title={t('updates.doctorTitle')}
-                accent={C.ok}
-                C={C}
-              >
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldDoctorName')}
-                      value={doctorName}
-                      onChangeText={setDoctorName}
-                      placeholder={t('updates.fieldDoctorNamePlaceholder')}
-                      C={C}
-                    />
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>💊</Text>}
+                  title="Medications"
+                  accent={C.blue}
+                  C={C}
+                >
+                  <Field
+                    label="Medications"
+                    value={medications}
+                    onChangeText={setMedications}
+                    placeholder="e.g., Inhaler, Insulin"
+                    multiline
+                    C={C}
+                  />
+                </SectionCard>
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>}
+                  title="Family Doctor"
+                  accent={C.ok}
+                  C={C}
+                >
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Doctor Name"
+                        value={doctorName}
+                        onChangeText={setDoctorName}
+                        placeholder="Dr. Name"
+                        C={C}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Doctor Phone"
+                        value={doctorPhone}
+                        onChangeText={setDoctorPhone}
+                        placeholder="+91 98765 43210"
+                        keyboardType="phone-pad"
+                        C={C}
+                      />
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldDoctorPhone')}
-                      value={doctorPhone}
-                      onChangeText={setDoctorPhone}
-                      placeholder={t('updates.fieldDoctorPhonePlaceholder')}
-                      keyboardType="phone-pad"
-                      C={C}
-                    />
-                  </View>
-                </View>
-              </SectionCard>
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>📋</Text>}
-                title={t('updates.responderNotesTitle')}
-                subtitle={t('updates.responderNotesSub')}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldNotes')}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder={t('updates.fieldNotesPlaceholder')}
-                  multiline
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>📋</Text>}
+                  title="Additional Notes"
+                  subtitle="Any other important information"
                   C={C}
-                />
-              </SectionCard>
-            </View>
-          )}
-
-          {/* Step 2 — Contacts */}
-          {step === 2 && (
-            <View style={s.stepContent}>
-              <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <Text style={[s.callInfoTitle, { color: C.tx }]}>{t('updates.howCallsWork')}</Text>
-                {[
-                  { color: PRIORITY_COLORS[0], text: t('updates.callInfo1') },
-                  { color: PRIORITY_COLORS[1], text: t('updates.callInfo2') },
-                  { color: PRIORITY_COLORS[2], text: t('updates.callInfo3') },
-                ].map((item, i) => (
-                  <View key={i} style={s.callInfoRow}>
-                    <View style={[s.callInfoDot, { backgroundColor: item.color }]} />
-                    <Text style={[s.callInfoText, { color: C.tx2 }]}>{item.text}</Text>
-                  </View>
-                ))}
+                >
+                  <Field
+                    label="Notes"
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Special instructions for responders..."
+                    multiline
+                    C={C}
+                  />
+                </SectionCard>
               </View>
+            )}
 
-              {sortedContacts.length === 0 ? (
-                <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                  <Text style={{ fontSize: 28 }}>📵</Text>
-                  <Text style={[s.emptyTitle, { color: C.tx }]}>{t('updates.noContactsTitle')}</Text>
-                  <Text style={[s.emptySub, { color: C.tx3 }]}>{t('updates.noContactsSub')}</Text>
-                </View>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {sortedContacts.map((c, i) => (
-                    <ContactCard
-                      key={c.id ?? `contact_${i}`}
-                      contact={c}
-                      index={i}
-                      onEdit={(con) => { setEditContact(con); setModalVisible(true); }}
-                      onDelete={handleDeleteContact}
-                      C={C}
-                    />
+            {/* Step 2 — Contacts */}
+            {step === 2 && (
+              <View style={s.stepContent}>
+                <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <Text style={[s.callInfoTitle, { color: C.tx }]}>How Emergency Calls Work</Text>
+                  {[
+                    { color: PRIORITY_COLORS[0], text: "Call #1 — Primary contact gets called first" },
+                    { color: PRIORITY_COLORS[1], text: "Call #2 — Secondary contact if first doesn't answer" },
+                    { color: PRIORITY_COLORS[2], text: "Call #3 — Tertiary contact for backup" },
+                  ].map((item, i) => (
+                    <View key={i} style={s.callInfoRow}>
+                      <View style={[s.callInfoDot, { backgroundColor: item.color }]} />
+                      <Text style={[s.callInfoText, { color: C.tx2 }]}>{item.text}</Text>
+                    </View>
                   ))}
                 </View>
-              )}
 
-              {contacts.length < 5 && (
-                <TouchableOpacity
-                  style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
-                  onPress={() => { setEditContact(null); setModalVisible(true); }}
-                  activeOpacity={0.75}
-                >
-                  <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}>
-                    <PlusSvg c="#fff" s={18} />
-                  </View>
-                  <View>
-                    <Text style={[s.addBtnLabel, { color: C.primary }]}>{t('updates.addContact')}</Text>
-                    <Text style={[s.addBtnSub, { color: C.tx3 }]}>
-                      {t('updates.contactsCount', { count: contacts.length })}
+                {sortedContacts.length === 0 ? (
+                  <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                    <Text style={{ fontSize: 28 }}>📵</Text>
+                    <Text style={[s.emptyTitle, { color: C.tx }]}>No Emergency Contacts</Text>
+                    <Text style={[s.emptySub, { color: C.tx3 }]}>
+                      Add at least one contact who will be called in an emergency.
                     </Text>
                   </View>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {sortedContacts.map((c, i) => (
+                      <ContactCard
+                        key={c.id ?? `contact_${i}`}
+                        contact={c}
+                        index={i}
+                        onEdit={(con) => { setEditContact(con); setModalVisible(true); }}
+                        onDelete={handleDeleteContact}
+                        C={C}
+                      />
+                    ))}
+                  </View>
+                )}
 
-          {/* Step 3 — Review */}
-          {step === 3 && (
-            <View style={s.stepContent}>
-              <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                  <Text style={[s.reviewAvatarText, { color: C.primary }]}>
-                    {firstName ? firstName[0].toUpperCase() : '?'}
-                  </Text>
+                {contacts.length < 5 && (
+                  <TouchableOpacity
+                    style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
+                    onPress={() => { setEditContact(null); setModalVisible(true); }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}>
+                      <PlusSvg c="#fff" s={18} />
+                    </View>
+                    <View>
+                      <Text style={[s.addBtnLabel, { color: C.primary }]}>Add Emergency Contact</Text>
+                      <Text style={[s.addBtnSub, { color: C.tx3 }]}>
+                        {contacts.length} contact{contacts.length !== 1 ? 's' : ''} added
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Step 3 — Review */}
+            {step === 3 && (
+              <View style={s.stepContent}>
+                <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+                    <Text style={[s.reviewAvatarText, { color: C.primary }]}>
+                      {firstName ? firstName[0].toUpperCase() : '?'}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={[s.reviewName, { color: C.tx }]}>
+                      {`${firstName} ${lastName}`.trim() || 'Child'}
+                    </Text>
+                    <Text style={[s.reviewClass, { color: C.tx3 }]}>{classLabel}</Text>
+                  </View>
+                  <View style={[
+                    s.reviewStatus,
+                    { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd },
+                  ]}>
+                    <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
+                    <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
+                      {completed.length >= 3 ? 'Ready' : 'Draft'}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={[s.reviewName, { color: C.tx }]}>
-                    {`${firstName} ${lastName}`.trim() || t('updates.headerFallback')}
-                  </Text>
-                  <Text style={[s.reviewClass, { color: C.tx3 }]}>{classLabel}</Text>
-                </View>
-                <View style={[
-                  s.reviewStatus,
-                  { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd },
-                ]}>
-                  <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
-                  <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
-                    {completed.length >= 3 ? t('updates.statusReady') : t('updates.statusDraft')}
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>👤</Text>}
+                  title="Student Information"
+                  C={C}
+                >
+                  <ReviewRow label="First Name" value={firstName} C={C} />
+                  <ReviewRow label="Last Name" value={lastName} C={C} />
+                  <ReviewRow label="Class" value={cls || 'Not set'} C={C} />
+                  <ReviewRow label="Section" value={section || 'Not set'} C={C} />
+                </SectionCard>
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>❤️</Text>}
+                  title="Medical Information"
+                  C={C}
+                >
+                  <ReviewRow label="Blood Group" value={bloodGroup || 'Not set'} C={C} />
+                  <ReviewRow label="Allergies" value={allergies || 'None'} C={C} />
+                  <ReviewRow label="Conditions" value={conditions || 'None'} C={C} />
+                  <ReviewRow label="Medications" value={medications || 'None'} C={C} />
+                  <ReviewRow label="Doctor" value={doctorName || 'Not set'} C={C} />
+                  <ReviewRow label="Doctor Phone" value={doctorPhone || 'Not set'} C={C} />
+                </SectionCard>
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>📞</Text>}
+                  title={`Emergency Contacts (${contacts.length})`}
+                  accent={C.blue}
+                  C={C}
+                >
+                  {contacts.length === 0
+                    ? <Text style={[s.noContacts, { color: C.tx3 }]}>No emergency contacts added</Text>
+                    : sortedContacts.map((c, i) => (
+                      <ReviewRow
+                        key={c.id ?? `review_${i}`}
+                        label={`${c.priority}. ${c.relationship || 'Contact'}`}
+                        value={`${c.name} · ${c.phone}`}
+                        C={C}
+                      />
+                    ))
+                  }
+                </SectionCard>
+
+                <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
+                  <Text style={{ fontSize: 14 }}>🛡️</Text>
+                  <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
+                    {isNewUser
+                      ? 'Review all information carefully. This will be used in emergencies.'
+                      : 'Update your child\'s information as needed.'}
                   </Text>
                 </View>
               </View>
+            )}
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>👤</Text>}
-                title={t('updates.reviewStudentTitle')}
-                C={C}
-              >
-                <ReviewRow label={t('updates.reviewFieldFirstName')} value={firstName} C={C} />
-                <ReviewRow label={t('updates.reviewFieldLastName')} value={lastName} C={C} />
-                <ReviewRow label={t('updates.reviewFieldClass')} value={cls} C={C} />
-                <ReviewRow label={t('updates.reviewFieldSection')} value={section} C={C} />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>❤️</Text>}
-                title={t('updates.reviewMedicalTitle')}
-                C={C}
-              >
-                <ReviewRow label={t('updates.reviewFieldBloodGroup')} value={bloodGroup} C={C} />
-                <ReviewRow label={t('updates.reviewFieldAllergies')} value={allergies} C={C} />
-                <ReviewRow label={t('updates.reviewFieldConditions')} value={conditions} C={C} />
-                <ReviewRow label={t('updates.reviewFieldMedications')} value={medications} C={C} />
-                <ReviewRow label={t('updates.reviewFieldDoctor')} value={doctorName} C={C} />
-                <ReviewRow label={t('updates.reviewFieldDoctorPhone')} value={doctorPhone} C={C} />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>📞</Text>}
-                title={t('updates.reviewContactsTitle', { count: contacts.length })}
-                accent={C.blue}
-                C={C}
-              >
-                {contacts.length === 0
-                  ? <Text style={[s.noContacts, { color: C.tx3 }]}>{t('updates.reviewNoContacts')}</Text>
-                  : sortedContacts.map((c, i) => (
-                    <ReviewRow
-                      key={c.id ?? `review_${i}`}
-                      label={t('updates.reviewContactLabel', {
-                        priority: c.priority,
-                        relationship: c.relationship || t('updates.fieldContactRel'),
-                      })}
-                      value={`${c.name} · ${c.phone}`}
-                      C={C}
-                    />
-                  ))
-                }
-              </SectionCard>
-
-              <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
-                <Text style={{ fontSize: 14 }}>🛡️</Text>
-                <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
-                  {isNewUser ? t('updates.reviewNoteNew') : t('updates.reviewNoteEdit')}
-                </Text>
-              </View>
-            </View>
-          )}
-
-        </Animated.View>
-        <View style={{ height: 16 }} />
-      </ScrollView>
+          </Animated.View>
+          <View style={{ height: 20 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <NavFooter
         step={step}
@@ -986,16 +1064,15 @@ export default function UpdatesScreen() {
 
 const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[3], borderBottomWidth: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
+  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, flex: 1, textAlign: 'center' },
   newBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   newDot: { width: 5, height: 5, borderRadius: 3 },
   newText: { fontSize: 11, fontWeight: '700' },
-  onboardBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
-  onboardBannerText: { fontSize: 13, lineHeight: 18, flex: 1, fontWeight: '500' },
   scroll: { paddingHorizontal: spacing.screenH, paddingTop: 18, gap: 14, paddingBottom: 30 },
   stepContent: { gap: 14 },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
-  noteText: { fontSize: 11.5 },
+  noteText: { fontSize: 11.5, flex: 1 },
   callInfoBox: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
   callInfoTitle: { fontSize: 13, fontWeight: '700' },
   callInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1016,5 +1093,5 @@ const s = StyleSheet.create({
   reviewStatus: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   reviewStatusDot: { width: 5, height: 5, borderRadius: 3 },
   reviewStatusText: { fontSize: 11, fontWeight: '700' },
-  noContacts: { fontSize: 13, fontStyle: 'italic' },
+  noContacts: { fontSize: 13, fontStyle: 'italic', textAlign: 'center', padding: 12 },
 });

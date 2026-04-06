@@ -122,6 +122,57 @@ export const mockApi = {
     await delay(300);
     return { success: true };
   },
+
+  // Add to mockApi object
+  getChildrenList: async () => {
+    await delay(300);
+    return {
+      children: [
+        {
+          id: "student-001",
+          first_name: "Arjun",
+          last_name: "Sharma",
+          class: "6",
+          section: "B",
+          token_status: "ACTIVE",
+          is_primary: true,
+        },
+        {
+          id: "student-002",
+          first_name: "Ananya",
+          last_name: "Sharma",
+          class: "3",
+          section: "A",
+          token_status: "ACTIVE",
+          is_primary: false,
+        },
+        {
+          id: "student-003",
+          first_name: "Rohan",
+          last_name: "Sharma",
+          class: "9",
+          section: "C",
+          token_status: "ISSUED",
+          is_primary: false,
+        },
+      ],
+    };
+  },
+
+  linkCard: async ({ card_number, phone }) => {
+    await delay(800);
+    return {
+      success: true,
+      student_id: "student-004",
+      student_name: "New Child",
+      is_first_child: false,
+    };
+  },
+
+  setActiveStudent: async (studentId) => {
+    await delay(300);
+    return { success: true, active_student_id: studentId };
+  },
 };
 
 // Helper

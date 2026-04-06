@@ -22,6 +22,7 @@ import * as SecureStore from "expo-secure-store";
 
 // ── Mode detection ────────────────────────────────────────────────────────────
 const USE_MMKV = !__DEV__;
+const LAST_ACTIVE_CHILD_KEY = "last_active_child_v1";
 
 // ── MMKV — lazy loaded only in production ────────────────────────────────────
 let _mmkv = null;
@@ -29,9 +30,6 @@ const getMmkv = () => {
   if (_mmkv) return _mmkv;
   try {
     const { MMKV } = require("react-native-mmkv");
-    // ✅ FIX: No hardcoded encryption key
-    // Profile data is not sensitive (student names, classes)
-    // Tokens already in SecureStore
     _mmkv = new MMKV({
       id: "resqid_profile_store",
     });
@@ -312,6 +310,30 @@ export const storage = Object.freeze({
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // LAST ACTIVE CHILD — AsyncStorage (works in both dev and prod)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  setLastActiveChild: async (studentId) => {
+    try {
+      await AsyncStorage.setItem(LAST_ACTIVE_CHILD_KEY, studentId);
+    } catch {}
+  },
+
+  getLastActiveChild: async () => {
+    try {
+      return await AsyncStorage.getItem(LAST_ACTIVE_CHILD_KEY);
+    } catch {
+      return null;
+    }
+  },
+
+  clearLastActiveChild: async () => {
+    try {
+      await AsyncStorage.removeItem(LAST_ACTIVE_CHILD_KEY);
+    } catch {}
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // FULL WIPE — logout
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -320,6 +342,7 @@ export const storage = Object.freeze({
       _secDel(SK.AUTH),
       _secDel(SK.USER),
       _profileDel(PK.PROFILE),
+      storage.clearLastActiveChild(),
     ]);
   },
 });

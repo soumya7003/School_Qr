@@ -182,4 +182,43 @@ export const profileApi = {
     const res = await apiClient.get("/parents/me/scans", { params });
     return res?.data?.data ?? res?.data;
   },
+  /**
+   * GET /api/parents/me/children
+   * Lightweight list of all children for the switcher UI
+   * → { children: [{ id, first_name, last_name, class, section, token_status, is_primary }] }
+   */
+  getChildrenList: async () => {
+    if (USE_MOCK) return mockApi.getChildrenList();
+    const res = await apiClient.get("/parents/me/children");
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/link-card
+   * Add a new child (second/third/etc.) by scanning a new card
+   * body: { card_number, phone }
+   * → { success, student_id, student_name, is_first_child }
+   */
+  linkCard: async ({ card_number, phone }) => {
+    if (USE_MOCK) return mockApi.linkCard({ card_number, phone });
+    const res = await apiClient.post("/parents/me/link-card", {
+      card_number,
+      phone,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * PATCH /api/parents/me/active-student
+   * Switch the active student for this parent
+   * body: { student_id }
+   * → { success, active_student_id }
+   */
+  setActiveStudent: async (studentId) => {
+    if (USE_MOCK) return mockApi.setActiveStudent(studentId);
+    const res = await apiClient.patch("/parents/me/active-student", {
+      student_id: studentId,
+    });
+    return res?.data?.data ?? res?.data;
+  },
 };

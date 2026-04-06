@@ -55,6 +55,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="scan-history" options={{ href: null }} />
                 <Tabs.Screen name="support" options={{ href: null }} />
                 <Tabs.Screen name="change-phone" options={{ href: null }} />
+                <Tabs.Screen name='add-child' options={{ href: null }} />
             </Tabs>
         </View>
     );
