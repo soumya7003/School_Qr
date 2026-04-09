@@ -108,7 +108,7 @@ export const getDeviceFingerprint = async () => {
 
     return fingerprint;
   } catch (error) {
-    if (__DEV__) console.warn("[deviceFingerprint] failed:", error.message);
+    if (false) console.warn("[deviceFingerprint] failed:", error.message);
     return sha256(Crypto.randomUUID());
   }
 };

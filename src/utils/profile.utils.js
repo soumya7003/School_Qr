@@ -1,19 +1,11 @@
-/**
- * @file utils/profile.utils.js
- * @description Shared helpers used across multiple screens.
- *
- * Import in:
- *   app/(app)/home.jsx             ← tokenMeta, fmtRelTime, fmtDate, profileCompleteness, missingFields
- *   app/(app)/qr.jsx               ← tokenMeta  (card status badge on QR screen)
- *   app/(app)/scan-history.jsx     ← fmtRelTime, fmtDate  (scan log timestamps)
- *   app/(app)/updates.jsx          ← profileCompleteness, missingFields  (edit form progress bar)
- *   components/common/TokenBadge   ← tokenMeta  (if you make a shared badge component)
- */
+// utils/profile.utils.js — CONSOLIDATED
+// All shared utilities in one place
 
-// ─── Token status metadata ────────────────────────────────────────────────────
-// TokenStatus enum: UNASSIGNED | ISSUED | ACTIVE | INACTIVE | REVOKED | EXPIRED
-// Returns: { label, color, bg, pulse }
-// Requires: colors from @/theme
+import * as Application from "expo-application";
+import * as Device from "expo-device";
+import { Platform } from "react-native";
+
+// ────────────────────────────────────────────────────────────── TOKEN STATUS
 
 export function tokenMeta(status, colors) {
   switch (status) {
@@ -69,8 +61,7 @@ export function tokenMeta(status, colors) {
   }
 }
 
-// ─── Relative time formatter ──────────────────────────────────────────────────
-// e.g. "3d ago", "2h ago", "5m ago", "Just now"
+// ────────────────────────────────────────────────────────────── DATE/TIME
 
 export function fmtRelTime(iso) {
   if (!iso) return null;
@@ -84,9 +75,6 @@ export function fmtRelTime(iso) {
   return "Just now";
 }
 
-// ─── Date formatter (en-IN) ───────────────────────────────────────────────────
-// e.g. "09 Mar 2026"
-
 export function fmtDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-IN", {
@@ -96,10 +84,26 @@ export function fmtDate(iso) {
   });
 }
 
-// ─── Emergency profile completeness (0–100) ───────────────────────────────────
-// ✅ FIX: doctor_phone is optional – removed from denominator
-// Fields: blood_group, allergies, conditions, medications, doctor_name, ≥1 contact
-// doctor_phone is nice-to-have but not required for completeness
+export function fmtDateTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// ────────────────────────────────────────────────────────────── VISIBILITY
+
+export function visibilityLabel(v) {
+  if (v === "PUBLIC") return "Full Info Visible";
+  if (v === "MINIMAL") return "Name & Contacts Only";
+  if (v === "HIDDEN") return "Hidden";
+  return "—";
+}
+
+// ────────────────────────────────────────────────────────────── PROFILE COMPLETENESS
 
 export function profileCompleteness(ep, contacts) {
   const fields = [
@@ -111,13 +115,8 @@ export function profileCompleteness(ep, contacts) {
     contacts?.length > 0 ? "ok" : null,
   ];
   const filledCount = fields.filter(Boolean).length;
-  const totalFields = fields.length; // 6 fields (doctor_phone excluded)
-  return Math.round((filledCount / totalFields) * 100);
+  return Math.round((filledCount / 6) * 100);
 }
-
-// ─── Missing emergency profile fields (for nudge UI) ─────────────────────────
-// Returns string[] of human-readable missing field names
-// ✅ FIX: doctor_phone is optional – only show if user wants to add it
 
 export function missingFields(ep, contacts) {
   const m = [];
@@ -125,6 +124,28 @@ export function missingFields(ep, contacts) {
   if (!ep?.allergies) m.push("Allergies");
   if (!ep?.doctor_name) m.push("Doctor name");
   if (!contacts?.length) m.push("Emergency contact");
-  // doctor_phone is optional – not included in missing fields
   return m;
+}
+
+// ────────────────────────────────────────────────────────────── DEVICE INFO
+
+export async function getDeviceInfo() {
+  let deviceId = null;
+  try {
+    deviceId =
+      Platform.OS === "android"
+        ? await Application.getAndroidId()
+        : await Application.getIosIdForVendorAsync();
+  } catch (error) {
+    console.warn("[getDeviceInfo] Failed:", error);
+  }
+
+  const fallbackId = `fallback_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+  return {
+    deviceId: deviceId ?? fallbackId,
+    deviceName: Device.deviceName ?? "Unknown Device",
+    platform: Platform.OS,
+    osVersion: Device.osVersion ?? "Unknown",
+  };
 }

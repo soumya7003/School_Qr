@@ -2,7 +2,7 @@
 import { storage } from "@/lib/storage/storage";
 import { mockFullProfile, mockScanLogs } from "../mock/mockData";
 
-const USE_MOCK = __DEV__; // Only use mock in development
+const USE_MOCK = false; // Only use mock in development
 
 // Mock API responses
 export const mockApi = {

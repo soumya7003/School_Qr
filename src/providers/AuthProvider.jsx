@@ -9,7 +9,7 @@ export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
     // ✅ FIX: Only bypass in development, never in production
-    const __DEV_BYPASS__ = __DEV__;
+    const __DEV_BYPASS__ = false;
 
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const isHydrated = useAuthStore((s) => s.isHydrated);

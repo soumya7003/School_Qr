@@ -20,7 +20,7 @@ import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
 // ✅ FIX: Only bypass in development, never in production
-const __DEV_BYPASS_AUTH__ = __DEV__;
+const __DEV_BYPASS_AUTH__ = false;
 
 const isValidUser = (u) =>
   u !== null &&

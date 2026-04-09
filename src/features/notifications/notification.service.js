@@ -9,8 +9,7 @@ import * as Notification from "expo-notifications";
 import { Platform } from "react-native";
 import { notificationApi } from "./notification.api";
 
-const PROJECT_ID = "8b193d0d-4f69-41d2-8e0e-59aeecc83565";
-
+const PROJECT_ID = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
 /**
  * Gets Expo push token after requesting permission.
  * Returns null if permission denied or running on simulator.

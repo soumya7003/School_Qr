@@ -29,7 +29,7 @@ import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
-import { visibilityLabel } from '@/utils/helpers';
+import { visibilityLabel } from '@/utils/profile.utils';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';

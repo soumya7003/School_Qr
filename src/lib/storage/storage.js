@@ -21,7 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 // ── Mode detection ────────────────────────────────────────────────────────────
-const USE_MMKV = !__DEV__;
+const USE_MMKV = !false;
 const LAST_ACTIVE_CHILD_KEY = "last_active_child_v1";
 
 // ── MMKV — lazy loaded only in production ────────────────────────────────────

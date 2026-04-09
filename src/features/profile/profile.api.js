@@ -1,6 +1,6 @@
 import { apiClient, authClient } from "@/lib/api/apiClient";
 import { mockApi } from "@/services/mockService";
-const USE_MOCK = __DEV__;
+const USE_MOCK = false;
 
 // ── Guards ─────────────────────────────────────────────────────────────────────
 
