@@ -9,6 +9,7 @@ import {
   useActiveStudent,
   useCardVisibility,
   useEmergencyProfile,
+  useIsFetchingProfile,
   useLastScan,
   useLocationConsent,
   useNotificationPrefs,
@@ -44,7 +45,7 @@ export const useProfile = () => {
 
   // ── Store state ────────────────────────────────────────────────────────────
   const isHydrated = useProfileStore((s) => s.isHydrated);
-  const isFetching = useProfileStore((s) => s.isFetching);
+  const isFetching = useIsFetchingProfile();
   const students = useProfileStore((s) => s.students);
   const parent = useProfileStore((s) => s.parent);
   const lastScan = useLastScan();
@@ -62,11 +63,12 @@ export const useProfile = () => {
   const lockCard = useProfileStore((s) => s.lockCard);
   const requestReplace = useProfileStore((s) => s.requestReplace);
   const deleteAccount = useProfileStore((s) => s.deleteAccount);
-  const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
-  const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
+  const refresh = useProfileStore((s) => s.refresh);
+  const onLogin = useProfileStore((s) => s.onLogin);
+  const onLogout = useProfileStore((s) => s.onLogout);
   const setActiveStudent = useProfileStore((s) => s.setActiveStudent);
 
-  // ── Multi-child actions (NEW) ──────────────────────────────────────────────
+  // ── Multi-child actions ────────────────────────────────────────────────────
   const getChildrenList = useProfileStore((s) => s.getChildrenList);
   const linkCard = useProfileStore((s) => s.linkCard);
   const setActiveStudentWithSync = useProfileStore(
@@ -79,7 +81,6 @@ export const useProfile = () => {
   const trustedContacts = emergency?.contacts ?? [];
   const recentScans = lastScan ? [lastScan] : [];
   const anomalies = anomaly ? [anomaly] : [];
-  const updateRequests = [];
 
   // ── updateVisibility — auto-injects studentId ─────────────────────────────
   const updateVisibility = (visibilityPayload) => {
@@ -106,8 +107,7 @@ export const useProfile = () => {
     return _updateLocationConsent(student.id, enabled);
   };
 
-  // ── Multi-child helper functions (NEW) ─────────────────────────────────────
-
+  // ── Multi-child helper functions ──────────────────────────────────────────
   const fetchChildrenList = async () => {
     try {
       return await getChildrenList();
@@ -153,6 +153,15 @@ export const useProfile = () => {
     }
   };
 
+  // ── Pull to refresh ────────────────────────────────────────────────────────
+  const pullToRefresh = async () => {
+    try {
+      await refresh();
+    } catch (error) {
+      Alert.alert("Refresh Failed", "Please try again", [{ text: "OK" }]);
+    }
+  };
+
   return {
     // ── Data ──────────────────────────────────────────────────────────────────
     student,
@@ -172,11 +181,11 @@ export const useProfile = () => {
     anomaly,
     recentScans,
     anomalies,
-    updateRequests,
 
     // ── Status ────────────────────────────────────────────────────────────────
     isHydrated,
     isFetching,
+    activeStudentId,
 
     // ── Actions ───────────────────────────────────────────────────────────────
     patchStudent,
@@ -187,12 +196,12 @@ export const useProfile = () => {
     lockCard,
     requestReplace,
     deleteAccount,
-    fetchAndPersist,
-    fetchIfStale,
+    refresh: pullToRefresh,
+    onLogin,
+    onLogout,
     setActiveStudent,
 
-    // ── Multi-child (NEW) ─────────────────────────────────────────────────────
-    activeStudentId,
+    // ── Multi-child ───────────────────────────────────────────────────────────
     fetchChildrenList,
     addChildByCard,
     switchActiveStudent,
