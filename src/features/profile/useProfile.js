@@ -2,27 +2,9 @@
  * features/profile/useProfile.js
  *
  * Single hook — every screen reads from here, never directly from useProfileStore.
- *
- * FIXES vs original:
- *
- *   updateNotificationPref — accepts both call styles:
- *     Old broken style:  updateNotificationPref('scanAlerts', true)
- *     New correct style: updateNotificationPref({ scan_notify_enabled: true })
- *     The hook maps the old string-key style to correct backend field names
- *     so settings.jsx works without changes.
- *
- *   updateLocationConsent — injects studentId automatically:
- *     Old broken call: updateLocationConsent(v)         ← missing studentId
- *     New correct:     updateLocationConsent(student.id, v)
- *     Hook wraps this — settings.jsx still calls updateLocationConsent(v).
- *
- *   updateVisibility — injects studentId automatically:
- *     Old broken call: updateVisibility({ visibility, hidden_fields })
- *     New correct:     updateVisibility(student.id, { visibility, hidden_fields })
- *
- *   scanCount — now comes from real store value (not hardcoded 0 or 1).
  */
 
+import { Alert } from "react-native";
 import {
   useActiveStudent,
   useCardVisibility,
@@ -37,8 +19,7 @@ import {
   useUnresolvedAnomaly,
 } from "./profile.store";
 
-// Notification pref field name mapping:
-// frontend alias → backend field name (matches parent.validation.js)
+// Notification pref field name mapping
 const NOTIF_FIELD_MAP = {
   scanAlerts: "scan_notify_enabled",
   scanPush: "scan_notify_push",
@@ -67,8 +48,9 @@ export const useProfile = () => {
   const students = useProfileStore((s) => s.students);
   const parent = useProfileStore((s) => s.parent);
   const lastScan = useLastScan();
-  const scanCount = useScanCount(); // real total from backend
+  const scanCount = useScanCount();
   const anomaly = useUnresolvedAnomaly();
+  const activeStudentId = useProfileStore((s) => s.activeStudentId);
 
   // ── Write actions (raw from store) ────────────────────────────────────────
   const patchStudent = useProfileStore((s) => s.patchStudent);
@@ -84,44 +66,91 @@ export const useProfile = () => {
   const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
   const setActiveStudent = useProfileStore((s) => s.setActiveStudent);
 
+  // ── Multi-child actions (NEW) ──────────────────────────────────────────────
+  const getChildrenList = useProfileStore((s) => s.getChildrenList);
+  const linkCard = useProfileStore((s) => s.linkCard);
+  const setActiveStudentWithSync = useProfileStore(
+    (s) => s.setActiveStudentWithSync,
+  );
+
   // ── Convenience aliases ────────────────────────────────────────────────────
   const card = token?.card_number ? { card_number: token.card_number } : null;
   const emergencyProfile = emergency ?? null;
   const trustedContacts = emergency?.contacts ?? [];
-  const recentScans = lastScan ? [lastScan] : []; // for settings preview
-  const anomalies = anomaly ? [anomaly] : []; // for settings preview
-  const updateRequests = []; // not in /me yet
+  const recentScans = lastScan ? [lastScan] : [];
+  const anomalies = anomaly ? [anomaly] : [];
+  const updateRequests = [];
 
-  // ── FIX: updateVisibility — auto-injects studentId ───────────────────────
+  // ── updateVisibility — auto-injects studentId ─────────────────────────────
   const updateVisibility = (visibilityPayload) => {
     if (!student?.id) return;
     return _updateVisibility(student.id, visibilityPayload);
   };
 
-  // ── FIX: updateNotifications — accepts both call styles ──────────────────
-  // Style 1 (correct, preferred):  updateNotifications({ scan_notify_enabled: true })
-  // Style 2 (legacy settings.jsx): updateNotificationPref('scanAlerts', true)
+  // ── updateNotifications — accepts both call styles ────────────────────────
   const updateNotifications = (prefsOrKey, value) => {
     if (typeof prefsOrKey === "object" && prefsOrKey !== null) {
-      // Object form — pass straight through
       return _updateNotifications(prefsOrKey);
     }
     if (typeof prefsOrKey === "string") {
-      // String key form — map to backend field name
       const backendKey = NOTIF_FIELD_MAP[prefsOrKey] ?? prefsOrKey;
       return _updateNotifications({ [backendKey]: value });
     }
   };
 
-  // Alias used by settings.jsx
   const updateNotificationPref = updateNotifications;
 
-  // ── FIX: updateLocationConsent — auto-injects studentId ──────────────────
-  // settings.jsx calls updateLocationConsent(v) — no studentId.
-  // This wrapper injects the active student's id automatically.
+  // ── updateLocationConsent — auto-injects studentId ────────────────────────
   const updateLocationConsent = (enabled) => {
     if (!student?.id) return;
     return _updateLocationConsent(student.id, enabled);
+  };
+
+  // ── Multi-child helper functions (NEW) ─────────────────────────────────────
+
+  const fetchChildrenList = async () => {
+    try {
+      return await getChildrenList();
+    } catch (error) {
+      console.error("[useProfile] fetchChildrenList error:", error);
+      return [];
+    }
+  };
+
+  const addChildByCard = async ({ card_number, phone }) => {
+    try {
+      const result = await linkCard({ card_number, phone });
+      Alert.alert(
+        "Child Added! 🎉",
+        `${result.student_name || "Your child"} has been added to your account.`,
+        [{ text: "OK" }],
+      );
+      return result;
+    } catch (error) {
+      console.error("[useProfile] addChildByCard error:", error);
+      Alert.alert(
+        "Failed to Add Child",
+        error?.message || "Please check the card number and try again.",
+        [{ text: "OK" }],
+      );
+      throw error;
+    }
+  };
+
+  const switchActiveStudent = async (studentId) => {
+    if (!studentId) return;
+    try {
+      const result = await setActiveStudentWithSync(studentId);
+      return result;
+    } catch (error) {
+      console.error("[useProfile] switchActiveStudent error:", error);
+      Alert.alert(
+        "Failed to Switch Student",
+        error?.message || "Please try again.",
+        [{ text: "OK" }],
+      );
+      throw error;
+    }
   };
 
   return {
@@ -153,7 +182,7 @@ export const useProfile = () => {
     patchStudent,
     updateVisibility,
     updateNotifications,
-    updateNotificationPref, // alias for settings.jsx
+    updateNotificationPref,
     updateLocationConsent,
     lockCard,
     requestReplace,
@@ -161,5 +190,11 @@ export const useProfile = () => {
     fetchAndPersist,
     fetchIfStale,
     setActiveStudent,
+
+    // ── Multi-child (NEW) ─────────────────────────────────────────────────────
+    activeStudentId,
+    fetchChildrenList,
+    addChildByCard,
+    switchActiveStudent,
   };
 };

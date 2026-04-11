@@ -1,72 +1,93 @@
 // src/hooks/useInactivityLock.js
-import { useCallback, useEffect, useRef } from 'react';
-import { AppState, PanResponder } from 'react-native';
-import { useBiometricStore } from '../store/biometricStore';
-import { useLogout } from '@/providers/AuthProvider';
+import { authenticateForAppResume } from "@/services/biometricService";
+import { useBiometricStore } from "@/store/biometricStore";
+import { useCallback, useEffect, useRef } from "react";
+import { AppState, PanResponder } from "react-native";
 
 const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes
 
 /**
  * Combines two lock strategies:
- * 1. Touch inactivity → auto-logout after INACTIVITY_TIMEOUT
- * 2. Background → foreground → biometric lock (only after a real background cycle)
+ * 1. Touch inactivity → lock screen with biometric
+ * 2. Background → foreground → biometric lock
  *
  * Returns panHandlers to spread onto the root view.
  */
 export function useInactivityLock() {
-  const logout = useLogout();
-  const { isBiometricEnabled, isAppReady, setLocked } = useBiometricStore();
+  const { isBiometricEnabled, isAppReady, setLocked, isLocked } =
+    useBiometricStore();
 
   // --- Inactivity timer ---
   const timerRef = useRef(null);
 
+  const lockApp = useCallback(() => {
+    if (isBiometricEnabled && !isLocked) {
+      setLocked(true);
+    }
+  }, [isBiometricEnabled, isLocked, setLocked]);
+
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      logout();
+      lockApp();
     }, INACTIVITY_TIMEOUT);
-  }, [logout]);
+  }, [lockApp]);
+
+  // Handle biometric unlock when app is locked
+  const handleUnlock = useCallback(async () => {
+    if (!isLocked) return;
+
+    const success = await authenticateForAppResume();
+    if (success) {
+      setLocked(false);
+      resetTimer(); // Reset inactivity timer after unlock
+    }
+  }, [isLocked, setLocked, resetTimer]);
+
+  // Listen for app state changes to trigger unlock
+  useEffect(() => {
+    if (isLocked && isAppReady) {
+      handleUnlock();
+    }
+  }, [isLocked, isAppReady, handleUnlock]);
 
   // Stable pan responder — created once
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponderCapture: () => {
-        resetTimer();
+        if (!isLocked) {
+          resetTimer();
+        }
         return false; // don't consume the touch
       },
-    })
+    }),
   ).current;
 
   // Start inactivity timer on mount
   useEffect(() => {
-    resetTimer();
+    if (!isLocked) {
+      resetTimer();
+    }
     return () => clearTimeout(timerRef.current);
-  }, [resetTimer]);
+  }, [resetTimer, isLocked]);
 
   // --- Background → foreground biometric lock ---
   const appStateRef = useRef(AppState.currentState);
   const wentToBackgroundRef = useRef(false);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
       const prevState = appStateRef.current;
 
-      if (nextState === 'background') {
+      if (nextState === "background") {
         wentToBackgroundRef.current = true;
-        // Pause inactivity timer while backgrounded
         clearTimeout(timerRef.current);
       }
 
-      // iOS: brief inactive (control centre, calls) — ignore
-      if (nextState === 'inactive' && prevState === 'active') {
-        // intentionally empty
-      }
-
-      if (nextState === 'active') {
+      if (nextState === "active") {
         if (wentToBackgroundRef.current && isBiometricEnabled && isAppReady) {
           setLocked(true);
-        } else {
-          // Resume inactivity countdown on foreground
+        } else if (!isLocked) {
           resetTimer();
         }
         wentToBackgroundRef.current = false;
@@ -76,7 +97,7 @@ export function useInactivityLock() {
     });
 
     return () => subscription.remove();
-  }, [isBiometricEnabled, isAppReady, setLocked, resetTimer]);
+  }, [isBiometricEnabled, isAppReady, setLocked, resetTimer, isLocked]);
 
   return panResponder.panHandlers;
 }

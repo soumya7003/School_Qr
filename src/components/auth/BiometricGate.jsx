@@ -1,15 +1,15 @@
 // src/components/auth/BiometricGate.jsx
-import React, { useEffect, useCallback, useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ActivityIndicator,
-} from 'react-native';
-import { useBiometricStore } from '@/store/biometricStore';
 import { authenticateForAppResume } from '@/services/biometricService';
+import { useBiometricStore } from '@/store/biometricStore';
 import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 /**
  * BiometricGate
@@ -112,11 +112,11 @@ export default function BiometricGate() {
             </View>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            < View style={styles.footer} >
                 <Ionicons name="shield-checkmark-outline" size={14} color="#555" />
                 <Text style={styles.footerText}>  Protected by biometric security</Text>
-            </View>
-        </View>
+            </View >
+        </View >
     );
 }
 

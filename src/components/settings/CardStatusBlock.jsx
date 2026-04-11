@@ -4,7 +4,7 @@
  */
 
 import { colors, radius, spacing, typography } from '@/theme';
-import { fmtDate, tokenStatusMeta } from '@/utils/helpers';
+import { fmtDate, tokenStatusMeta } from '@/utils/profile.utils';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function CardStatusBlock({ token, card }) {

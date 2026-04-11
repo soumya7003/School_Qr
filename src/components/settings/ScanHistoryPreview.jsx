@@ -5,7 +5,7 @@
 
 import { IconClock, IconWarning } from '@/components/icon/AllIcon';
 import { colors, spacing, typography } from '@/theme';
-import { fmtDateTime } from '@/utils/helpers';
+import { fmtDateTime } from '@/utils/profile.utils';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

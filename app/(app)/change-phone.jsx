@@ -1,5 +1,6 @@
 /**
  * app/(app)/change-phone.jsx
+ * Change Phone Number Screen
  * All colors from useTheme().colors
  * All strings from i18n changePhone namespace
  */
@@ -12,152 +13,302 @@ import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator, Alert, KeyboardAvoidingView,
-    Platform, StyleSheet, Text, TextInput,
-    TouchableOpacity, View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
+// ── Icons ──────────────────────────────────────────────────────────────────────
 const ArrowLeft = ({ c }) => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
         <Path d="M19 12H5M12 19l-7-7 7-7" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
 );
 
-// ── Step bar ──────────────────────────────────────────────────────────────────
-function StepBar({ step, C }) {
+const CheckIcon = ({ c }) => (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+        <Path d="M20 6L9 17l-5-5" stroke={c} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+
+// ── Step Indicator ─────────────────────────────────────────────────────────────
+function StepIndicator({ step, C }) {
     const { t } = useTranslation();
     return (
         <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
-            {[1, 2].map((n) => (
-                <View key={n} style={sb.item}>
-                    <View style={[
-                        sb.dot,
-                        { borderColor: C.bd2, backgroundColor: C.s3 },
-                        step === n && { borderColor: C.primary, backgroundColor: C.primaryBg },
-                        step > n && { borderColor: C.okBd, backgroundColor: C.okBg },
-                    ]}>
-                        {step > n
-                            ? <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
-                                <Path d="M20 6L9 17l-5-5" stroke={C.ok} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                              </Svg>
-                            : <Text style={[sb.dotText, { color: step === n ? C.primary : C.tx3 }]}>{n}</Text>
-                        }
+            <View style={sb.stepsContainer}>
+                {[1, 2].map((n) => (
+                    <View key={n} style={sb.stepItem}>
+                        <View style={[
+                            sb.dot,
+                            { borderColor: C.bd2, backgroundColor: C.s3 },
+                            step === n && { borderColor: C.primary, backgroundColor: C.primaryBg },
+                            step > n && { borderColor: C.okBd, backgroundColor: C.okBg },
+                        ]}>
+                            {step > n ? (
+                                <CheckIcon c={C.ok} />
+                            ) : (
+                                <Text style={[sb.dotText, { color: step === n ? C.primary : C.tx3 }]}>{n}</Text>
+                            )}
+                        </View>
+                        <Text style={[sb.label, { color: step === n ? C.tx : C.tx3 }]}>
+                            {n === 1 ? t('changePhone.stepNewNumber') : t('changePhone.stepVerifyOtp')}
+                        </Text>
                     </View>
-                    <Text style={[sb.label, { color: step === n ? C.tx : C.tx3 }]}>
-                        {n === 1 ? t('changePhone.stepNewNumber') : t('changePhone.stepVerifyOtp')}
-                    </Text>
-                </View>
-            ))}
+                ))}
+            </View>
             <View style={[sb.line, { backgroundColor: C.bd2 }, step > 1 && { backgroundColor: C.ok }]} />
         </View>
     );
 }
+
 const sb = StyleSheet.create({
-    wrap: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', gap: 48, paddingVertical: 20, borderBottomWidth: 1, position: 'relative' },
-    line: { position: 'absolute', top: 33, left: '30%', right: '30%', height: 1 },
-    item: { alignItems: 'center', gap: 6, zIndex: 1 },
-    dot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-    dotText: { fontSize: 11, fontWeight: '800' },
-    label: { fontSize: 10.5, fontWeight: '600', letterSpacing: 0.3 },
+    wrap: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        paddingVertical: 20,
+        borderBottomWidth: 1,
+        position: 'relative',
+    },
+    stepsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        gap: 48,
+        zIndex: 1,
+    },
+    stepItem: { alignItems: 'center', gap: 6 },
+    line: {
+        position: 'absolute',
+        top: 14,
+        left: '30%',
+        right: '30%',
+        height: 2,
+        borderRadius: 1,
+    },
+    dot: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+    dotText: { fontSize: 12, fontWeight: '800' },
+    label: { fontSize: 10, fontWeight: '600', letterSpacing: 0.3, textAlign: 'center' },
 });
 
-// ── Field ─────────────────────────────────────────────────────────────────────
-function Field({ label, value, onChangeText, placeholder, keyboardType, maxLength, autoFocus, editable = true, C }) {
+// ── Phone Input Field ─────────────────────────────────────────────────────────
+function PhoneInputField({ value, onChange, error, autoFocus, C }) {
     const [focused, setFocused] = useState(false);
+
+    const formatPhone = (text) => {
+        // Remove all non-digits
+        const cleaned = text.replace(/\D/g, '');
+        // Format as +91 XXXXX XXXXX for display
+        if (cleaned.startsWith('91') && cleaned.length > 2) {
+            const country = '+' + cleaned.slice(0, 2);
+            const first = cleaned.slice(2, 7);
+            const second = cleaned.slice(7, 12);
+            if (second) return `${country} ${first} ${second}`;
+            if (first) return `${country} ${first}`;
+            return country;
+        }
+        if (cleaned.length <= 10) {
+            const first = cleaned.slice(0, 5);
+            const second = cleaned.slice(5, 10);
+            if (second) return `${first} ${second}`;
+            return first;
+        }
+        return text;
+    };
+
+    const handleChange = (text) => {
+        const raw = text.replace(/\D/g, '');
+        onChange(raw);
+    };
+
     return (
-        <View style={fi.wrap}>
-            <Text style={[fi.label, { color: C.tx3 }]}>{label}</Text>
-            <View style={[fi.box, { backgroundColor: C.s3, borderColor: focused ? C.primary : C.bd2 }, !editable && { opacity: 0.5 }]}>
+        <View style={pi.wrap}>
+            <Text style={[pi.label, { color: C.tx3 }]}>New Phone Number</Text>
+            <View style={[
+                pi.box,
+                {
+                    backgroundColor: C.s3,
+                    borderColor: error ? C.red : (focused ? C.primary : C.bd2),
+                }
+            ]}>
+                <Text style={[pi.prefix, { color: C.tx3 }]}>+91</Text>
                 <TextInput
-                    style={[fi.input, { color: C.tx }]}
+                    style={[pi.input, { color: C.tx }]}
                     value={value}
-                    onChangeText={onChangeText}
-                    placeholder={placeholder}
+                    onChangeText={handleChange}
+                    placeholder="98765 43210"
                     placeholderTextColor={C.tx3}
-                    keyboardType={keyboardType ?? 'default'}
-                    maxLength={maxLength}
+                    keyboardType="phone-pad"
+                    maxLength={10}
                     autoFocus={autoFocus}
-                    editable={editable}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
                     selectionColor={C.primary}
                 />
             </View>
+            {error && <Text style={[pi.error, { color: C.red }]}>{error}</Text>}
+            <Text style={[pi.hint, { color: C.tx3 }]}>Enter your new mobile number</Text>
         </View>
     );
 }
-const fi = StyleSheet.create({
+
+const pi = StyleSheet.create({
     wrap: { gap: 8 },
     label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-    box: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14 },
-    input: { fontSize: 16, fontWeight: '600', letterSpacing: 0.2 },
+    box: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, minHeight: 56 },
+    prefix: { fontSize: 16, fontWeight: '600', marginRight: 8 },
+    input: { flex: 1, fontSize: 16, fontWeight: '500', paddingVertical: 14 },
+    error: { fontSize: 12, marginTop: 4 },
+    hint: { fontSize: 11, marginTop: 4 },
 });
 
-// ── Primary button ────────────────────────────────────────────────────────────
-function PrimaryBtn({ label, onPress, loading, disabled, C }) {
+// ── OTP Input ─────────────────────────────────────────────────────────────────
+const OTP_LEN = 6;
+
+function OtpInputField({ value, onChange, error, C }) {
+    const refs = useRef([]);
+    const digits = value.split('').slice(0, OTP_LEN);
+    while (digits.length < OTP_LEN) digits.push('');
+
+    const handleChange = (index, text) => {
+        const digit = text.replace(/[^0-9]/g, '').slice(-1);
+        const newDigits = [...digits];
+        newDigits[index] = digit;
+        const newValue = newDigits.join('');
+        onChange(newValue);
+
+        if (digit && index < OTP_LEN - 1) {
+            refs.current[index + 1]?.focus();
+        }
+    };
+
+    const handleKeyPress = (index, key) => {
+        if (key === 'Backspace' && !digits[index] && index > 0) {
+            refs.current[index - 1]?.focus();
+        }
+    };
+
+    return (
+        <View style={ot.wrap}>
+            <Text style={[ot.label, { color: C.tx3 }]}>Verification Code</Text>
+            <View style={ot.row}>
+                {digits.map((digit, idx) => (
+                    <TextInput
+                        key={idx}
+                        ref={(el) => { refs.current[idx] = el; }}
+                        style={[
+                            ot.box,
+                            {
+                                borderColor: error ? C.red : (digit ? C.primary : C.bd2),
+                                backgroundColor: digit ? C.primaryBg : C.s3,
+                                color: C.tx,
+                            }
+                        ]}
+                        value={digit}
+                        onChangeText={(text) => handleChange(idx, text)}
+                        onKeyPress={({ nativeEvent }) => handleKeyPress(idx, nativeEvent.key)}
+                        keyboardType="number-pad"
+                        maxLength={1}
+                        autoFocus={idx === 0}
+                        selectionColor={C.primary}
+                        textAlign="center"
+                    />
+                ))}
+            </View>
+            {error && <Text style={[ot.error, { color: C.red }]}>{error}</Text>}
+        </View>
+    );
+}
+
+const ot = StyleSheet.create({
+    wrap: { gap: 12 },
+    label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+    row: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
+    box: { width: 48, height: 56, borderRadius: 14, borderWidth: 1.5, fontSize: 22, fontWeight: '800', textAlign: 'center' },
+    error: { fontSize: 12, marginTop: 4, textAlign: 'center' },
+});
+
+// ── Primary Button ────────────────────────────────────────────────────────────
+function PrimaryButton({ label, onPress, loading, disabled, C }) {
     return (
         <TouchableOpacity
-            style={[pb.wrap, { backgroundColor: C.primary }, (disabled || loading) && pb.wrapDisabled]}
+            style={[
+                pb.wrap,
+                { backgroundColor: C.primary },
+                (disabled || loading) && pb.disabled,
+            ]}
             onPress={onPress}
             activeOpacity={0.75}
             disabled={disabled || loading}
         >
-            {loading
-                ? <ActivityIndicator size="small" color={C.white} />
-                : <Text style={[pb.label, { color: C.white }]}>{label}</Text>}
+            {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+            ) : (
+                <Text style={[pb.label, { color: '#fff' }]}>{label}</Text>
+            )}
         </TouchableOpacity>
     );
 }
+
 const pb = StyleSheet.create({
-    wrap: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', justifyContent: 'center' },
-    wrapDisabled: { opacity: 0.45 },
-    label: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+    wrap: { borderRadius: 30, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+    disabled: { opacity: 0.5 },
+    label: { fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
 });
 
-// ── OTP input ─────────────────────────────────────────────────────────────────
-const OTP_LEN = 6;
-
-function OtpInput({ value, onChange, C }) {
-    const refs = useRef([]);
-    const handleKey = (index, key) => {
-        if (key === 'Backspace' && !value[index] && index > 0) refs.current[index - 1]?.focus();
-    };
-    const handleChange = (index, char) => {
-        const digit = char.replace(/[^0-9]/g, '').slice(-1);
-        const arr = value.split('');
-        arr[index] = digit;
-        const next = arr.join('').padEnd(OTP_LEN, ' ').slice(0, OTP_LEN);
-        onChange(next.trimEnd());
-        if (digit && index < OTP_LEN - 1) refs.current[index + 1]?.focus();
-    };
+// ── Secondary Button ──────────────────────────────────────────────────────────
+function SecondaryButton({ label, onPress, disabled, C }) {
     return (
-        <View style={ot.row}>
-            {Array.from({ length: OTP_LEN }).map((_, i) => (
-                <TextInput
-                    key={i}
-                    ref={(el) => { refs.current[i] = el; }}
-                    style={[ot.box, { borderColor: C.bd2, backgroundColor: C.s3, color: C.tx }, value[i] && value[i].trim() && { borderColor: C.primary, backgroundColor: C.primaryBg }]}
-                    value={value[i] ?? ''}
-                    onChangeText={(char) => handleChange(i, char)}
-                    onKeyPress={({ nativeEvent }) => handleKey(i, nativeEvent.key)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    autoFocus={i === 0}
-                    selectionColor={C.primary}
-                    textAlign="center"
-                />
-            ))}
+        <TouchableOpacity
+            style={[sbBtn.wrap, { borderColor: C.bd }]}
+            onPress={onPress}
+            activeOpacity={0.7}
+            disabled={disabled}
+        >
+            <Text style={[sbBtn.label, { color: C.tx3 }]}>{label}</Text>
+        </TouchableOpacity>
+    );
+}
+
+const sbBtn = StyleSheet.create({
+    wrap: { alignItems: 'center', paddingVertical: 12, borderWidth: 1, borderRadius: 30 },
+    label: { fontSize: 14, fontWeight: '500' },
+});
+
+// ─── Info Card ────────────────────────────────────────────────────────────────
+function InfoCard({ icon, title, subtitle, C }) {
+    return (
+        <View style={[ic.wrap, { backgroundColor: C.s2, borderColor: C.bd }]}>
+            <View style={[ic.iconWrap, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+                <Text style={ic.icon}>{icon}</Text>
+            </View>
+            <View style={ic.content}>
+                <Text style={[ic.title, { color: C.tx }]}>{title}</Text>
+                <Text style={[ic.subtitle, { color: C.tx3 }]}>{subtitle}</Text>
+            </View>
         </View>
     );
 }
-const ot = StyleSheet.create({
-    row: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
-    box: { width: 46, height: 54, borderRadius: 12, borderWidth: 1.5, fontSize: 22, fontWeight: '800' },
+
+const ic = StyleSheet.create({
+    wrap: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 18, borderWidth: 1, padding: 16 },
+    iconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    icon: { fontSize: 24 },
+    content: { flex: 1, gap: 2 },
+    title: { fontSize: 15, fontWeight: '700' },
+    subtitle: { fontSize: 12 },
 });
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ChangePhoneScreen() {
     const router = useRouter();
     const { colors: C } = useTheme();
@@ -169,46 +320,71 @@ export default function ChangePhoneScreen() {
     const [otpValue, setOtpValue] = useState('');
     const [loading, setLoading] = useState(false);
     const [resendCooldown, setResend] = useState(0);
+    const [phoneError, setPhoneError] = useState('');
+    const [otpError, setOtpError] = useState('');
 
     const maskedOld = parentUser?.phone
         ? parentUser.phone.slice(0, -4).replace(/\d/g, '•') + parentUser.phone.slice(-4)
         : '••••••••••';
 
-    const isPhoneValid = phone.replace(/\D/g, '').length >= 10;
-    const isOtpComplete = otpValue.replace(/\s/g, '').length === OTP_LEN;
+    const isPhoneValid = phone.length === 10;
+    const isOtpComplete = otpValue.length === OTP_LEN;
 
     const startCooldown = (secs = 30) => {
         setResend(secs);
-        const iv = setInterval(() => setResend((p) => {
-            if (p <= 1) { clearInterval(iv); return 0; }
-            return p - 1;
-        }), 1000);
+        const iv = setInterval(() => {
+            setResend((p) => {
+                if (p <= 1) {
+                    clearInterval(iv);
+                    return 0;
+                }
+                return p - 1;
+            });
+        }, 1000);
     };
 
     const handleSendOtp = async () => {
+        if (!isPhoneValid) {
+            setPhoneError('Enter a valid 10-digit mobile number');
+            return;
+        }
+
+        setPhoneError('');
         setLoading(true);
+
         try {
+            // TODO: Call actual API
             await new Promise((r) => setTimeout(r, 1000));
             setStep(2);
             startCooldown(30);
-        } catch {
-            Alert.alert(t('common.error'), t('changePhone.errorSend'));
+            setOtpValue('');
+            setOtpError('');
+        } catch (err) {
+            setPhoneError(err?.message || 'Failed to send OTP. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
     const handleVerify = async () => {
+        if (!isOtpComplete) {
+            setOtpError('Enter the 6-digit verification code');
+            return;
+        }
+
+        setOtpError('');
         setLoading(true);
+
         try {
+            // TODO: Call actual API
             await new Promise((r) => setTimeout(r, 1000));
             Alert.alert(
-                t('changePhone.successTitle'),
-                t('changePhone.successMessage'),
-                [{ text: t('changePhone.done'), onPress: () => router.back() }],
+                'Phone Number Updated',
+                'Your phone number has been successfully changed. Please login again.',
+                [{ text: 'OK', onPress: () => router.back() }],
             );
-        } catch {
-            Alert.alert(t('changePhone.invalidOtp'), t('changePhone.errorVerify'));
+        } catch (err) {
+            setOtpError(err?.message || 'Invalid OTP. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -216,13 +392,16 @@ export default function ChangePhoneScreen() {
 
     const handleResend = async () => {
         if (resendCooldown > 0) return;
+
         setLoading(true);
         try {
+            // TODO: Call actual API
             await new Promise((r) => setTimeout(r, 800));
             startCooldown(30);
             setOtpValue('');
+            setOtpError('');
         } catch {
-            Alert.alert(t('common.error'), t('changePhone.errorResend'));
+            Alert.alert('Error', 'Failed to resend OTP. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -232,7 +411,7 @@ export default function ChangePhoneScreen() {
         <Screen bg={C.bg} edges={['top', 'left', 'right']}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
 
-                {/* Nav bar */}
+                {/* Navigation Bar */}
                 <Animated.View entering={FadeInDown.delay(0).duration(300)} style={[nav.bar, { borderBottomColor: C.bd }]}>
                     <TouchableOpacity style={[nav.back, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={() => router.back()} activeOpacity={0.7}>
                         <ArrowLeft c={C.tx} />
@@ -241,40 +420,31 @@ export default function ChangePhoneScreen() {
                     <View style={{ width: 40 }} />
                 </Animated.View>
 
-                {/* Step bar */}
+                {/* Step Indicator */}
                 <Animated.View entering={FadeInDown.delay(60).duration(300)}>
-                    <StepBar step={step} C={C} />
+                    <StepIndicator step={step} C={C} />
                 </Animated.View>
 
-                <Animated.View entering={FadeInUp.delay(120).duration(350)} style={cp.content}>
+                <Animated.View entering={FadeInUp.delay(120).duration(350)} style={styles.content}>
                     {step === 1 ? (
-                        <View style={cp.form}>
-                            <View style={cp.headBlock}>
-                                <View style={[cp.iconCircle, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                                    <Text style={{ fontSize: 22 }}>📱</Text>
-                                </View>
-                                <Text style={[cp.formTitle, { color: C.tx }]}>{t('changePhone.enterNewNumber')}</Text>
-                                <Text style={[cp.formSub, { color: C.tx3 }]}>
-                                    {t('changePhone.currentlyUsing')}{' '}
-                                    <Text style={{ color: C.tx2, fontWeight: '700' }}>{maskedOld}</Text>
-                                </Text>
-                            </View>
-                            <Field
-                                label={t('changePhone.newPhoneNumber')}
+                        <View style={styles.form}>
+                            <InfoCard
+                                icon="📱"
+                                title="Change Phone Number"
+                                subtitle={`Current number: ${maskedOld}`}
+                                C={C}
+                            />
+
+                            <PhoneInputField
                                 value={phone}
-                                onChangeText={setPhone}
-                                placeholder={t('changePhone.placeholder')}
-                                keyboardType="phone-pad"
-                                maxLength={15}
+                                onChange={setPhone}
+                                error={phoneError}
                                 autoFocus
                                 C={C}
                             />
-                            <View style={[cp.infoNote, { backgroundColor: C.s3, borderColor: C.bd }]}>
-                                <Text style={{ fontSize: 14 }}>🛡️</Text>
-                                <Text style={[cp.infoText, { color: C.tx2 }]}>{t('changePhone.otpNote')}</Text>
-                            </View>
-                            <PrimaryBtn
-                                label={t('changePhone.sendOtp')}
+
+                            <PrimaryButton
+                                label="Send Verification Code"
                                 onPress={handleSendOtp}
                                 loading={loading}
                                 disabled={!isPhoneValid}
@@ -282,68 +452,75 @@ export default function ChangePhoneScreen() {
                             />
                         </View>
                     ) : (
-                        <View style={cp.form}>
-                            <View style={cp.headBlock}>
-                                <View style={[cp.iconCircle, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
-                                    <Text style={{ fontSize: 22 }}>🔐</Text>
-                                </View>
-                                <Text style={[cp.formTitle, { color: C.tx }]}>{t('changePhone.enterOtp')}</Text>
-                                <Text style={[cp.formSub, { color: C.tx3 }]}>
-                                    {t('changePhone.sentTo')}{' '}
-                                    <Text style={{ color: C.tx2, fontWeight: '700' }}>{phone}</Text>
-                                </Text>
-                            </View>
-                            <OtpInput value={otpValue} onChange={setOtpValue} C={C} />
-                            <View style={cp.resendRow}>
-                                <Text style={[cp.resendLabel, { color: C.tx3 }]}>{t('changePhone.didntReceive')}</Text>
+                        <View style={styles.form}>
+                            <InfoCard
+                                icon="📱"
+                                title="New Phone Number"
+                                subtitle={`+91 ${phone.slice(0, 5)} ${phone.slice(5, 10)}`}
+                                C={C}
+                            />
+
+                            <OtpInputField
+                                value={otpValue}
+                                onChange={setOtpValue}
+                                error={otpError}
+                                C={C}
+                            />
+
+                            <View style={styles.resendRow}>
+                                <Text style={[styles.resendLabel, { color: C.tx3 }]}>Didn't receive the code?</Text>
                                 <TouchableOpacity onPress={handleResend} disabled={resendCooldown > 0 || loading} activeOpacity={0.7}>
-                                    <Text style={[cp.resendBtn, { color: resendCooldown > 0 ? C.tx3 : C.primary }]}>
+                                    <Text style={[styles.resendBtn, { color: resendCooldown > 0 ? C.tx3 : C.primary }]}>
                                         {resendCooldown > 0
-                                            ? t('changePhone.resendIn', { seconds: resendCooldown })
-                                            : t('changePhone.resendOtp')}
+                                            ? `Resend in ${resendCooldown}s`
+                                            : 'Resend Code'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
-                            <PrimaryBtn
-                                label={t('changePhone.verifyAndUpdate')}
+
+                            <PrimaryButton
+                                label="Verify & Update"
                                 onPress={handleVerify}
                                 loading={loading}
                                 disabled={!isOtpComplete}
                                 C={C}
                             />
-                            <TouchableOpacity
-                                style={cp.backToPhone}
-                                onPress={() => { setStep(1); setOtpValue(''); }}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[cp.backToPhoneText, { color: C.tx3 }]}>{t('changePhone.changePhoneNumber')}</Text>
-                            </TouchableOpacity>
+
+                            <SecondaryButton
+                                label="← Back to phone number"
+                                onPress={() => {
+                                    setStep(1);
+                                    setOtpValue('');
+                                    setOtpError('');
+                                }}
+                                C={C}
+                            />
                         </View>
                     )}
                 </Animated.View>
-
             </KeyboardAvoidingView>
         </Screen>
     );
 }
 
 const nav = StyleSheet.create({
-    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.screenH, paddingTop: spacing[2], paddingBottom: spacing[2], borderBottomWidth: 1 },
+    bar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.screenH,
+        paddingTop: spacing[2],
+        paddingBottom: spacing[2],
+        borderBottomWidth: 1,
+    },
     back: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    title: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+    title: { fontSize: 18, fontWeight: '700', letterSpacing: -0.2 },
 });
-const cp = StyleSheet.create({
+
+const styles = StyleSheet.create({
     content: { flex: 1, paddingHorizontal: spacing.screenH, paddingTop: 24 },
-    form: { gap: 20 },
-    headBlock: { alignItems: 'center', gap: 8, paddingBottom: 8 },
-    iconCircle: { width: 56, height: 56, borderRadius: 28, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-    formTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-    formSub: { fontSize: 13, textAlign: 'center' },
-    infoNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 10, borderWidth: 1, padding: 12 },
-    infoText: { flex: 1, fontSize: 12.5, lineHeight: 18 },
+    form: { gap: 24 },
     resendRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
     resendLabel: { fontSize: 13 },
     resendBtn: { fontSize: 13, fontWeight: '700' },
-    backToPhone: { alignItems: 'center', paddingVertical: 4 },
-    backToPhoneText: { fontSize: 13, fontWeight: '500' },
 });

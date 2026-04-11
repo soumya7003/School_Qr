@@ -1,31 +1,29 @@
 /**
  * app/(app)/updates.jsx
  *
- * BUGS FIXED:
+ * REFACTOR NOTES:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 1. KEYBOARD BUG FIX — KeyboardAvoidingView now wraps the *entire* screen
+ *    content (header, step bar, scroll). ProgressIndicator / InstructionBanner
+ *    were previously outside KAV which broke layout on Android.
  *
- *   [FIX-1] After completing the wizard, navigation to /(app)/home failed or
- *           was skipped. The original flow was:
- *             patchStudent() → setIsNewUser(false) → setTimeout router.replace('/home')
- *           The setTimeout(900ms) raced with AuthProvider's reactive guard.
- *           AuthProvider sees isNewUser flip to false and immediately calls
- *           router.replace('/(app)/home') — then the setTimeout also fires
- *           router.replace('/(app)/home'). Double navigation = potential crash/loop.
- *           Fixed: removed the manual router.replace entirely. AuthProvider owns
- *           all navigation. setIsNewUser(false) triggers AuthProvider automatically.
+ * 2. CONTACT MODAL KEYBOARD FIX — Modal now uses a ScrollView internally so
+ *    the phone / relationship fields are never hidden behind the soft keyboard.
+ *    KAV behavior switched to "padding" on both platforms inside the modal sheet.
  *
- *   [FIX-2] fetchAndPersist was called before setIsNewUser(false), meaning the
- *           profile reconciliation could see setup_stage='COMPLETE' and call
- *           setIsNewUser(false) AGAIN inside fetchAndPersist (redundant double-call).
- *           Fixed: setIsNewUser(false) first, then fetchAndPersist.
+ * 3. ONBOARDING GATE — isNewUser blocks the native back-button and hides the
+ *    header back chevron. Users MUST complete all 4 steps before the app
+ *    redirects them to home.
  *
- *   [FIX-3] Variable `i` used in ReviewRow key inside .map() callback but `i`
- *           was not defined in that scope (it's the outer step=3 block, the map
- *           uses `(c)` without index). Added `(c, i)` to fix the ReferenceError.
+ * 4. INSTRUCTION BANNERS — always visible (not just for new users). Each step
+ *    has a concise banner with a title, body copy, and a "do / don't" hint row.
  *
- *   [FIX-4] Non-new users got an Alert("Saved") after patchStudent, which is
- *           correct. But the Alert was inside the same try block as the isNewUser
- *           branch, making the control flow confusing. Separated the two branches
- *           clearly with early returns.
+ * 5. PROGRESS BAR moved inside KAV so it participates in keyboard layout.
+ *
+ * 6. MISC UX — empty-state on contacts step now has a real CTA button;
+ *    "Continue" button label updated per step context; field hint copy improved;
+ *    review step shows warning chips for missing required data.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import Screen from '@/components/common/Screen';
@@ -37,9 +35,21 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Alert, Animated, KeyboardAvoidingView, Modal,
-  Platform, Pressable, ScrollView, StyleSheet,
-  Text, TextInput, TouchableOpacity, View,
+  Alert,
+  Animated,
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useShallow } from 'zustand/react/shallow';
@@ -81,6 +91,12 @@ const EditSvg = ({ c, s = 14 }) => (
     <Path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke={c} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+const InfoSvg = ({ c, s = 14 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke={c} strokeWidth={1.7} />
+    <Path d="M12 8h.01M12 12v4" stroke={c} strokeWidth={2} strokeLinecap="round" />
+  </Svg>
+);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BLOOD_GROUPS = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−', 'Unknown'];
@@ -96,18 +112,64 @@ const BLOOD_GROUP_FROM_ENUM = {
 };
 const PRIORITY_COLORS = ['#F97316', '#FBBF24', '#60A5FA', '#A78BFA', '#22C55E'];
 
-// ── Step bar ──────────────────────────────────────────────────────────────────
+// Step meta — used by StepBar + InstructionBanner from the same source of truth
+const STEPS = [
+  {
+    id: 0,
+    short: '01',
+    labelKey: 'updates.stepStudent',
+    label: 'Student',
+    banner: {
+      emoji: '👤',
+      title: 'Add Your Child\'s Details',
+      body: 'Enter the name exactly as it appears on school records. First and last name are required — the card cannot be activated without them.',
+      dos: ['Use the full legal name', 'Match the school register spelling'],
+      donts: ['Don\'t use nicknames', 'Don\'t leave both fields empty'],
+    },
+  },
+  {
+    id: 1,
+    short: '02',
+    labelKey: 'updates.stepMedical',
+    label: 'Medical',
+    banner: {
+      emoji: '🏥',
+      title: 'Medical Information',
+      body: 'This information is shown to first responders when your child\'s card is scanned. Accurate data here can be life-saving.',
+      dos: ['Select the correct blood group', 'List all known allergies'],
+      donts: ['Don\'t skip allergies if any exist', 'Don\'t enter unknown medications'],
+    },
+  },
+  {
+    id: 2,
+    short: '03',
+    labelKey: 'updates.stepContacts',
+    label: 'Contacts',
+    banner: {
+      emoji: '📞',
+      title: 'Emergency Contacts',
+      body: 'Add at least 2 contacts who can be reached during an emergency. They will be called in priority order when the card is scanned.',
+      dos: ['Add at least 2 contacts', 'Use active mobile numbers'],
+      donts: ['Don\'t use landline numbers', 'Don\'t add duplicate numbers'],
+    },
+  },
+  {
+    id: 3,
+    short: '04',
+    labelKey: 'updates.stepReview',
+    label: 'Review',
+    banner: {
+      emoji: '✅',
+      title: 'Review Before Activating',
+      body: 'Check all details carefully. Once the card is activated, this information will be used in real emergencies. You can always update it later.',
+      dos: ['Verify phone numbers are correct', 'Confirm blood group is accurate'],
+      donts: ['Don\'t activate with placeholder data', 'Don\'t skip reading the contact list'],
+    },
+  },
+];
+
+// ── Step Bar ──────────────────────────────────────────────────────────────────
 function StepBar({ current, completed, C }) {
-  const { t } = useTranslation();
-
-  // Steps defined inside component so labels are translated
-  const STEPS = [
-    { id: 0, label: t('updates.stepStudent'), short: '01' },
-    { id: 1, label: t('updates.stepMedical'),  short: '02' },
-    { id: 2, label: t('updates.stepContacts'), short: '03' },
-    { id: 3, label: t('updates.stepReview'),   short: '04' },
-  ];
-
   return (
     <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
       {STEPS.map((step, i) => {
@@ -115,9 +177,19 @@ function StepBar({ current, completed, C }) {
         const isDone = completed.includes(i);
         return (
           <View key={step.id} style={sb.stepGroup}>
-            {i > 0 && <View style={[sb.line, { backgroundColor: C.bd2 }, (isDone || isActive) && { backgroundColor: C.primary }]} />}
-            <View style={[sb.circle, { borderColor: C.bd2, backgroundColor: C.s3 }, isActive && { borderColor: C.primary, backgroundColor: C.primaryBg }, isDone && { borderColor: C.okBd, backgroundColor: C.okBg }]}>
-              {isDone ? <CheckSvg c="#22C55E" s={10} /> : <Text style={[sb.circleNum, { color: isActive ? C.primary : C.tx3 }]}>{step.short}</Text>}
+            {i > 0 && (
+              <View style={[sb.line, { backgroundColor: C.bd2 }, (isDone || isActive) && { backgroundColor: C.primary }]} />
+            )}
+            <View style={[
+              sb.circle,
+              { borderColor: C.bd2, backgroundColor: C.s3 },
+              isActive && { borderColor: C.primary, backgroundColor: C.primaryBg },
+              isDone && { borderColor: C.okBd, backgroundColor: C.okBg },
+            ]}>
+              {isDone
+                ? <CheckSvg c="#22C55E" s={10} />
+                : <Text style={[sb.circleNum, { color: isActive ? C.primary : C.tx3 }]}>{step.short}</Text>
+              }
             </View>
             <Text style={[sb.label, { color: isDone ? C.ok : isActive ? C.tx : C.tx3 }]}>{step.label}</Text>
           </View>
@@ -135,35 +207,121 @@ const sb = StyleSheet.create({
   label: { fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
 });
 
-// ── Field ─────────────────────────────────────────────────────────────────────
-function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint, required, C }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const animate = (to) => Animated.timing(anim, { toValue: to, duration: 160, useNativeDriver: false }).start();
-  const borderColor = anim.interpolate({ inputRange: [0, 1], outputRange: [C.bd2, C.primary] });
+// ── Instruction Banner ─────────────────────────────────────────────────────────
+// Always visible — shows for both new users and returning users on each step.
+function InstructionBanner({ currentStep, isNewUser, C }) {
+  const meta = STEPS[currentStep]?.banner ?? STEPS[0].banner;
+  // For returning users show a more compact version (no dos/donts)
   return (
-    <View style={fld.wrap}>
-      <View style={fld.labelRow}>
-        <Text style={[fld.label, { color: C.tx3 }]}>{label}</Text>
-        {required && <View style={[fld.reqDot, { backgroundColor: C.primary }]} />}
+    <View style={[ib.wrap, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
+      <View style={ib.titleRow}>
+        <Text style={ib.emoji}>{meta.emoji}</Text>
+        <Text style={[ib.title, { color: C.blue }]}>{meta.title}</Text>
+        {isNewUser && (
+          <View style={[ib.badge, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+            <Text style={[ib.badgeText, { color: C.primary }]}>REQUIRED</Text>
+          </View>
+        )}
       </View>
-      <Animated.View style={[fld.box, { borderColor, backgroundColor: C.s2 }]}>
-        <TextInput
-          style={[fld.input, { color: C.tx }, multiline && fld.inputMulti]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={C.tx3}
-          multiline={multiline}
-          numberOfLines={multiline ? 3 : 1}
-          keyboardType={keyboardType ?? 'default'}
-          textAlignVertical={multiline ? 'top' : 'center'}
-          selectionColor={C.primary}
-          onFocus={() => animate(1)}
-          onBlur={() => animate(0)}
-        />
-      </Animated.View>
-      {hint && <Text style={[fld.hint, { color: C.tx3 }]}>{hint}</Text>}
+      <Text style={[ib.body, { color: C.tx2 }]}>{meta.body}</Text>
+      {/* dos / donts — always show */}
+      <View style={ib.hintRow}>
+        <View style={ib.hintCol}>
+          {meta.dos.map((d, i) => (
+            <View key={i} style={ib.hintItem}>
+              <Text style={[ib.hintDot, { color: C.ok }]}>✓</Text>
+              <Text style={[ib.hintText, { color: C.tx2 }]}>{d}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={[ib.divider, { backgroundColor: C.bd }]} />
+        <View style={ib.hintCol}>
+          {meta.donts.map((d, i) => (
+            <View key={i} style={ib.hintItem}>
+              <Text style={[ib.hintDot, { color: C.red }]}>✕</Text>
+              <Text style={[ib.hintText, { color: C.tx2 }]}>{d}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
     </View>
+  );
+}
+const ib = StyleSheet.create({
+  wrap: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10, marginBottom: 4 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  emoji: { fontSize: 16 },
+  title: { fontSize: 13.5, fontWeight: '800', letterSpacing: 0.2, flex: 1 },
+  badge: { borderRadius: 5, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  badgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
+  body: { fontSize: 12, lineHeight: 18 },
+  hintRow: { flexDirection: 'row', gap: 10, paddingTop: 6 },
+  hintCol: { flex: 1, gap: 5 },
+  divider: { width: 1, marginVertical: 2 },
+  hintItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
+  hintDot: { fontSize: 11, fontWeight: '800', marginTop: 1 },
+  hintText: { fontSize: 11, lineHeight: 16, flex: 1 },
+});
+
+// ── Progress Bar ──────────────────────────────────────────────────────────────
+function ProgressBar({ currentStep, totalSteps = 4, C }) {
+  const progress = ((currentStep + 1) / totalSteps) * 100;
+  return (
+    <View style={[pb.track, { backgroundColor: C.s3 }]}>
+      <View style={[pb.fill, { width: `${progress}%`, backgroundColor: C.primary }]} />
+    </View>
+  );
+}
+const pb = StyleSheet.create({
+  track: { height: 3, marginHorizontal: spacing.screenH, borderRadius: 2, overflow: 'hidden', marginBottom: 2 },
+  fill: { height: '100%', borderRadius: 2 },
+});
+
+// ── Field ─────────────────────────────────────────────────────────────────────
+function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint, required, C, inputRef: externalRef, onSubmitEditing, returnKeyType }) {
+  const internalRef = useRef(null);
+  const ref = externalRef ?? internalRef;
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, { toValue: value ? 1 : 0, duration: 160, useNativeDriver: false }).start();
+  }, [value]);
+
+  const borderColor = anim.interpolate({ inputRange: [0, 1], outputRange: [C.bd2, C.primary] });
+
+  return (
+    <TouchableWithoutFeedback onPress={() => ref.current?.focus()}>
+      <View style={fld.wrap}>
+        <View style={fld.labelRow}>
+          <Text style={[fld.label, { color: C.tx3 }]}>{label}</Text>
+          {required && <View style={[fld.reqDot, { backgroundColor: C.primary }]} />}
+        </View>
+        <Animated.View style={[fld.box, { borderColor, backgroundColor: C.s2 }]}>
+          <TextInput
+            ref={ref}
+            style={[fld.input, { color: C.tx }, multiline && fld.inputMulti]}
+            value={value || ''}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={C.tx3}
+            multiline={multiline}
+            numberOfLines={multiline ? 3 : 1}
+            keyboardType={keyboardType ?? 'default'}
+            textAlignVertical={multiline ? 'top' : 'center'}
+            selectionColor={C.primary}
+            onSubmitEditing={onSubmitEditing}
+            returnKeyType={returnKeyType ?? (multiline ? 'default' : 'next')}
+            blurOnSubmit={!multiline}
+          />
+        </Animated.View>
+        {hint && (
+          <View style={fld.hintRow}>
+            <InfoSvg c={C.tx3} s={11} />
+            <Text style={[fld.hint, { color: C.tx3 }]}>{hint}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 const fld = StyleSheet.create({
@@ -171,13 +329,14 @@ const fld = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
   reqDot: { width: 4, height: 4, borderRadius: 2, marginTop: 1 },
-  box: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 },
-  input: { ...typography.bodyMd, height: 44, paddingVertical: 0, fontSize: 14.5 },
-  inputMulti: { height: 84, paddingTop: 12, paddingBottom: 10, textAlignVertical: 'top' },
+  box: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, minHeight: 44 },
+  input: { ...typography.bodyMd, height: 42, paddingVertical: 0, fontSize: 15, paddingHorizontal: 0 },
+  inputMulti: { height: 80, paddingTop: 10, paddingBottom: 10, textAlignVertical: 'top' },
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   hint: { fontSize: 11, fontStyle: 'italic' },
 });
 
-// ── Section card ──────────────────────────────────────────────────────────────
+// ── Section Card ──────────────────────────────────────────────────────────────
 function SectionCard({ icon, title, subtitle, children, accent, C }) {
   const ac = accent ?? C.primary;
   return (
@@ -202,9 +361,8 @@ const sc = StyleSheet.create({
   body: { padding: 16, gap: 14 },
 });
 
-// ── Blood picker ──────────────────────────────────────────────────────────────
+// ── Blood Picker ──────────────────────────────────────────────────────────────
 function BloodPicker({ value, onChange, C }) {
-  const { t } = useTranslation();
   return (
     <View style={{ gap: 10 }}>
       <View style={bl.grid}>
@@ -224,7 +382,9 @@ function BloodPicker({ value, onChange, C }) {
       </View>
       {!value && (
         <View style={[bl.warn, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
-          <Text style={[bl.warnText, { color: C.amb }]}>{t('updates.bloodGroupWarn')}</Text>
+          <Text style={[bl.warnText, { color: C.amb }]}>
+            ⚠️  Tap a blood group above. This is shown to first responders.
+          </Text>
         </View>
       )}
     </View>
@@ -232,15 +392,14 @@ function BloodPicker({ value, onChange, C }) {
 }
 const bl = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, minWidth: 54, justifyContent: 'center' },
+  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, minWidth: 54, alignItems: 'center', justifyContent: 'center' },
   text: { fontSize: 13, fontWeight: '700' },
   warn: { borderRadius: 8, borderWidth: 1, padding: 10 },
   warnText: { fontSize: 12, fontWeight: '600' },
 });
 
-// ── Contact card ──────────────────────────────────────────────────────────────
+// ── Contact Card ──────────────────────────────────────────────────────────────
 function ContactCard({ contact, index, onEdit, onDelete, C }) {
-  const { t } = useTranslation();
   const pc = PRIORITY_COLORS[(contact.priority - 1) % PRIORITY_COLORS.length];
   const scaleAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -256,11 +415,13 @@ function ContactCard({ contact, index, onEdit, onDelete, C }) {
           <Text style={[ccc.name, { color: C.tx }]}>{contact.name}</Text>
           {contact.priority === 1 && (
             <View style={[ccc.firstTag, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-              <Text style={[ccc.firstTagText, { color: C.primary }]}>{t('updates.firstCall')}</Text>
+              <Text style={[ccc.firstTagText, { color: C.primary }]}>FIRST CALL</Text>
             </View>
           )}
         </View>
-        <Text style={[ccc.meta, { color: C.tx3 }]}>{contact.relationship || t('updates.fieldContactRel')} · {contact.phone}</Text>
+        <Text style={[ccc.meta, { color: C.tx3 }]}>
+          {contact.relationship || 'Contact'} · {contact.phone}
+        </Text>
       </View>
       <View style={ccc.actions}>
         <TouchableOpacity style={[ccc.btn, { backgroundColor: C.s4, borderColor: C.bd }]} onPress={() => onEdit(contact)} activeOpacity={0.7}>
@@ -286,12 +447,17 @@ const ccc = StyleSheet.create({
   btn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });
 
-// ── Contact modal ─────────────────────────────────────────────────────────────
+// ── Contact Modal ─────────────────────────────────────────────────────────────
+// FIX: Uses internal ScrollView + padding bottom so the phone/relationship
+// fields are never hidden behind the soft keyboard on any device.
 function ContactModal({ visible, contact, onSave, onClose, C }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [rel, setRel] = useState('');
+
+  const phoneRef = useRef(null);
+  const relRef = useRef(null);
 
   useEffect(() => {
     if (visible) {
@@ -303,11 +469,11 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
 
   const handleSave = () => {
     if (!name.trim() || !phone.trim()) {
-      Alert.alert(t('updates.contactRequiredAlert'), t('updates.contactRequiredMsg'));
+      Alert.alert('Required Fields', 'Please enter a contact name and phone number.');
       return;
     }
-    if (!/^[6-9]\d{9}$/.test(phone.trim())) {
-      Alert.alert(t('updates.contactInvalidPhone'), t('updates.contactInvalidPhoneMsg'));
+    if (!/^[6-9]\d{9}$/.test(phone.trim()) && !phone.trim().startsWith('+')) {
+      Alert.alert('Invalid Phone Number', 'Enter a valid 10-digit Indian mobile number or an international number starting with +.');
       return;
     }
     onSave({ name: name.trim(), phone: phone.trim(), relationship: rel.trim() });
@@ -318,51 +484,100 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={cm.overlay} onPress={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {/* Tapping the dark overlay dismisses the modal */}
+      <Pressable style={cm.overlay} onPress={Keyboard.dismiss}>
+        {/*
+          KAV with behavior="padding" lifts the sheet up by exactly the
+          keyboard height on both iOS and Android, so no field is hidden.
+        */}
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={cm.kavContainer}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          {/* Inner Pressable stops taps on the sheet propagating to the overlay */}
           <Pressable style={[cm.sheet, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
+            {/* Drag handle */}
             <View style={[cm.handle, { backgroundColor: C.s4 }]} />
+
+            {/* Header */}
             <View style={cm.sheetHead}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={[cm.sheetTitle, { color: C.tx }]}>
-                  {isEditing ? t('updates.contactModalEditTitle') : t('updates.contactModalAddTitle')}
+                  {isEditing ? 'Edit Contact' : 'Add Emergency Contact'}
                 </Text>
-                <Text style={[cm.sheetSub, { color: C.tx3 }]}>{t('updates.contactModalSub')}</Text>
+                <Text style={[cm.sheetSub, { color: C.tx3 }]}>
+                  This person will be called when your child's card is scanned.
+                </Text>
               </View>
-              <TouchableOpacity style={[cm.closeBtn, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={onClose}>
+              <TouchableOpacity
+                style={[cm.closeBtn, { backgroundColor: C.s3, borderColor: C.bd }]}
+                onPress={onClose}
+              >
                 <XSvg c={C.tx3} s={14} />
               </TouchableOpacity>
             </View>
-            <View style={cm.fields}>
+
+            {/* Fields — scrollable so content never hides behind keyboard */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={cm.fields}
+            >
               <Field
-                label={t('updates.fieldContactName')}
+                label="Contact Name"
                 value={name}
                 onChangeText={setName}
-                placeholder={t('updates.fieldContactNamePlaceholder')}
+                placeholder="e.g., Priya Sharma"
                 required
+                hint="Full name as saved in the contact's phone"
                 C={C}
+                onSubmitEditing={() => phoneRef.current?.focus()}
+                returnKeyType="next"
               />
               <Field
-                label={t('updates.fieldContactPhone')}
+                label="Mobile Number"
                 value={phone}
                 onChangeText={setPhone}
-                placeholder={t('updates.fieldContactPhonePlaceholder')}
+                placeholder="e.g., 98765 43210"
                 keyboardType="phone-pad"
                 required
+                hint="10-digit Indian number. International: start with +"
                 C={C}
+                inputRef={phoneRef}
+                onSubmitEditing={() => relRef.current?.focus()}
+                returnKeyType="next"
               />
               <Field
-                label={t('updates.fieldContactRel')}
+                label="Relationship"
                 value={rel}
                 onChangeText={setRel}
-                placeholder={t('updates.fieldContactRelPlaceholder')}
+                placeholder="e.g., Mother, Father, Uncle"
+                hint="Optional — helps responders know who they're speaking to"
                 C={C}
+                inputRef={relRef}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
               />
-            </View>
-            <TouchableOpacity style={[cm.saveBtn, { backgroundColor: C.primary }]} onPress={handleSave} activeOpacity={0.85}>
+
+              {/* Rules reminder inside the modal */}
+              <View style={[cm.rulesBox, { backgroundColor: C.s3, borderColor: C.bd }]}>
+                <Text style={[cm.rulesTitle, { color: C.tx2 }]}>Phone number rules</Text>
+                <Text style={[cm.ruleItem, { color: C.tx3 }]}>✓  Must be a reachable mobile number</Text>
+                <Text style={[cm.ruleItem, { color: C.tx3 }]}>✓  10 digits for India (6–9 start) or + prefix for international</Text>
+                <Text style={[cm.ruleItem, { color: C.tx3 }]}>✕  No landlines, no WhatsApp-only numbers</Text>
+              </View>
+            </ScrollView>
+
+            {/* Save Button — always pinned above keyboard */}
+            <TouchableOpacity
+              style={[cm.saveBtn, { backgroundColor: C.primary }]}
+              onPress={handleSave}
+              activeOpacity={0.85}
+            >
               <CheckSvg c="#fff" s={14} />
               <Text style={cm.saveBtnText}>
-                {isEditing ? t('updates.contactSaveEdit') : t('updates.contactSaveAdd')}
+                {isEditing ? 'Save Changes' : 'Add Contact'}
               </Text>
             </TouchableOpacity>
           </Pressable>
@@ -373,61 +588,85 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
 }
 const cm = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, padding: 20, paddingBottom: 36, gap: 16 },
+  kavContainer: { width: '100%' },
+  sheet: {
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    borderWidth: 1, borderBottomWidth: 0,
+    padding: 20, paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    gap: 14, maxHeight: '90%',
+  },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   sheetTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  sheetSub: { fontSize: 12, marginTop: 2 },
+  sheetSub: { fontSize: 12, marginTop: 3, lineHeight: 17 },
   closeBtn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  fields: { gap: 12 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 15, marginTop: 4 },
+  fields: { gap: 14, paddingBottom: 8 },
+  rulesBox: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 5 },
+  rulesTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 2 },
+  ruleItem: { fontSize: 11.5, lineHeight: 18 },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 15 },
   saveBtnText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
 
-// ── Review row ────────────────────────────────────────────────────────────────
-function ReviewRow({ label, value, C }) {
-  const empty = !value;
+// ── Review Row ────────────────────────────────────────────────────────────────
+function ReviewRow({ label, value, required, C }) {
+  const empty = !value || value === 'Not set' || value === 'None';
   return (
     <View style={[rv.row, { borderBottomColor: C.bd }]}>
       <Text style={[rv.label, { color: C.tx3 }]}>{label}</Text>
-      <Text style={[rv.value, { color: empty ? C.tx3 : C.tx }, empty && rv.empty]}>{value || '—'}</Text>
+      <View style={{ flex: 2, alignItems: 'flex-end' }}>
+        {empty && required
+          ? (
+            <View style={[rv.missingChip, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
+              <Text style={[rv.missingText, { color: C.red }]}>Missing</Text>
+            </View>
+          )
+          : <Text style={[rv.value, { color: empty ? C.tx3 : C.tx }, empty && rv.empty]}>{value || '—'}</Text>
+        }
+      </View>
     </View>
   );
 }
 const rv = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 9, borderBottomWidth: 1 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1 },
   label: { fontSize: 12, flex: 1, fontWeight: '600' },
-  value: { fontSize: 13, flex: 2, textAlign: 'right', fontWeight: '600' },
+  value: { fontSize: 13, textAlign: 'right', fontWeight: '600' },
   empty: { fontStyle: 'italic', fontWeight: '400' },
+  missingChip: { borderRadius: 5, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  missingText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
 });
 
-// ── Nav footer ────────────────────────────────────────────────────────────────
-function NavFooter({ step, onBack, onNext, nextLabel, saving, canProceed, C }) {
-  const { t } = useTranslation();
+// ── Nav Footer ────────────────────────────────────────────────────────────────
+function NavFooter({ step, isNewUser, onBack, onNext, nextLabel, saving, canProceed, C }) {
   const isFirst = step === 0;
   return (
     <View style={[nf.bar, { backgroundColor: C.s2, borderTopColor: C.bd }]}>
+      {/* Hide back on step 0 for new users — they must complete the flow */}
+      {(!isNewUser || step > 0) ? (
+        <TouchableOpacity
+          style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]}
+          onPress={onBack}
+          disabled={isFirst}
+          activeOpacity={0.7}
+        >
+          <ChevLeft c={C.tx2} s={16} />
+          <Text style={[nf.backText, { color: C.tx2 }]}>Back</Text>
+        </TouchableOpacity>
+      ) : (
+        // Placeholder to keep layout balanced
+        <View style={nf.backBtn} />
+      )}
       <TouchableOpacity
-        style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]}
-        onPress={onBack}
-        disabled={isFirst}
-        activeOpacity={0.7}
-      >
-        <ChevLeft c={C.tx2} s={16} />
-        <Text style={[nf.backText, { color: C.tx2 }]}>{t('updates.back')}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[nf.nextBtn, { backgroundColor: C.primary }, saving && { opacity: 0.6 }, !canProceed && { opacity: 0.4 }]}
+        style={[nf.nextBtn, { backgroundColor: C.primary }, (saving || !canProceed) && { opacity: 0.45 }]}
         onPress={onNext}
         disabled={saving || !canProceed}
         activeOpacity={0.85}
       >
-        <Text style={nf.nextText}>
-          {saving ? t('updates.saving') : nextLabel}
-        </Text>
-        {!saving && (nextLabel === t('updates.next')
-          ? <ChevRight c="#fff" s={15} />
-          : <Text style={{ fontSize: 14 }}>⚡</Text>
+        <Text style={nf.nextText}>{saving ? 'Saving…' : nextLabel}</Text>
+        {!saving && (
+          step < 3
+            ? <ChevRight c="#fff" s={15} />
+            : <Text style={{ fontSize: 14 }}>⚡</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -441,10 +680,9 @@ const nf = StyleSheet.create({
   nextText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function UpdatesScreen() {
   const { colors: C } = useTheme();
-  const { t } = useTranslation();
   const router = useRouter();
   const isNewUser = useAuthStore((s) => s.isNewUser);
   const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
@@ -454,31 +692,33 @@ export default function UpdatesScreen() {
     useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
   );
   const ep = student?.emergency ?? null;
-  const rawContacts = useMemo(
-    () => student?.emergency?.contacts ?? [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [student?.emergency?.contacts]
-  );
+  const rawContacts = useMemo(() => student?.emergency?.contacts ?? [], [student?.emergency?.contacts]);
 
   const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  const [firstName, setFirstName]     = useState(student?.first_name ?? '');
-  const [lastName, setLastName]       = useState(student?.last_name ?? '');
-  const [cls, setCls]                 = useState(student?.class ?? '');
-  const [section, setSection]         = useState(student?.section ?? '');
-  const [bloodGroup, setBloodGroup]   = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
-  const [allergies, setAllergies]     = useState(ep?.allergies ?? '');
-  const [conditions, setConditions]   = useState(ep?.conditions ?? '');
+  // ── Form state ──
+  const [firstName, setFirstName] = useState(student?.first_name ?? '');
+  const [lastName, setLastName] = useState(student?.last_name ?? '');
+  const [cls, setCls] = useState(student?.class ?? '');
+  const [section, setSection] = useState(student?.section ?? '');
+  const [bloodGroup, setBloodGroup] = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
+  const [allergies, setAllergies] = useState(ep?.allergies ?? '');
+  const [conditions, setConditions] = useState(ep?.conditions ?? '');
   const [medications, setMedications] = useState(ep?.medications ?? '');
-  const [doctorName, setDoctorName]   = useState(ep?.doctor_name ?? '');
+  const [doctorName, setDoctorName] = useState(ep?.doctor_name ?? '');
   const [doctorPhone, setDoctorPhone] = useState(ep?.doctor_phone ?? '');
-  const [notes, setNotes]             = useState(ep?.notes ?? '');
-  const [contacts, setContacts]       = useState(rawContacts ?? []);
+  const [notes, setNotes] = useState(ep?.notes ?? '');
+  const [contacts, setContacts] = useState(rawContacts ?? []);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingContact, setEditContact] = useState(null);
 
+  const scrollRef = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Sync from store ──
   useEffect(() => {
     setFirstName(student?.first_name ?? '');
     setLastName(student?.last_name ?? '');
@@ -498,25 +738,43 @@ export default function UpdatesScreen() {
 
   useEffect(() => { setContacts(rawContacts ?? []); }, [rawContacts]);
 
-  const scrollRef = useRef(null);
-  const scrollTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
+  // ── Block Android hardware back during onboarding ──
+  useEffect(() => {
+    if (!isNewUser) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step > 0) { goBack(); return true; }
+      // On step 0 for new user — eat the back press entirely
+      Alert.alert(
+        'Complete Profile First',
+        'You need to add your child\'s details before you can use RESQID.',
+        [{ text: 'OK' }]
+      );
+      return true;
+    });
+    return () => sub.remove();
+  }, [isNewUser, step]);
 
+  // ── Scroll to top on step change ──
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [step]);
+
+  // ── Can proceed guard ──
   const canProceed = step === 0
     ? firstName.trim().length > 0 && lastName.trim().length > 0
     : true;
 
-  const fadeAnim  = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
+  // ── Step transitions ──
   const transitionStep = (n) => {
+    Keyboard.dismiss();
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 0,  duration: 100, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 20, duration: 100, useNativeDriver: true }),
     ]).start(() => {
       setStep(n);
       slideAnim.setValue(-20);
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
         Animated.timing(slideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
       ]).start();
     });
@@ -524,38 +782,36 @@ export default function UpdatesScreen() {
 
   const goNext = () => {
     if (step === 0 && (!firstName.trim() || !lastName.trim())) {
-      Alert.alert(t('updates.requiredAlert'), t('updates.requiredAlertMsg'));
+      Alert.alert('Name Required', "Please enter your child's first and last name to continue.");
       return;
     }
     if (step < 3) {
       setCompleted((p) => p.includes(step) ? p : [...p, step]);
       transitionStep(step + 1);
-      scrollTop();
     } else {
       handleSubmitAll();
     }
   };
 
-  const goBack = () => {
-    if (step > 0) { transitionStep(step - 1); scrollTop(); }
-  };
+  const goBack = () => { if (step > 0) transitionStep(step - 1); };
 
+  // ── Submit ──
   const handleSubmitAll = async () => {
     setSaving(true);
     try {
       await patchStudent(student.id, {
         student: {
           first_name: firstName.trim(),
-          last_name:  lastName.trim(),
-          class:      cls.trim(),
-          section:    section.trim(),
+          last_name: lastName.trim(),
+          class: cls.trim(),
+          section: section.trim(),
         },
         emergency: {
-          blood_group:  (BLOOD_GROUP_TO_ENUM[bloodGroup] ?? bloodGroup) || undefined,
-          allergies:    allergies.trim(),
-          conditions:   conditions.trim(),
-          medications:  medications.trim(),
-          doctor_name:  doctorName.trim(),
+          blood_group: (BLOOD_GROUP_TO_ENUM[bloodGroup] ?? bloodGroup) || undefined,
+          allergies: allergies.trim(),
+          conditions: conditions.trim(),
+          medications: medications.trim(),
+          doctor_name: doctorName.trim(),
           ...(doctorPhone.trim()
             ? { doctor_phone: doctorPhone.trim().startsWith('+') ? doctorPhone.trim() : `+91${doctorPhone.trim().replace(/^0/, '')}` }
             : {}),
@@ -563,31 +819,31 @@ export default function UpdatesScreen() {
         },
         contacts: contacts.map((c, i) => ({
           ...(c.id && !c.id.startsWith('tmp_') ? { id: c.id } : {}),
-          name:         c.name,
-          phone:        c.phone?.startsWith('+') ? c.phone : `+91${c.phone?.replace(/^0/, '') ?? ''}`,
+          name: c.name,
+          phone: c.phone?.startsWith('+') ? c.phone : `+91${c.phone?.replace(/^0/, '') ?? ''}`,
           relationship: c.relationship,
-          priority:     i + 1,
+          priority: i + 1,
         })),
       });
 
       setCompleted([0, 1, 2, 3]);
 
       if (isNewUser) {
-        // [FIX-1] Removed manual router.replace — AuthProvider handles navigation.
-        // [FIX-2] setIsNewUser(false) FIRST, then fetchAndPersist.
         await setIsNewUser(false);
-        fetchAndPersist?.().catch(() => {});
+        fetchAndPersist?.().catch(() => { });
+        // AuthProvider re-routes to home
       } else {
-        // [FIX-4] Non-new user confirmation — clear separate branch
-        Alert.alert(t('updates.saveSuccess'), t('updates.saveSuccessMsg'));
+        Alert.alert('Profile Updated ✓', "Your child's information has been saved.");
       }
-    } catch {
-      Alert.alert(t('updates.saveError'), t('updates.saveErrorMsg'));
+    } catch (err) {
+      console.error('Save error:', err);
+      Alert.alert('Save Failed', 'Something went wrong. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Contact handlers ──
   const handleSaveContact = (data) => {
     if (editingContact?.id) {
       setContacts((p) => p.map((c) => c.id === editingContact.id ? { ...c, ...data } : c));
@@ -601,12 +857,12 @@ export default function UpdatesScreen() {
 
   const handleDeleteContact = (contact) => {
     Alert.alert(
-      t('updates.removeContact'),
-      t('updates.removeContactMsg', { name: contact.name }),
+      'Remove Contact',
+      `Remove ${contact.name} from emergency contacts?`,
       [
-        { text: t('updates.removeContactCancel'), style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: t('updates.removeContactConfirm'),
+          text: 'Remove',
           style: 'destructive',
           onPress: () =>
             setContacts((p) =>
@@ -619,27 +875,22 @@ export default function UpdatesScreen() {
 
   const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
 
-  // Derived next button label — computed from t() so NavFooter comparison works
+  // ── Derived labels ──
   const nextLabel = step === 3
-    ? (isNewUser ? t('updates.activateCardBtn') : t('updates.saveAll'))
-    : t('updates.next');
+    ? (isNewUser ? 'Activate Card' : 'Save Changes')
+    : 'Continue';
 
-  // Derived header title
   const headerTitle = isNewUser
-    ? t('updates.headerNewUser')
+    ? 'Complete Your Profile'
     : student?.first_name
-      ? t('updates.headerExisting', { name: student.first_name })
-      : t('updates.headerFallback');
+      ? `Edit ${student.first_name}'s Profile`
+      : 'Edit Profile';
 
-  // Derived review class label
-  const classLabel = cls && section
-    ? t('updates.classSection', { cls, section })
-    : cls
-      ? t('updates.classOnly', { cls })
-      : t('updates.classNotSet');
+  const classLabel = cls && section ? `Class ${cls} · ${section}` : cls ? `Class ${cls}` : 'No class set';
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
+      {/* Contact Modal — rendered outside KAV so it overlays everything */}
       <ContactModal
         visible={modalVisible}
         contact={editingContact}
@@ -648,388 +899,417 @@ export default function UpdatesScreen() {
         C={C}
       />
 
-      {/* ── Header ── */}
-      <View style={[s.header, { borderBottomColor: C.bd }]}>
-        <Text style={[s.headerTitle, { color: C.tx }]}>{headerTitle}</Text>
-        {isNewUser && (
-          <View style={[s.newBadge, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
-            <View style={[s.newDot, { backgroundColor: C.ok }]} />
-            <Text style={[s.newText, { color: C.ok }]}>{t('updates.newBadge')}</Text>
-          </View>
-        )}
-      </View>
-
-      <StepBar current={step} completed={completed} C={C} />
-
-      <ScrollView
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
-        keyboardShouldPersistTaps="handled"
+      {/*
+        ─────────────────────────────────────────────────────────────────────
+        FIX: KeyboardAvoidingView wraps the ENTIRE screen body (header, step
+        bar, progress, scroll, footer). This is the correct pattern. Putting
+        KAV only around the ScrollView means the elements above it don't
+        participate in the keyboard-avoidance layout.
+        ─────────────────────────────────────────────────────────────────────
+      */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        {/* ── Header ── */}
+        <View style={[s.header, { borderBottomColor: C.bd }]}>
+          {/* Hide back arrow for new users on step 0 */}
+          {(!isNewUser || step > 0) ? (
+            <TouchableOpacity onPress={isNewUser ? goBack : router.back} style={s.backBtn}>
+              <ChevLeft c={C.tx} s={20} />
+            </TouchableOpacity>
+          ) : (
+            <View style={s.backBtn} />
+          )}
+          <Text style={[s.headerTitle, { color: C.tx }]}>{headerTitle}</Text>
+          {isNewUser ? (
+            <View style={[s.badge, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+              <View style={[s.badgeDot, { backgroundColor: C.primary }]} />
+              <Text style={[s.badgeText, { color: C.primary }]}>Setup</Text>
+            </View>
+          ) : (
+            <View style={s.backBtn} />
+          )}
+        </View>
 
-          {/* ── Step 0 — Student ── */}
-          {step === 0 && (
-            <View style={s.stepContent}>
-              {isNewUser && (
-                <View style={[s.onboardBanner, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
-                  <Text style={{ fontSize: 15 }}>🛡️</Text>
-                  <Text style={[s.onboardBannerText, { color: C.ok }]}>
-                    {t('updates.onboardBanner')}
+        {/* ── Progress Bar (new users only) ── */}
+        {isNewUser && <ProgressBar currentStep={step} C={C} />}
+
+        {/* ── Step Indicator ── */}
+        <StepBar current={step} completed={completed} C={C} />
+
+        {/* ── Scrollable content ── */}
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Instruction banner — always shown */}
+          <InstructionBanner currentStep={step} isNewUser={isNewUser} C={C} />
+
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
+            {/* ── Step 0: Student ── */}
+            {step === 0 && (
+              <View style={s.stepContent}>
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>👤</Text>}
+                  title="Child's Name"
+                  subtitle="Required — match the name on school records"
+                  C={C}
+                >
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="First Name"
+                        value={firstName}
+                        onChangeText={setFirstName}
+                        placeholder="e.g., Arjun"
+                        required
+                        C={C}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Last Name"
+                        value={lastName}
+                        onChangeText={setLastName}
+                        placeholder="e.g., Sharma"
+                        required
+                        C={C}
+                      />
+                    </View>
+                  </View>
+                </SectionCard>
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>🏫</Text>}
+                  title="Class & Section"
+                  subtitle="Optional — helps identify your child quickly"
+                  accent={C.blue}
+                  C={C}
+                >
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Class" value={cls} onChangeText={setCls} placeholder="e.g., 6" C={C} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Section" value={section} onChangeText={setSection} placeholder="e.g., B" C={C} />
+                    </View>
+                  </View>
+                </SectionCard>
+
+                <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <Text style={{ fontSize: 12 }}>📌</Text>
+                  <Text style={[s.noteText, { color: C.tx3 }]}>
+                    First and last name are required to continue. You cannot skip this step.
                   </Text>
                 </View>
-              )}
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>👤</Text>}
-                title={t('updates.studentNameTitle')}
-                subtitle={t('updates.studentNameSub')}
-                C={C}
-              >
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldFirstName')}
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholder={t('updates.fieldFirstNamePlaceholder')}
-                      required
-                      C={C}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldLastName')}
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholder={t('updates.fieldLastNamePlaceholder')}
-                      required
-                      C={C}
-                    />
-                  </View>
-                </View>
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>🏫</Text>}
-                title={t('updates.classSectionTitle')}
-                accent={C.blue}
-                C={C}
-              >
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldClass')}
-                      value={cls}
-                      onChangeText={setCls}
-                      placeholder={t('updates.fieldClassPlaceholder')}
-                      C={C}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldSection')}
-                      value={section}
-                      onChangeText={setSection}
-                      placeholder={t('updates.fieldSectionPlaceholder')}
-                      C={C}
-                    />
-                  </View>
-                </View>
-              </SectionCard>
-
-              <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <Text style={[s.noteText, { color: C.tx3 }]}>{t('updates.requiredNote')}</Text>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* ── Step 1 — Medical ── */}
-          {step === 1 && (
-            <View style={s.stepContent}>
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>🩸</Text>}
-                title={t('updates.bloodGroupTitle')}
-                subtitle={t('updates.bloodGroupSub')}
-                C={C}
-              >
-                <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>⚠️</Text>}
-                title={t('updates.allergiesTitle')}
-                subtitle={t('updates.allergiesSub')}
-                accent={C.amb}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldAllergies')}
-                  value={allergies}
-                  onChangeText={setAllergies}
-                  placeholder={t('updates.fieldAllergiesPlaceholder')}
-                  multiline
-                  hint={t('updates.allergiesHint')}
+            {/* ── Step 1: Medical ── */}
+            {step === 1 && (
+              <View style={s.stepContent}>
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>🩸</Text>}
+                  title="Blood Group"
+                  subtitle="Critical for emergency response — tap to select"
                   C={C}
-                />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>🫁</Text>}
-                title={t('updates.conditionsTitle')}
-                accent={C.blue}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldConditions')}
-                  value={conditions}
-                  onChangeText={setConditions}
-                  placeholder={t('updates.fieldConditionsPlaceholder')}
-                  multiline
-                  C={C}
-                />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>💊</Text>}
-                title={t('updates.medicationsTitle')}
-                accent={C.blue}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldMedications')}
-                  value={medications}
-                  onChangeText={setMedications}
-                  placeholder={t('updates.fieldMedicationsPlaceholder')}
-                  multiline
-                  C={C}
-                />
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>}
-                title={t('updates.doctorTitle')}
-                accent={C.ok}
-                C={C}
-              >
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldDoctorName')}
-                      value={doctorName}
-                      onChangeText={setDoctorName}
-                      placeholder={t('updates.fieldDoctorNamePlaceholder')}
-                      C={C}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label={t('updates.fieldDoctorPhone')}
-                      value={doctorPhone}
-                      onChangeText={setDoctorPhone}
-                      placeholder={t('updates.fieldDoctorPhonePlaceholder')}
-                      keyboardType="phone-pad"
-                      C={C}
-                    />
-                  </View>
-                </View>
-              </SectionCard>
-
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>📋</Text>}
-                title={t('updates.responderNotesTitle')}
-                subtitle={t('updates.responderNotesSub')}
-                C={C}
-              >
-                <Field
-                  label={t('updates.fieldNotes')}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder={t('updates.fieldNotesPlaceholder')}
-                  multiline
-                  C={C}
-                />
-              </SectionCard>
-            </View>
-          )}
-
-          {/* ── Step 2 — Contacts ── */}
-          {step === 2 && (
-            <View style={s.stepContent}>
-              <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <Text style={[s.callInfoTitle, { color: C.tx }]}>{t('updates.howCallsWork')}</Text>
-                {[
-                  { color: PRIORITY_COLORS[0], text: t('updates.callInfo1') },
-                  { color: PRIORITY_COLORS[1], text: t('updates.callInfo2') },
-                  { color: PRIORITY_COLORS[2], text: t('updates.callInfo3') },
-                ].map((item, i) => (
-                  <View key={i} style={s.callInfoRow}>
-                    <View style={[s.callInfoDot, { backgroundColor: item.color }]} />
-                    <Text style={[s.callInfoText, { color: C.tx2 }]}>{item.text}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {sortedContacts.length === 0 ? (
-                <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                  <Text style={{ fontSize: 28 }}>📵</Text>
-                  <Text style={[s.emptyTitle, { color: C.tx }]}>{t('updates.noContactsTitle')}</Text>
-                  <Text style={[s.emptySub, { color: C.tx3 }]}>{t('updates.noContactsSub')}</Text>
-                </View>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {sortedContacts.map((c, i) => (
-                    <ContactCard
-                      key={c.id ?? `contact_${i}`}
-                      contact={c}
-                      index={i}
-                      onEdit={(con) => { setEditContact(con); setModalVisible(true); }}
-                      onDelete={handleDeleteContact}
-                      C={C}
-                    />
-                  ))}
-                </View>
-              )}
-
-              {contacts.length < 5 && (
-                <TouchableOpacity
-                  style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
-                  onPress={() => { setEditContact(null); setModalVisible(true); }}
-                  activeOpacity={0.75}
                 >
-                  <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}>
-                    <PlusSvg c="#fff" s={18} />
+                  <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
+                </SectionCard>
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>⚠️</Text>}
+                  title="Allergies"
+                  subtitle="Medication, food, or environmental allergies"
+                  accent={C.amb}
+                  C={C}
+                >
+                  <Field
+                    label="Known Allergies"
+                    value={allergies}
+                    onChangeText={setAllergies}
+                    placeholder="e.g., Peanuts, Penicillin"
+                    multiline
+                    hint='Leave blank if none. Separate multiple allergies with commas.'
+                    C={C}
+                  />
+                </SectionCard>
+
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title="Medical Conditions" accent={C.blue} C={C}>
+                  <Field
+                    label="Conditions"
+                    value={conditions}
+                    onChangeText={setConditions}
+                    placeholder="e.g., Asthma, Diabetes, Epilepsy"
+                    multiline
+                    hint="Chronic or recurring conditions that affect emergency care"
+                    C={C}
+                  />
+                </SectionCard>
+
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title="Medications" accent={C.blue} C={C}>
+                  <Field
+                    label="Current Medications"
+                    value={medications}
+                    onChangeText={setMedications}
+                    placeholder="e.g., Ventolin Inhaler, Insulin"
+                    multiline
+                    hint="Include dosage if known. Leave blank if none."
+                    C={C}
+                  />
+                </SectionCard>
+
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>}
+                  title="Family Doctor"
+                  subtitle="Will be contacted if medical decision is needed"
+                  accent={C.ok}
+                  C={C}
+                >
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Field label="Doctor Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" C={C} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label="Doctor's Phone"
+                        value={doctorPhone}
+                        onChangeText={setDoctorPhone}
+                        placeholder="+91 98765 43210"
+                        keyboardType="phone-pad"
+                        C={C}
+                      />
+                    </View>
                   </View>
-                  <View>
-                    <Text style={[s.addBtnLabel, { color: C.primary }]}>{t('updates.addContact')}</Text>
-                    <Text style={[s.addBtnSub, { color: C.tx3 }]}>
-                      {t('updates.contactsCount', { count: contacts.length })}
+                </SectionCard>
+
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>📋</Text>} title="Additional Notes" subtitle="Any other information for responders" C={C}>
+                  <Field
+                    label="Notes"
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="e.g., Child panics in crowds, carries EpiPen in bag"
+                    multiline
+                    C={C}
+                  />
+                </SectionCard>
+              </View>
+            )}
+
+            {/* ── Step 2: Contacts ── */}
+            {step === 2 && (
+              <View style={s.stepContent}>
+                {/* How it works */}
+                <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <Text style={[s.callInfoTitle, { color: C.tx }]}>How Emergency Calls Work</Text>
+                  {[
+                    { color: PRIORITY_COLORS[0], text: 'Priority 1 — Called first when card is scanned' },
+                    { color: PRIORITY_COLORS[1], text: 'Priority 2 — Called if #1 does not answer' },
+                    { color: PRIORITY_COLORS[2], text: 'Priority 3 — Backup contact' },
+                  ].map((item, i) => (
+                    <View key={i} style={s.callInfoRow}>
+                      <View style={[s.callInfoDot, { backgroundColor: item.color }]} />
+                      <Text style={[s.callInfoText, { color: C.tx2 }]}>{item.text}</Text>
+                    </View>
+                  ))}
+                  <View style={[s.callInfoDivider, { backgroundColor: C.bd }]} />
+                  <Text style={[s.callInfoNote, { color: C.tx3 }]}>
+                    Add at least 2 contacts. Use only reachable mobile numbers — not landlines.
+                  </Text>
+                </View>
+
+                {/* Contact list or empty state */}
+                {sortedContacts.length === 0 ? (
+                  <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                    <Text style={{ fontSize: 32 }}>📵</Text>
+                    <Text style={[s.emptyTitle, { color: C.tx }]}>No Emergency Contacts Added</Text>
+                    <Text style={[s.emptySub, { color: C.tx3 }]}>
+                      Tap the button below to add your first contact. You can add up to 5 contacts.
+                    </Text>
+                    <TouchableOpacity
+                      style={[s.emptyAddBtn, { backgroundColor: C.primary }]}
+                      onPress={() => { setEditContact(null); setModalVisible(true); }}
+                      activeOpacity={0.85}
+                    >
+                      <PlusSvg c="#fff" s={16} />
+                      <Text style={s.emptyAddBtnText}>Add First Contact</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {sortedContacts.map((c, i) => (
+                      <ContactCard
+                        key={c.id ?? `contact_${i}`}
+                        contact={c}
+                        index={i}
+                        onEdit={(con) => { setEditContact(con); setModalVisible(true); }}
+                        onDelete={handleDeleteContact}
+                        C={C}
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {/* Add more button */}
+                {contacts.length > 0 && contacts.length < 5 && (
+                  <TouchableOpacity
+                    style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
+                    onPress={() => { setEditContact(null); setModalVisible(true); }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}>
+                      <PlusSvg c="#fff" s={18} />
+                    </View>
+                    <View>
+                      <Text style={[s.addBtnLabel, { color: C.primary }]}>Add Another Contact</Text>
+                      <Text style={[s.addBtnSub, { color: C.tx3 }]}>
+                        {contacts.length} of 5 contacts added
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                {contacts.length >= 5 && (
+                  <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
+                    <Text style={{ fontSize: 12 }}>✅</Text>
+                    <Text style={[s.noteText, { color: C.ok }]}>Maximum of 5 contacts reached.</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* ── Step 3: Review ── */}
+            {step === 3 && (
+              <View style={s.stepContent}>
+                {/* Student summary card */}
+                <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                  <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+                    <Text style={[s.reviewAvatarText, { color: C.primary }]}>
+                      {firstName ? firstName[0].toUpperCase() : '?'}
                     </Text>
                   </View>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* ── Step 3 — Review ── */}
-          {step === 3 && (
-            <View style={s.stepContent}>
-              <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                  <Text style={[s.reviewAvatarText, { color: C.primary }]}>
-                    {firstName ? firstName[0].toUpperCase() : '?'}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.reviewName, { color: C.tx }]}>
+                      {`${firstName} ${lastName}`.trim() || 'Child'}
+                    </Text>
+                    <Text style={[s.reviewClass, { color: C.tx3 }]}>{classLabel}</Text>
+                  </View>
+                  <View style={[
+                    s.reviewStatus,
+                    { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd },
+                  ]}>
+                    <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
+                    <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
+                      {completed.length >= 3 ? 'Ready' : 'Draft'}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={[s.reviewName, { color: C.tx }]}>
-                    {`${firstName} ${lastName}`.trim() || t('updates.headerFallback')}
-                  </Text>
-                  <Text style={[s.reviewClass, { color: C.tx3 }]}>{classLabel}</Text>
-                </View>
-                <View style={[
-                  s.reviewStatus,
-                  { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd },
-                ]}>
-                  <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
-                  <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
-                    {completed.length >= 3 ? t('updates.statusReady') : t('updates.statusDraft')}
-                  </Text>
-                </View>
-              </View>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>👤</Text>}
-                title={t('updates.reviewStudentTitle')}
-                C={C}
-              >
-                <ReviewRow label={t('updates.reviewFieldFirstName')} value={firstName}   C={C} />
-                <ReviewRow label={t('updates.reviewFieldLastName')}  value={lastName}    C={C} />
-                <ReviewRow label={t('updates.reviewFieldClass')}     value={cls}         C={C} />
-                <ReviewRow label={t('updates.reviewFieldSection')}   value={section}     C={C} />
-              </SectionCard>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Student Information" C={C}>
+                  <ReviewRow label="First Name" value={firstName} required C={C} />
+                  <ReviewRow label="Last Name" value={lastName} required C={C} />
+                  <ReviewRow label="Class" value={cls || 'Not set'} C={C} />
+                  <ReviewRow label="Section" value={section || 'Not set'} C={C} />
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>❤️</Text>}
-                title={t('updates.reviewMedicalTitle')}
-                C={C}
-              >
-                <ReviewRow label={t('updates.reviewFieldBloodGroup')}  value={bloodGroup}  C={C} />
-                <ReviewRow label={t('updates.reviewFieldAllergies')}   value={allergies}   C={C} />
-                <ReviewRow label={t('updates.reviewFieldConditions')}  value={conditions}  C={C} />
-                <ReviewRow label={t('updates.reviewFieldMedications')} value={medications} C={C} />
-                <ReviewRow label={t('updates.reviewFieldDoctor')}      value={doctorName}  C={C} />
-                <ReviewRow label={t('updates.reviewFieldDoctorPhone')} value={doctorPhone} C={C} />
-              </SectionCard>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title="Medical Information" C={C}>
+                  <ReviewRow label="Blood Group" value={bloodGroup || 'Not set'} C={C} />
+                  <ReviewRow label="Allergies" value={allergies || 'None'} C={C} />
+                  <ReviewRow label="Conditions" value={conditions || 'None'} C={C} />
+                  <ReviewRow label="Medications" value={medications || 'None'} C={C} />
+                  <ReviewRow label="Doctor" value={doctorName || 'Not set'} C={C} />
+                  <ReviewRow label="Doctor Phone" value={doctorPhone || 'Not set'} C={C} />
+                </SectionCard>
 
-              <SectionCard
-                icon={<Text style={{ fontSize: 15 }}>📞</Text>}
-                title={t('updates.reviewContactsTitle', { count: contacts.length })}
-                accent={C.blue}
-                C={C}
-              >
-                {contacts.length === 0
-                  ? <Text style={[s.noContacts, { color: C.tx3 }]}>{t('updates.reviewNoContacts')}</Text>
-                  // [FIX-3] Added `i` as second param to fix ReferenceError on `i` in key
-                  : sortedContacts.map((c, i) => (
+                <SectionCard
+                  icon={<Text style={{ fontSize: 15 }}>📞</Text>}
+                  title={`Emergency Contacts (${contacts.length})`}
+                  accent={C.blue}
+                  C={C}
+                >
+                  {contacts.length === 0
+                    ? (
+                      <View style={[s.reviewWarn, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
+                        <Text style={[s.reviewWarnText, { color: C.red }]}>
+                          ⚠️  No emergency contacts added. Go back to Step 3 and add at least one contact.
+                        </Text>
+                      </View>
+                    )
+                    : sortedContacts.map((c, i) => (
                       <ReviewRow
                         key={c.id ?? `review_${i}`}
-                        label={t('updates.reviewContactLabel', {
-                          priority: c.priority,
-                          relationship: c.relationship || t('updates.fieldContactRel'),
-                        })}
+                        label={`#${c.priority} ${c.relationship || 'Contact'}`}
                         value={`${c.name} · ${c.phone}`}
                         C={C}
                       />
                     ))
-                }
-              </SectionCard>
+                  }
+                </SectionCard>
 
-              <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
-                <Text style={{ fontSize: 14 }}>🛡️</Text>
-                <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
-                  {isNewUser ? t('updates.reviewNoteNew') : t('updates.reviewNoteEdit')}
-                </Text>
+                <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
+                  <Text style={{ fontSize: 14 }}>🛡️</Text>
+                  <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
+                    {isNewUser
+                      ? 'Review all information carefully. Tap "Activate Card" when ready. You can update this any time from the profile screen.'
+                      : 'Changes will take effect immediately after saving.'}
+                  </Text>
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-        </Animated.View>
-        <View style={{ height: 16 }} />
-      </ScrollView>
+          </Animated.View>
+          <View style={{ height: 24 }} />
+        </ScrollView>
 
-      <NavFooter
-        step={step}
-        onBack={goBack}
-        onNext={goNext}
-        nextLabel={nextLabel}
-        saving={saving}
-        canProceed={canProceed}
-        C={C}
-      />
+        {/* ── Footer ── */}
+        <NavFooter
+          step={step}
+          isNewUser={isNewUser}
+          onBack={goBack}
+          onNext={goNext}
+          nextLabel={nextLabel}
+          saving={saving}
+          canProceed={canProceed}
+          C={C}
+        />
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[3], borderBottomWidth: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
-  newBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
-  newDot: { width: 5, height: 5, borderRadius: 3 },
-  newText: { fontSize: 11, fontWeight: '700' },
-  onboardBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
-  onboardBannerText: { fontSize: 13, lineHeight: 18, flex: 1, fontWeight: '500' },
-  scroll: { paddingHorizontal: spacing.screenH, paddingTop: 18, gap: 14 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[3],
+    borderBottomWidth: 1,
+  },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
+  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, flex: 1, textAlign: 'center' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  badgeDot: { width: 5, height: 5, borderRadius: 3 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  scroll: { paddingHorizontal: spacing.screenH, paddingTop: 14, gap: 14, paddingBottom: 30 },
   stepContent: { gap: 14 },
-  note: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
-  noteText: { fontSize: 11.5 },
+  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
+  noteText: { fontSize: 11.5, flex: 1, lineHeight: 17 },
   callInfoBox: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
   callInfoTitle: { fontSize: 13, fontWeight: '700' },
   callInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   callInfoDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
   callInfoText: { fontSize: 12.5, flex: 1 },
-  emptyContacts: { borderRadius: 14, borderWidth: 1, padding: 32, alignItems: 'center', gap: 8 },
+  callInfoDivider: { height: 1, marginVertical: 2 },
+  callInfoNote: { fontSize: 11.5, lineHeight: 17 },
+  emptyContacts: { borderRadius: 14, borderWidth: 1, padding: 32, alignItems: 'center', gap: 10 },
   emptyTitle: { fontSize: 15, fontWeight: '700' },
   emptySub: { fontSize: 12.5, textAlign: 'center', lineHeight: 18 },
+  emptyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 12, marginTop: 4 },
+  emptyAddBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed' },
   addBtnIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   addBtnLabel: { fontSize: 14, fontWeight: '700' },
@@ -1039,8 +1319,9 @@ const s = StyleSheet.create({
   reviewAvatarText: { fontSize: 20, fontWeight: '900' },
   reviewName: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
   reviewClass: { fontSize: 12, marginTop: 2 },
-  reviewStatus: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  reviewStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   reviewStatusDot: { width: 5, height: 5, borderRadius: 3 },
   reviewStatusText: { fontSize: 11, fontWeight: '700' },
-  noContacts: { fontSize: 13, fontStyle: 'italic' },
+  reviewWarn: { borderRadius: 10, borderWidth: 1, padding: 12 },
+  reviewWarnText: { fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
 });

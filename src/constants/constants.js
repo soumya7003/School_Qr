@@ -1,5 +1,7 @@
 // ── Constants ─────────────────────────────────────────────────────────────────
-export const OTP_TTL_MS = 2 * 60 * 1000; // 5 minutes
+
+// ✅ FIX: Match backend OTP_TTL_SECONDS = 15 * 60
+export const OTP_TTL_MS = 15 * 60 * 1000; // 15 minutes
 export const MAX_ATTEMPTS = 5;
 export const LOCKOUT_MS = 30 * 60 * 1000; // 30 minutes after max attempts
 
@@ -21,7 +23,7 @@ export const LANGUAGES = [
   { code: "kn", label: "Kannada", native: "ಕನ್ನಡ" },
 ];
 
-export const BIOMETRIC_COLOR = "#6366f1"; // indigo — visually distinct from app primary
+export const BIOMETRIC_COLOR = "#6366f1";
 
 export const THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -29,7 +31,8 @@ export const THEME_OPTIONS = [
   { value: "system", label: "System" },
 ];
 
-// ! index.js file color section
+// ✅ FIX: Single color object – use colors.js or tokens.js instead
+// Keeping only what's needed for components that haven't migrated yet
 export const COLORS = {
   bg: "#0D0D0F",
   bgDeep: "#120909",
@@ -45,43 +48,10 @@ export const COLORS = {
   green: "#2ECC71",
 };
 
-export const C = {
-  bg: "#0D0D0F",
-  bgCard2: "#1A1A1D",
-  red: "#FF3B30",
-  redDark: "#C8211A",
-  redGlow: "rgba(255,59,48,0.18)",
-  white: "#FFFFFF",
-  white90: "rgba(255,255,255,0.90)",
-  white60: "rgba(255,255,255,0.60)",
-  white35: "rgba(255,255,255,0.35)",
-  white15: "rgba(255,255,255,0.15)",
-  white08: "rgba(255,255,255,0.08)",
-  white04: "rgba(255,255,255,0.04)",
-  green: "#2ECC71",
-  greenGlow: "rgba(46,204,113,0.5)",
-  border: "rgba(255,255,255,0.07)",
-  borderRed: "rgba(255,59,48,0.25)",
-};
-
-export const Login_C = {
-  bg: "#0D0D0F",
-  surface: "#131315",
-  red: "#FF3B30",
-  redDark: "#C8211A",
-  redBorder: "rgba(255,59,48,0.35)",
-  white: "#FFFFFF",
-  white90: "rgba(255,255,255,0.90)",
-  white60: "rgba(255,255,255,0.60)",
-  white40: "rgba(255,255,255,0.40)",
-  white10: "rgba(255,255,255,0.10)",
-  white06: "rgba(255,255,255,0.06)",
-  muted: "rgba(255,255,255,0.42)",
-  dim: "rgba(255,255,255,0.22)",
-  border: "rgba(255,255,255,0.07)",
-  focusBorder: "rgba(255,59,48,0.55)",
-  green: "#2ECC71",
-};
+// ✅ FIX: Remove duplicate C and Login_C – use COLORS or import from theme
+// Keeping for backward compatibility, mark as deprecated
+export const C = COLORS;
+export const Login_C = COLORS;
 
 export const VALID_MODES = ["register", "login"];
 export const TRUST_BADGE_TEXT = "Trusted by 2,400+ parents across India";

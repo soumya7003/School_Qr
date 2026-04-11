@@ -1,57 +1,47 @@
 /**
- * app/(app)/_layout.jsx - DEBUG VERSION
- *
- * This version logs everything to help identify the blank screen issue.
+ * app/(app)/_layout.jsx - PRODUCTION READY
  */
 
 import TabBar from '@/components/navigation/TabBar';
 import { useAuthStore } from '@/features/auth/auth.store';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { useFetchOnMount } from '@/hooks/useFetchOnMount';
+import { useInactivityLock } from '@/hooks/useInactivityLock';
 import { Tabs } from 'expo-router';
 import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 export default function AppLayout() {
     const isHydrated = useAuthStore((s) => s.isHydrated);
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const profileHydrated = useProfileStore((s) => s.isHydrated);
 
-    // Log state on every render
+    // Hydrate profile store on mount
     useEffect(() => {
-        console.log('════════════════════════════════════════');
-        console.log('[AppLayout] Render state:', {
-            isHydrated,
-            isAuthenticated,
-            timestamp: new Date().toISOString(),
-        });
-        console.log('════════════════════════════════════════');
-    });
+        useProfileStore.getState().hydrate();
+    }, []);
 
-    // Show diagnostic info instead of spinner
-    if (!isHydrated) {
-        console.log('[AppLayout] BLOCKING: Not hydrated');
+    // Fetch fresh profile if stale
+    useFetchOnMount();
+
+    // Inactivity lock with biometric
+    const panHandlers = useInactivityLock();
+
+    // Loading state
+    if (!isHydrated || !profileHydrated) {
         return (
             <View style={styles.loadingContainer}>
-                <Text style={styles.debugText}>🔄 Hydrating store...</Text>
-                <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 16 }} />
+                <ActivityIndicator size="large" color="#E8342A" />
             </View>
         );
     }
 
     if (!isAuthenticated) {
-        console.log('[AppLayout] BLOCKING: Not authenticated');
-        return (
-            <View style={styles.loadingContainer}>
-                <Text style={styles.debugText}>🔐 Not authenticated</Text>
-                <Text style={styles.debugSubtext}>AuthProvider should redirect to login</Text>
-            </View>
-        );
+        return null; // AuthProvider will redirect
     }
 
-    console.log('[AppLayout] ✅ RENDERING TABS');
-
     return (
-        <View style={styles.container}>
-            {/* Debug overlay to confirm tabs are rendering */}
-
+        <View style={styles.container} {...panHandlers}>
             <Tabs
                 tabBar={(props) => <TabBar {...props} />}
                 screenOptions={{ headerShown: false }}
@@ -65,6 +55,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="scan-history" options={{ href: null }} />
                 <Tabs.Screen name="support" options={{ href: null }} />
                 <Tabs.Screen name="change-phone" options={{ href: null }} />
+                <Tabs.Screen name='add-child' options={{ href: null }} />
             </Tabs>
         </View>
     );
@@ -76,35 +67,8 @@ const styles = StyleSheet.create({
     },
     loadingContainer: {
         flex: 1,
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#0D0D0F',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
-    },
-    debugText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 8,
-    },
-    debugSubtext: {
-        color: '#888888',
-        fontSize: 14,
-        textAlign: 'center',
-    },
-    debugOverlay: {
-        position: 'absolute',
-        top: 50,
-        left: 0,
-        right: 0,
-        backgroundColor: 'rgba(0, 255, 0, 0.8)',
-        padding: 8,
-        alignItems: 'center',
-        zIndex: 9999,
-    },
-    overlayText: {
-        color: '#000000',
-        fontSize: 12,
-        fontWeight: 'bold',
     },
 });

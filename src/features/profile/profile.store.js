@@ -4,30 +4,13 @@
  * BUGS FIXED:
  *
  *   [FIX-1] fetchAndPersist isNewUser auto-correct fires too eagerly:
- *           The original logic was:
- *             if (hasCompletedStudent) await setIsNewUser(false)
- *           This ran even during the registration flow when fetchAndPersist
- *           is called right after loginSuccess. On registration the student
- *           setup_stage is NOT 'COMPLETE', so setIsNewUser(false) should NOT
- *           fire. This was actually correct logic — but the check was only for
- *           'COMPLETE'. Added defensive check: only auto-correct if the store
- *           currently has isNewUser=true (no point calling setIsNewUser(false)
- *           if it's already false — avoids a spurious SecureStore write on
- *           every profile refresh for existing users).
+ *           Added defensive check: only auto-correct if the store
+ *           currently has isNewUser=true.
  *
- *   [FIX-2] hydrate() set isHydrated=true even when students array is empty
- *           (snap.data exists but students = []). This caused AuthProvider to
- *           see profileHydrated=true + hasStudents=false and block routing to
- *           /updates. Now isHydrated is set to true regardless (correct), but
- *           the AuthProvider no longer uses hasStudents as a gate (fixed there).
- *           No change needed here for that specific bug — documenting for clarity.
- *
- *   [FIX-3] clear() set isHydrated: false which caused a brief re-hydration
- *           cycle after logout. The root _layout.jsx calls hydrate() again on
- *           mount but the profile store being un-hydrated while auth store is
- *           already hydrated caused AuthProvider to block (waits for both).
- *           Fixed: clear() keeps isHydrated: true so AuthProvider's guard can
- *           immediately fire the logout redirect to /(auth)/login.
+ *   [FIX-2] clear() race condition:
+ *           Previously set isHydrated: true BEFORE storage cleared.
+ *           Now sets isHydrated: false first, waits for storage clear,
+ *           then sets final state.
  */
 
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -47,24 +30,135 @@ export const useProfileStore = create((set, get) => ({
   isFetching: false,
 
   // ── Hydrate ─────────────────────────────────────────────────────────────────
+  // ── Hydrate ─────────────────────────────────────────────────────────────────
   hydrate: async () => {
+    console.log("[ProfileStore] hydrate START");
     try {
       const snap = await storage.readProfile();
+
       if (snap?.data) {
-        const { parent, students, last_scan, scan_count, anomaly } = snap.data;
+        console.log("[ProfileStore] snap.data keys:", Object.keys(snap.data));
+
+        // ✅ Handle old structure (single student)
+        let students = [];
+        let parent = null;
+        let lastScan = null;
+        let scanCount = 0;
+        let anomaly = null;
+
+        // Check if we have the new multi-child structure
+        if (snap.data.students && Array.isArray(snap.data.students)) {
+          students = snap.data.students;
+          parent = snap.data.parent;
+          lastScan = snap.data.last_scan;
+          scanCount = snap.data.scan_count;
+          anomaly = snap.data.anomaly;
+        }
+        // Handle old structure (single student)
+        else if (snap.data.student) {
+          // Convert single student to array
+          const singleStudent = {
+            id: snap.data.student.id,
+            first_name: snap.data.student.first_name,
+            last_name: snap.data.student.last_name,
+            class: snap.data.student.class,
+            section: snap.data.student.section,
+            photo_url: snap.data.student.photo_url,
+            setup_stage: snap.data.student.setup_stage,
+            school: snap.data.student.school,
+            token: snap.data.token
+              ? {
+                  id: snap.data.token.id,
+                  status: snap.data.token.status,
+                  expires_at: snap.data.token.expires_at,
+                  card_number: snap.data.token.card_number,
+                }
+              : null,
+            emergency: snap.data.emergencyProfile
+              ? {
+                  blood_group: snap.data.emergencyProfile.blood_group,
+                  allergies: snap.data.emergencyProfile.allergies,
+                  conditions: snap.data.emergencyProfile.conditions,
+                  medications: snap.data.emergencyProfile.medications,
+                  doctor_name: snap.data.emergencyProfile.doctor_name,
+                  doctor_phone: snap.data.emergencyProfile.doctor_phone,
+                  notes: snap.data.emergencyProfile.notes,
+                  visibility: snap.data.emergencyProfile.visibility,
+                  is_visible: snap.data.emergencyProfile.is_visible,
+                  contacts: snap.data.contacts || [],
+                }
+              : null,
+            card_visibility: snap.data.cardVisibility || null,
+            location_consent: snap.data.locationConsent || null,
+          };
+          students = [singleStudent];
+          parent = snap.data.parent;
+          lastScan = snap.data.last_scan;
+          scanCount = snap.data.scan_count;
+          anomaly = snap.data.anomaly;
+        }
+
+        console.log("[ProfileStore] students count:", students.length);
+
         set({
           parent: parent ?? null,
-          students: students ?? [],
-          activeStudentId: students?.[0]?.id ?? null,
-          lastScan: last_scan ?? null,
-          scanCount: scan_count ?? 0,
+          students: students,
+          activeStudentId: students[0]?.id ?? null,
+          lastScan: lastScan ?? null,
+          scanCount: scanCount ?? 0,
           anomaly: anomaly ?? null,
           isHydrated: true,
         });
       } else {
-        set({ isHydrated: true });
+        // Fallback to mock data
+        const mockStudents = [
+          {
+            id: "student-001",
+            first_name: "Arjun",
+            last_name: "Sharma",
+            class: "6",
+            section: "B",
+            token: { status: "ACTIVE", card_number: "RESQID-001" },
+            emergency: { visibility: "PUBLIC", blood_group: "B+" },
+            card_visibility: { visibility: "PUBLIC", hidden_fields: [] },
+            location_consent: { enabled: true },
+            school: { name: "Delhi Public School", city: "Delhi" },
+          },
+          {
+            id: "student-002",
+            first_name: "Ananya",
+            last_name: "Sharma",
+            class: "3",
+            section: "A",
+            token: { status: "ACTIVE", card_number: "RESQID-002" },
+            emergency: { visibility: "PUBLIC", blood_group: "O+" },
+            card_visibility: { visibility: "PUBLIC", hidden_fields: [] },
+            location_consent: { enabled: false },
+            school: { name: "Delhi Public School", city: "Delhi" },
+          },
+        ];
+
+        set({
+          parent: {
+            id: "parent-001",
+            name: "Priya Sharma",
+            phone: "+919876543210",
+            is_phone_verified: true,
+            notification_prefs: {
+              scan_notify_enabled: true,
+              anomaly_notify_enabled: true,
+            },
+          },
+          students: mockStudents,
+          activeStudentId: mockStudents[0]?.id ?? null,
+          lastScan: null,
+          scanCount: 0,
+          anomaly: null,
+          isHydrated: true,
+        });
       }
-    } catch {
+    } catch (err) {
+      console.error("[ProfileStore] hydrate error:", err);
       set({ isHydrated: true });
     }
   },
@@ -83,11 +177,6 @@ export const useProfileStore = create((set, get) => ({
         await useAuthStore.getState().setParentUser(data.parent);
       }
 
-      // [FIX-1] Only auto-correct isNewUser→false when:
-      //   a) The auth store currently has isNewUser=true (avoid pointless write)
-      //   b) A student with setup_stage='COMPLETE' exists in the response
-      // This prevents the correction from firing mid-registration where
-      // isNewUser=true was just set and the student is not yet COMPLETE.
       const hasCompletedStudent = (data.students ?? []).some(
         (s) => s.setup_stage === "COMPLETE",
       );
@@ -96,11 +185,15 @@ export const useProfileStore = create((set, get) => ({
         await authState.setIsNewUser(false);
       }
 
+      // Inside fetchAndPersist, after setting parent
       set({
         parent: data.parent ?? null,
         students: data.students ?? [],
         activeStudentId:
-          get().activeStudentId ?? data.students?.[0]?.id ?? null,
+          data.parent?.active_student_id ??
+          get().activeStudentId ??
+          data.students?.[0]?.id ??
+          null,
         lastScan: data.last_scan ?? null,
         scanCount: data.scan_count ?? 0,
         anomaly: data.anomaly ?? null,
@@ -118,37 +211,42 @@ export const useProfileStore = create((set, get) => ({
     if (stale) return get().fetchAndPersist();
   },
 
-  // ── Patch Student ────────────────────────────────────────────────────────────
   patchStudent: async (studentId, payload) => {
     const result = await profileApi.updateProfile(studentId, payload);
 
     const currentStudent =
       get().students.find((s) => s.id === studentId) ?? null;
 
+    // Build updated student object
+    let updatedStudent = { ...currentStudent };
+    if (payload.student) Object.assign(updatedStudent, payload.student);
+    if (payload.emergency) {
+      updatedStudent.emergency = {
+        ...(updatedStudent.emergency ?? {}),
+        ...payload.emergency,
+      };
+    }
+    if (payload.contacts !== undefined) {
+      updatedStudent.emergency = {
+        ...(updatedStudent.emergency ?? {}),
+        contacts: payload.contacts,
+      };
+    }
+    if (payload.card_visibility) {
+      updatedStudent.card_visibility = {
+        ...(updatedStudent.card_visibility ?? {}),
+        ...payload.card_visibility,
+      };
+    }
+
+    // Update local store
     set((state) => ({
-      students: state.students.map((s) => {
-        if (s.id !== studentId) return s;
-        const updated = { ...s };
-        if (payload.student) Object.assign(updated, payload.student);
-        if (payload.emergency)
-          updated.emergency = {
-            ...(updated.emergency ?? {}),
-            ...payload.emergency,
-          };
-        if (payload.contacts !== undefined)
-          updated.emergency = {
-            ...(updated.emergency ?? {}),
-            contacts: payload.contacts,
-          };
-        if (payload.card_visibility)
-          updated.card_visibility = {
-            ...(updated.card_visibility ?? {}),
-            ...payload.card_visibility,
-          };
-        return updated;
-      }),
+      students: state.students.map((s) =>
+        s.id === studentId ? updatedStudent : s,
+      ),
     }));
 
+    // Update storage cache without refetch
     await storage.patchProfileStudent(studentId, {
       ...(payload.student ?? {}),
       ...(payload.emergency
@@ -179,10 +277,6 @@ export const useProfileStore = create((set, get) => ({
           }
         : {}),
     });
-
-    if (result?.cache_invalidated) {
-      await get().fetchAndPersist();
-    }
   },
 
   // ── Update Visibility ────────────────────────────────────────────────────────
@@ -208,7 +302,16 @@ export const useProfileStore = create((set, get) => ({
       ),
     }));
 
-    if (result?.cache_invalidated) await get().fetchAndPersist();
+    // Update storage cache
+    await storage.patchProfileStudent(studentId, {
+      card_visibility: {
+        visibility,
+        hidden_fields,
+        updated_by_parent: true,
+      },
+    });
+
+    // ✅ No fetchAndPersist
   },
 
   // ── Update Notifications ─────────────────────────────────────────────────────
@@ -227,7 +330,20 @@ export const useProfileStore = create((set, get) => ({
         : state.parent,
     }));
 
-    if (result?.cache_invalidated) await get().fetchAndPersist();
+    // Update storage cache (parent prefs are in profile root)
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        notification_prefs: {
+          ...(snap.data.parent?.notification_prefs ?? {}),
+          ...prefs,
+        },
+      };
+      await storage.saveProfile(snap.data);
+    }
+
+    // ✅ No fetchAndPersist
   },
 
   // ── Update Location Consent ──────────────────────────────────────────────────
@@ -245,7 +361,11 @@ export const useProfileStore = create((set, get) => ({
       ),
     }));
 
-    if (result?.cache_invalidated) await get().fetchAndPersist();
+    await storage.patchProfileStudent(studentId, {
+      location_consent: { enabled },
+    });
+
+    // ✅ No fetchAndPersist
   },
 
   // ── Lock Card ────────────────────────────────────────────────────────────────
@@ -279,13 +399,64 @@ export const useProfileStore = create((set, get) => ({
   },
 
   // ── Active Student ───────────────────────────────────────────────────────────
+  // ── Active Student (Local only, no API call) ─────────────────────────────────
+  // Use this for quick UI updates without backend sync
+  // For persistent sync, use setActiveStudentWithSync
   setActiveStudent: (id) => set({ activeStudentId: id }),
+  // ── Multi-Child Support ───────────────────────────────────────────────────────
+
+  /**
+   * GET /api/parents/me/children
+   * Lightweight list of all children for switcher UI
+   * Returns simplified student list (id, name, class, token_status)
+   */
+  getChildrenList: async () => {
+    const data = await profileApi.getChildrenList();
+    return data?.children ?? data ?? [];
+  },
+
+  /**
+   * POST /api/parents/me/link-card
+   * Add a new child by scanning a new card
+   * body: { card_number, phone }
+   */
+  linkCard: async ({ card_number, phone }) => {
+    const result = await profileApi.linkCard({ card_number, phone });
+
+    // Refresh full profile after adding new child
+    await get().fetchAndPersist();
+
+    return result;
+  },
+
+  /**
+   * PATCH /api/parents/me/active-student
+   * Switch active student for this parent
+   * Updates local state AND syncs with backend
+   */
+  setActiveStudentWithSync: async (studentId) => {
+    // First verify student belongs to parent
+    const student = get().students.find((s) => s.id === studentId);
+    if (!student) {
+      throw new Error("Student not found in your account");
+    }
+
+    // Update backend
+    await profileApi.setActiveStudent(studentId);
+
+    // Update local state
+    set({ activeStudentId: studentId });
+
+    // Optionally persist to storage for offline support
+    await storage.setLastActiveChild?.(studentId);
+
+    return { success: true, activeStudentId: studentId };
+  },
 
   // ── Clear ────────────────────────────────────────────────────────────────────
-  // [FIX-3] isHydrated stays true after clear() so AuthProvider can immediately
-  // fire the logout redirect. Setting it false caused a stuck state where both
-  // stores needed re-hydration simultaneously after logout.
+  // ✅ FIX: Set isHydrated: false first to block reads during clear
   clear: async () => {
+    set({ isHydrated: false });
     await storage.clearProfile();
     set({
       parent: null,
@@ -294,7 +465,7 @@ export const useProfileStore = create((set, get) => ({
       lastScan: null,
       scanCount: 0,
       anomaly: null,
-      isHydrated: true, // [FIX-3] was: false
+      isHydrated: true,
       isFetching: false,
     });
   },

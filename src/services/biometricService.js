@@ -1,5 +1,5 @@
 // src/services/biometricService.js
-import * as LocalAuthentication from 'expo-local-authentication';
+import * as LocalAuthentication from "expo-local-authentication";
 
 /**
  * Check if the device has biometric hardware AND has enrolled biometrics.
@@ -8,51 +8,57 @@ import * as LocalAuthentication from 'expo-local-authentication';
  */
 export async function isBiometricAvailable() {
   try {
-    // Step 1: Does the device have biometric hardware at all?
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    console.log('[Biometric] hasHardware:', hasHardware);
+    console.log("[Biometric] hasHardware:", hasHardware);
 
     if (!hasHardware) {
-      console.warn('[Biometric] No biometric hardware detected.');
+      console.warn("[Biometric] No biometric hardware detected.");
       return false;
     }
 
-    // Step 2: Has the user enrolled any biometrics (fingerprint / face)?
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    console.log('[Biometric] isEnrolled:', isEnrolled);
+    console.log("[Biometric] isEnrolled:", isEnrolled);
 
     if (!isEnrolled) {
-      console.warn('[Biometric] Hardware found but no biometrics enrolled.');
+      console.warn("[Biometric] Hardware found but no biometrics enrolled.");
       return false;
     }
 
-    // Step 3: What types are supported?
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    console.log('[Biometric] supportedTypes:', types);
+    console.log("[Biometric] supportedTypes:", types);
 
     return true;
   } catch (error) {
-    console.error('[Biometric] isBiometricAvailable error:', error);
+    console.error("[Biometric] isBiometricAvailable error:", error);
     return false;
   }
 }
 
 /**
  * Get supported biometric type label for UI display.
- * @returns {Promise<'fingerprint' | 'face' | 'biometric'>}
+ * ✅ FIX: Added IRIS_SCAN support
+ * @returns {Promise<'fingerprint' | 'face' | 'iris' | 'biometric'>}
  */
 export async function getBiometricLabel() {
   try {
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-      return 'face';
+
+    // Order of preference: face > fingerprint > iris > generic
+    if (
+      types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
+    ) {
+      return "face";
     }
     if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-      return 'fingerprint';
+      return "fingerprint";
     }
-    return 'biometric';
+    // ✅ FIX: Add IRIS_SCAN support for Android devices with iris scanner
+    if (types.includes(LocalAuthentication.AuthenticationType.IRIS_SCAN)) {
+      return "iris";
+    }
+    return "biometric";
   } catch {
-    return 'biometric';
+    return "biometric";
   }
 }
 
@@ -62,8 +68,8 @@ export async function getBiometricLabel() {
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 export async function authenticate({
-  promptMessage = 'Scan to unlock the app',
-  cancelLabel = 'Cancel',
+  promptMessage = "Scan to unlock the app",
+  cancelLabel = "Cancel",
   disableDeviceFallback = false,
 } = {}) {
   try {
@@ -71,17 +77,17 @@ export async function authenticate({
       promptMessage,
       cancelLabel,
       disableDeviceFallback,
-      fallbackLabel: 'Use Passcode',
+      fallbackLabel: "Use Passcode",
     });
 
-    console.log('[Biometric] authenticate result:', result);
+    console.log("[Biometric] authenticate result:", result);
 
     if (result.success) {
       return { success: true };
     }
-    return { success: false, error: result.error || 'cancelled' };
+    return { success: false, error: result.error || "cancelled" };
   } catch (error) {
-    console.error('[Biometric] authenticate error:', error);
+    console.error("[Biometric] authenticate error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -92,8 +98,8 @@ export async function authenticate({
  */
 export async function authenticateForAppResume() {
   const result = await authenticate({
-    promptMessage: 'Scan to unlock the app',
-    cancelLabel: 'Cancel',
+    promptMessage: "Scan to unlock the app",
+    cancelLabel: "Cancel",
     disableDeviceFallback: false,
   });
   return result.success;

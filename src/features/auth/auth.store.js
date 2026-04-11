@@ -15,16 +15,12 @@
  *   If expired → isAuthenticated = false → redirect to login screen.
  */
 
+import { registerPushToken } from "@/features/notifications/notification.service";
 import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
+// ✅ FIX: Only bypass in development, never in production
 const __DEV_BYPASS_AUTH__ = false;
-const __DEV_USER__ = {
-  id: "dev-parent-id",
-  phone: "+919999999999",
-  name: "Dev User",
-  is_phone_verified: true,
-};
 
 const isValidUser = (u) =>
   u !== null &&
@@ -37,10 +33,10 @@ export const useAuthStore = create((set, get) => {
 
   return {
     // ── State ─────────────────────────────────────────────────────────────────
-    isAuthenticated: __DEV_BYPASS_AUTH__,
-    isHydrated: __DEV_BYPASS_AUTH__,
+    isAuthenticated: false,
+    isHydrated: false,
     isNewUser: false,
-    parentUser: __DEV_BYPASS_AUTH__ ? __DEV_USER__ : null,
+    parentUser: null,
 
     // ── Hydrate ───────────────────────────────────────────────────────────────
     /**
@@ -49,7 +45,20 @@ export const useAuthStore = create((set, get) => {
      * If session expired → forces re-login.
      */
     hydrate: async () => {
-      if (__DEV_BYPASS_AUTH__) return;
+      if (__DEV_BYPASS_AUTH__) {
+        set({
+          isAuthenticated: true,
+          parentUser: {
+            id: "dev-parent-id",
+            phone: "+919876543210",
+            name: "Priya Sharma", // ✅ Change from "Dev User"
+            is_phone_verified: true,
+          },
+          isNewUser: false,
+          isHydrated: true,
+        });
+        return;
+      }
       if (_hydrationPromise) return _hydrationPromise;
 
       _hydrationPromise = (async () => {
@@ -89,12 +98,6 @@ export const useAuthStore = create((set, get) => {
     },
 
     // ── Login Success ─────────────────────────────────────────────────────────
-    /**
-     * Called by useLoginSuccess (login) and useRegistrationSuccess (register).
-     *
-     * Writes tokens to auth_v1 and user to user_v1 in parallel.
-     * Both keys stay safely under the 2048-byte SecureStore limit.
-     */
     loginSuccess: async (
       user,
       accessToken,
@@ -115,13 +118,11 @@ export const useAuthStore = create((set, get) => {
         isNewUser,
         isHydrated: true,
       });
+
+      registerPushToken();
     },
 
     // ── Set Is New User ───────────────────────────────────────────────────────
-    /**
-     * Called by updates.jsx after onboarding wizard completes.
-     * Flips isNewUser → false to unlock the rest of the app.
-     */
     setIsNewUser: async (val) => {
       const value = Boolean(val);
       set({ isNewUser: value });
@@ -129,10 +130,6 @@ export const useAuthStore = create((set, get) => {
     },
 
     // ── Set Parent User ───────────────────────────────────────────────────────
-    /**
-     * Called by profile.store.fetchAndPersist() after GET /parents/me.
-     * Enriches parentUser with phone + name (login only gives us { id }).
-     */
     setParentUser: async (user) => {
       if (!isValidUser(user)) {
         set({ parentUser: null });
@@ -145,12 +142,8 @@ export const useAuthStore = create((set, get) => {
     },
 
     // ── Logout ────────────────────────────────────────────────────────────────
-    /**
-     * Clears auth_v1 + user_v1 (SecureStore) + profile_v1 (MMKV).
-     * isHydrated stays true so AuthProvider redirect fires immediately.
-     */
     logout: async () => {
-      await storage.clearAll(); // wipes all three keys
+      await storage.clearAll();
       set({
         isAuthenticated: false,
         parentUser: null,

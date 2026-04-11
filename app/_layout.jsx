@@ -17,16 +17,16 @@
  *  11.  [CRITICAL FIX] Rules of Hooks violation fixed — moved useInactivityLock
  *       to separate component that renders after hydration check
  */
-
+import BiometricGate from "@/components/auth/BiometricGate";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useProfileStore } from "@/features/profile/profile.store";
+import { useInactivityLock } from "@/hooks/useInactivityLock";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { initI18n } from "@/i18n";
 import { setLogoutHandler } from "@/lib/api/apiClient";
 import { isDeviceRooted } from "@/lib/security/deviceSecurity";
 import { checkAppIntegrity } from "@/lib/security/integrityCheck";
 import AppProviders from "@/providers";
-import BiometricGate from "@/components/auth/BiometricGate";
-import { useInactivityLock } from "@/hooks/useInactivityLock";
 import { useBiometricStore } from "@/store/biometricStore";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -68,7 +68,7 @@ if (typeof ErrorUtils !== "undefined") {
 }
 
 // Keep splash visible until we explicitly hide it
-SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 const I18N_TIMEOUT_MS = 5_000;
 
@@ -158,6 +158,8 @@ function RootLayoutContent({ handleRootLayout }) {
 
 // ─── Root Layout ──────────────────────────────────────────────────────────────
 export default function RootLayout() {
+    usePushNotifications();
+
     const [i18nReady, setI18nReady] = useState(false);
 
     // ── Store selectors ───────────────────────────────────────────────────────
@@ -249,7 +251,7 @@ export default function RootLayout() {
     // FIX 5: was never hidden in the original
     useEffect(() => {
         if (i18nReady && isHydrated) {
-            SplashScreen.hideAsync().catch(() => {});
+            SplashScreen.hideAsync().catch(() => { });
         }
     }, [i18nReady, isHydrated]);
 
