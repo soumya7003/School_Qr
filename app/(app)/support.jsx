@@ -13,7 +13,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
 const APP_VERSION = '1.0.0';
-const APP_BUILD   = '100';
+const APP_BUILD = '100';
 
 // Fallback FAQs in case translation file is missing
 const DEFAULT_FAQS = [
@@ -114,21 +114,21 @@ export default function SupportScreen() {
                     title={t('support.whatsappTitle')}
                     subtitle={t('support.whatsappSub')}
                     value={t('support.whatsappValue')}
-                    onPress={() => Linking.openURL('https://wa.me/911234567890')} delay={80} C={C}
+                    onPress={() => Linking.openURL('https://wa.me/916294690079')} delay={80} C={C}
                 />
                 <ContactCard
                     iconBg={C.blueBg} iconEl={<Text style={{ fontSize: 16 }}>✉️</Text>}
                     title={t('support.emailTitle')}
                     subtitle={t('support.emailSub')}
                     value={t('support.emailValue')}
-                    onPress={() => Linking.openURL('mailto:support@resqid.in')} delay={110} C={C}
+                    onPress={() => Linking.openURL('mailto:support@getresqid.in')} delay={110} C={C}
                 />
                 <ContactCard
                     iconBg={C.ambBg} iconEl={<Text style={{ fontSize: 16 }}>📞</Text>}
                     title={t('support.callTitle')}
                     subtitle={t('support.callSub')}
                     value={t('support.callValue')}
-                    onPress={() => Linking.openURL('tel:+911234567890')} delay={140} C={C}
+                    onPress={() => Linking.openURL('tel:+916294690079')} delay={140} C={C}
                 />
 
                 {/* ── FAQs ── */}
@@ -154,12 +154,12 @@ export default function SupportScreen() {
                 </Animated.View>
 
                 <Animated.View entering={FadeInDown.delay(460).duration(400)} style={su.legalRow}>
-                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://resqid.in/privacy')} activeOpacity={0.7}>
+                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://getresqid.in/privacy-policy')} activeOpacity={0.7}>
                         <Text style={{ fontSize: 14 }}>🛡️</Text>
                         <Text style={[su.legalBtnText, { color: C.tx2 }]}>{t('support.privacyPolicy')}</Text>
                         <ExternalIcon c={C.primary} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://resqid.in/terms')} activeOpacity={0.7}>
+                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://getresqid.in/terms-of-service')} activeOpacity={0.7}>
                         <Text style={{ fontSize: 14 }}>📋</Text>
                         <Text style={[su.legalBtnText, { color: C.tx2 }]}>{t('support.termsOfUse')}</Text>
                         <ExternalIcon c={C.primary} />

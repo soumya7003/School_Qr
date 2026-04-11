@@ -199,11 +199,9 @@ export const profileApi = {
    * body: { card_number, phone }
    * → { success, student_id, student_name, is_first_child }
    */
-  linkCard: async ({ card_number, phone }) => {
-    if (USE_MOCK) return mockApi.linkCard({ card_number, phone });
+  linkCard: async ({ card_number }) => {
     const res = await apiClient.post("/parents/me/link-card", {
       card_number,
-      phone,
     });
     return res?.data?.data ?? res?.data;
   },

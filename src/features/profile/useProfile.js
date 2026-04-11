@@ -117,9 +117,9 @@ export const useProfile = () => {
     }
   };
 
-  const addChildByCard = async ({ card_number, phone }) => {
+  const addChildByCard = async ({ card_number }) => {
     try {
-      const result = await linkCard({ card_number, phone });
+      const result = await linkCard({ card_number });
       Alert.alert(
         "Child Added! 🎉",
         `${result.student_name || "Your child"} has been added to your account.`,
@@ -205,5 +205,6 @@ export const useProfile = () => {
     fetchChildrenList,
     addChildByCard,
     switchActiveStudent,
+    fetchAndPersist: useProfileStore((s) => s.fetchAndPersist),
   };
 };

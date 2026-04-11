@@ -414,10 +414,10 @@ export const useProfileStore = create((set, get) => ({
     return data?.children ?? data ?? [];
   },
 
-  linkCard: async ({ card_number, phone }) => {
+  linkCard: async ({ card_number }) => {
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
-    const result = await profileApi.linkCard({ card_number, phone });
+    const result = await profileApi.linkCard({ card_number });
     await get().refresh();
     return result;
   },

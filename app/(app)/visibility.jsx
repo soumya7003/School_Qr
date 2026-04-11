@@ -4,7 +4,7 @@
  */
 
 import Screen from '@/components/common/Screen';
-import { useProfileStore } from '@/features/profile/profile.store';
+import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -134,23 +134,29 @@ export default function VisibilityScreen() {
     const router = useRouter();
     const { colors: C } = useTheme();
 
-    const emergencyProfile = useProfileStore((s) => s.students.find((st) => st.id === s.activeStudentId)?.emergency ?? null);
-    const activeStudentId = useProfileStore((s) => s.activeStudentId);
-    const updateVisibility = useProfileStore((s) => s.updateVisibility);
+    // ✅ FIXED: Use hook instead of direct store access
+    const { student, updateVisibility } = useProfile();
 
-    const [selected, setSelected] = useState(emergencyProfile?.visibility ?? 'PUBLIC');
+    const [selected, setSelected] = useState(student?.card_visibility?.visibility ?? 'PUBLIC');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
     const options = getVisibilityOptions(C);
     const current = options.find((o) => o.value === selected);
 
+    // ✅ FIXED: Correct payload structure
     const handleSave = async () => {
         setSaving(true);
         try {
-            await updateVisibility(activeStudentId, { visibility: selected, hidden_fields: [] });
+            await updateVisibility({
+                visibility: selected,
+                hidden_fields: []
+            });
             setSaved(true);
-            setTimeout(() => { setSaved(false); router.back(); }, 1200);
+            setTimeout(() => {
+                setSaved(false);
+                router.back();
+            }, 1200);
         } catch {
             Alert.alert('Save Failed', 'Could not update visibility. Please try again.');
         } finally {
