@@ -195,7 +195,7 @@ apiClient.interceptors.request.use(
     // 4. Device fingerprint and Device ID
     const fingerprint = await getCachedFingerprint();
     config.headers["X-Device-Fingerprint"] = fingerprint;
-    config.headers["X-Device-ID"] = fingerprint; // ✅ ADDED: Required by backend
+    config.headers["X-Device-ID"] = fingerprint;
 
     // 5. App metadata — useful for server-side analytics + version gating
     config.headers["X-App-Version"] =
@@ -262,6 +262,23 @@ apiClient.interceptors.response.use(
       return Promise.reject(new ApiError(ApiCode.NETWORK, null, err));
 
     const { status } = err.response;
+
+    // ✅ ADDED: Debug logging for 400 errors
+    if (status === 400) {
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.error("🔴 API 400 ERROR DEBUG:");
+      console.error("URL:", req?.url);
+      console.error("Method:", req?.method);
+      console.error(
+        "Response Data:",
+        JSON.stringify(err.response?.data, null, 2),
+      );
+      console.error("Request Headers:", JSON.stringify(req?.headers, null, 2));
+      if (req?.data) {
+        console.error("Request Body:", JSON.stringify(req?.data, null, 2));
+      }
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    }
 
     // ── 401: Token expired — refresh + retry ──────────────────────────────────
     if (status === 401 && !req._retry) {

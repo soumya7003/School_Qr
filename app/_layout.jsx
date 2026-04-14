@@ -1,22 +1,11 @@
 /**
  * app/_layout.jsx
  *
- * Fixes vs original InnerLayout version:
- *   1.  RootErrorBoundary added — sits INSIDE AppProviders for theme/i18n access
- *   2.  Stale useEffect deps fixed (hydrateAuth, hydrateProfile, fetchIfStale,
- *       logoutAuth, clearProfile, handleLogout)
- *   3.  Hydration double-run guarded with hasHydrated ref
- *   4.  setLogoutHandler(null) cleanup added — safe in Strict Mode
- *   5.  Splash screen gated on BOTH i18nReady + isHydrated
- *   6.  Security checks (rooted device + app integrity) added
- *   7.  i18n initialisation with 5 s timeout fallback
- *   8.  BiometricGate overlay kept (was silently dropped in the doc version)
- *   9.  setAppReady(true) kept via onLayout on the root View — replaces the
- *       fragile 500 ms setTimeout with a real "navigator painted" signal
- *  10.  AppState profile-refresh listener scoped to authenticated users
- *  11.  [CRITICAL FIX] Rules of Hooks violation fixed — moved useInactivityLock
- *       to separate component that renders after hydration check
+ * FIXED: Proper auth + profile initialization order
+ * FIXED: No race conditions between auth and profile
+ * FIXED: Profile refreshes only when authenticated
  */
+
 import BiometricGate from "@/components/auth/BiometricGate";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useProfileStore } from "@/features/profile/profile.store";
@@ -54,7 +43,7 @@ LogBox.ignoreLogs([
     "Require cycle: src/lib/api/apiClient",
 ]);
 
-// ── Global JS error handler (catches unhandled throws outside React tree) ─────
+// ── Global JS error handler ───────────────────────────────────────────────────
 if (typeof ErrorUtils !== "undefined") {
     const original = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error, isFatal) => {
@@ -73,7 +62,6 @@ SplashScreen.preventAutoHideAsync().catch(() => { });
 const I18N_TIMEOUT_MS = 5_000;
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
-// Placed INSIDE AppProviders so the error screen has access to theme + i18n.
 class RootErrorBoundary extends Component {
     state = { hasError: false, error: null };
 
@@ -109,24 +97,12 @@ class RootErrorBoundary extends Component {
 }
 
 // ─── Root Layout Content ──────────────────────────────────────────────────────
-// Separated to avoid Rules of Hooks violation — this renders AFTER hydration
 function RootLayoutContent({ handleRootLayout }) {
-    // ── Pan handlers from inactivity hook (spread onto root View) ────────────
-    // Now safe to call — no early returns above this in the component tree
     const panHandlers = useInactivityLock();
 
     return (
         <AppProviders>
-            {/* FIX 1: RootErrorBoundary inside providers for theme/i18n access */}
             <RootErrorBoundary>
-                {/*
-                 * FIX 9: onLayout fires after the first render paint — this is
-                 * when the navigator is truly mounted, making it a reliable
-                 * signal for setAppReady instead of a magic 500 ms delay.
-                 *
-                 * panHandlers (from useInactivityLock) reset the inactivity
-                 * timer on every touch without consuming the event.
-                 */}
                 <View
                     style={s.root}
                     onLayout={handleRootLayout}
@@ -143,12 +119,6 @@ function RootLayoutContent({ handleRootLayout }) {
                     </Stack>
 
                     <StatusBar style="auto" />
-
-                    {/*
-                     * FIX 8: BiometricGate kept — renders null when not locked,
-                     * shows the lock overlay when isLocked = true.
-                     * Was silently dropped in the doc version.
-                     */}
                     <BiometricGate />
                 </View>
             </RootErrorBoundary>
@@ -161,6 +131,7 @@ export default function RootLayout() {
     usePushNotifications();
 
     const [i18nReady, setI18nReady] = useState(false);
+    const [authReady, setAuthReady] = useState(false);
 
     // ── Store selectors ───────────────────────────────────────────────────────
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -168,11 +139,12 @@ export default function RootLayout() {
     const hydrateAuth = useAuthStore((s) => s.hydrate);
     const logoutAuth = useAuthStore((s) => s.logout);
     const hydrateProfile = useProfileStore((s) => s.hydrate);
-    const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
     const clearProfile = useProfileStore((s) => s.clear);
+    const onLogin = useProfileStore((s) => s.onLogin);
+    const onLogout = useProfileStore((s) => s.onLogout);
     const setAppReady = useBiometricStore((s) => s.setAppReady);
 
-    // ── Security checks — run once on cold start ──────────────────────────────
+    // ── Security checks ───────────────────────────────────────────────────────
     useEffect(() => {
         (async () => {
             const [rooted, integrityOk] = await Promise.all([
@@ -199,30 +171,62 @@ export default function RootLayout() {
                 );
             }
         })();
-    }, []); // no external deps — pure side-effect on mount
+    }, []);
 
-    // ── Hydration (auth + profile in parallel) ────────────────────────────────
-    // FIX 3: hasHydrated ref prevents double-run in Strict Mode or if store
-    //         functions briefly change identity.
+    // ── FIXED: Auth hydration FIRST, then profile ─────────────────────────────
     const hasHydrated = useRef(false);
     useEffect(() => {
         if (hasHydrated.current) return;
         hasHydrated.current = true;
-        Promise.all([hydrateAuth(), hydrateProfile()]).catch(() => {
-            // Each store handles its own errors — safe to ignore here
+
+        const init = async () => {
+            console.log("[RootLayout] Starting initialization...");
+
+            // Step 1: Hydrate auth store first
+            await hydrateAuth();
+            console.log("[RootLayout] Auth hydrated, isAuthenticated:", isAuthenticated);
+            setAuthReady(true);
+
+            // Step 2: Hydrate profile store (it will wait for auth internally)
+            await hydrateProfile();
+            console.log("[RootLayout] Profile hydrated");
+        };
+
+        init().catch((err) => {
+            console.error("[RootLayout] Init error:", err);
+            setAuthReady(true);
         });
-    }, [hydrateAuth, hydrateProfile]); // FIX 2: deps added
+    }, [hydrateAuth, hydrateProfile, isAuthenticated]);
 
     // ── Wire global logout handler ────────────────────────────────────────────
-    // FIX 4: cleanup sets handler to null — safe under React Strict Mode.
     const handleLogout = useCallback(async () => {
-        await Promise.allSettled([logoutAuth(), clearProfile()]);
-    }, [logoutAuth, clearProfile]); // FIX 2: deps added
+        console.log("[RootLayout] Global logout triggered");
+        await onLogout(); // Clear profile store
+        await logoutAuth(); // Clear auth store
+    }, [logoutAuth, onLogout]);
 
     useEffect(() => {
         setLogoutHandler(handleLogout);
-        return () => setLogoutHandler(null); // FIX 4: cleanup
+        return () => setLogoutHandler(null);
     }, [handleLogout]);
+
+    // ── FIXED: Subscribe to auth changes to sync profile store ─────────────────
+    useEffect(() => {
+        const unsubscribe = useAuthStore.subscribe((state, prevState) => {
+            // On login
+            if (state.isAuthenticated && !prevState.isAuthenticated) {
+                console.log("[RootLayout] Auth changed: LOGIN detected");
+                onLogin();
+            }
+            // On logout
+            if (!state.isAuthenticated && prevState.isAuthenticated) {
+                console.log("[RootLayout] Auth changed: LOGOUT detected");
+                onLogout();
+            }
+        });
+
+        return unsubscribe;
+    }, [onLogin, onLogout]);
 
     // ── i18n init with timeout fallback ──────────────────────────────────────
     useEffect(() => {
@@ -245,42 +249,45 @@ export default function RootLayout() {
             clearTimeout(timer);
             settled = true;
         };
-    }, []); // initI18n is stable — no deps needed
+    }, []);
 
-    // ── Hide splash only when BOTH i18n + store hydration are ready ──────────
-    // FIX 5: was never hidden in the original
+    // ── Hide splash when BOTH i18n + auth are ready ──────────────────────────
     useEffect(() => {
-        if (i18nReady && isHydrated) {
+        if (i18nReady && authReady) {
             SplashScreen.hideAsync().catch(() => { });
         }
-    }, [i18nReady, isHydrated]);
+    }, [i18nReady, authReady]);
 
-    // ── Refresh profile when app comes to foreground (authenticated only) ─────
+    // ── FIXED: Refresh profile when app comes to foreground (ONLY if authenticated) ──
+    const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
+
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated) {
+            console.log("[RootLayout] Not authenticated, skipping foreground refresh");
+            return;
+        }
+
         const sub = AppState.addEventListener("change", (state) => {
-            if (state === "active") fetchIfStale();
+            if (state === "active") {
+                console.log("[RootLayout] App foregrounded, checking stale profile");
+                fetchIfStale();
+            }
         });
         return () => sub.remove();
-    }, [isAuthenticated, fetchIfStale]); // FIX 2: fetchIfStale added
+    }, [isAuthenticated, fetchIfStale]);
 
     // ── Mark navigator as ready on first layout pass ──────────────────────────
-    // FIX 9: replaces the fragile setTimeout(500) with a real paint signal.
     const handleRootLayout = useCallback(() => {
         setAppReady(true);
     }, [setAppReady]);
 
     // ══════════════════════════════════════════════════════════════════════════
-    // FIX 11: Block render until both i18n and hydration are ready
-    // CRITICAL: This MUST come AFTER all hooks to avoid Rules of Hooks violation
+    // Block render until both i18n and auth are ready
     // ══════════════════════════════════════════════════════════════════════════
-    if (!i18nReady || !isHydrated) {
+    if (!i18nReady || !authReady) {
         return <View style={s.loadingContainer} />;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // Now safe to render the full tree with useInactivityLock in child component
-    // ══════════════════════════════════════════════════════════════════════════
     return <RootLayoutContent handleRootLayout={handleRootLayout} />;
 }
 

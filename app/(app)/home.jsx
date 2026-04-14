@@ -5,6 +5,7 @@
  */
 
 import Screen from '@/components/common/Screen';
+import { EssentialHelplines } from '@/components/home/EssentialHelplines';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -310,6 +311,7 @@ export default function HomeScreen() {
           </View>
           <Skeleton width="100%" height={200} radius={18} style={{ marginTop: 12 }} />
           <Skeleton width="100%" height={120} radius={18} style={{ marginTop: 12 }} />
+          <Skeleton width="100%" height={180} radius={18} style={{ marginTop: 12 }} />
         </ScrollView>
       </Screen>
     );
@@ -384,8 +386,13 @@ export default function HomeScreen() {
           <LastScanCard scan={lastScan} totalScans={scanCount} onPress={() => router.push('/(app)/scan-history')} C={C} />
         </Animated2.View>
 
-        {/* Safety Tip */}
+        {/* Essential Helplines */}
         <Animated2.View entering={FadeInDown.delay(240).duration(400)}>
+          <EssentialHelplines C={C} />
+        </Animated2.View>
+
+        {/* Safety Tip */}
+        <Animated2.View entering={FadeInDown.delay(280).duration(400)}>
           <View style={[styles.safetyTip, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
             <Feather name="shield" size={16} color={C.ok} />
             <Text style={[styles.safetyText, { color: C.tx2 }]}>{t('home.safetyTip')}</Text>

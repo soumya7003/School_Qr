@@ -21,12 +21,24 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 // ── Mode detection ────────────────────────────────────────────────────────────
-const USE_MMKV = !false;
+// ✅ FIXED: Properly detect if MMKV is available
+let USE_MMKV = false;
+try {
+  // Only try to use MMKV in production/dev build, not in Expo Go
+  const { MMKV } = require("react-native-mmkv");
+  if (MMKV && !__DEV__) {
+    USE_MMKV = true;
+  }
+} catch {
+  USE_MMKV = false;
+}
+
 const LAST_ACTIVE_CHILD_KEY = "last_active_child_v1";
 
-// ── MMKV — lazy loaded only in production ────────────────────────────────────
+// ── MMKV — lazy loaded only when available ────────────────────────────────────
 let _mmkv = null;
 const getMmkv = () => {
+  if (!USE_MMKV) return null;
   if (_mmkv) return _mmkv;
   try {
     const { MMKV } = require("react-native-mmkv");
@@ -35,6 +47,7 @@ const getMmkv = () => {
     });
     return _mmkv;
   } catch {
+    USE_MMKV = false;
     return null;
   }
 };
@@ -285,7 +298,10 @@ export const storage = Object.freeze({
       const raw = await _profileGet(PK.PROFILE);
       if (!raw) return;
       const snap = JSON.parse(raw);
-      snap.data.students = (snap.data.students ?? []).map((s) =>
+      if (!snap.data.students) {
+        snap.data.students = [];
+      }
+      snap.data.students = snap.data.students.map((s) =>
         s.id === studentId ? { ...s, ...partial } : s,
       );
       await _profileSet(PK.PROFILE, JSON.stringify(snap));
@@ -297,6 +313,7 @@ export const storage = Object.freeze({
       const raw = await _profileGet(PK.PROFILE);
       if (!raw) return true;
       const { savedAt } = JSON.parse(raw);
+      if (!savedAt) return true;
       return Date.now() - new Date(savedAt).getTime() > maxAgeMs;
     } catch {
       return true;
