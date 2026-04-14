@@ -60,6 +60,7 @@ export const useProfileStore = create((set, get) => ({
         isInitialized: true,
         students: [],
         parent: null,
+        activeStudentId: null,
       });
       return;
     }
@@ -77,10 +78,14 @@ export const useProfileStore = create((set, get) => ({
           students = [snap.data.student];
         }
 
+        // 🟢 FIX: Use parent.active_student_id from cache, fallback to first student
+        const activeId =
+          snap.data.parent?.active_student_id ?? students[0]?.id ?? null;
+
         set({
           parent: snap.data.parent ?? null,
           students: students,
-          activeStudentId: students[0]?.id ?? null,
+          activeStudentId: activeId,
           lastScan: snap.data.last_scan ?? null,
           scanCount: snap.data.scan_count ?? 0,
           anomaly: snap.data.anomaly ?? null,
@@ -97,11 +102,16 @@ export const useProfileStore = create((set, get) => ({
           isInitialized: true,
           students: [],
           parent: null,
+          activeStudentId: null,
         });
       }
     } catch (err) {
       console.error("[ProfileStore] hydrate cache read error:", err);
-      set({ isHydrated: true, isInitialized: true });
+      set({
+        isHydrated: true,
+        isInitialized: true,
+        activeStudentId: null,
+      });
     }
 
     // Step 4: Silently refresh in background
@@ -290,14 +300,10 @@ export const useProfileStore = create((set, get) => ({
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
-    // Update both cardVisibility AND emergency profile visibility
+    // 🟢 FIX: Single API call - backend handles both CardVisibility and EmergencyProfile
     await profileApi.updateVisibility(studentId, { visibility, hidden_fields });
 
-    // Also update emergency profile visibility
-    await profileApi.updateProfile(studentId, {
-      emergency: { visibility },
-    });
-
+    // Update local state optimistically
     set((state) => ({
       students: state.students.map((s) =>
         s.id !== studentId
@@ -318,10 +324,13 @@ export const useProfileStore = create((set, get) => ({
       ),
     }));
 
+    // Update storage cache
     await storage.patchProfileStudent(studentId, {
       card_visibility: { visibility, hidden_fields, updated_by_parent: true },
       emergency: { visibility },
     });
+
+    // Silent refresh to sync with server
     get()._silentRefresh();
   },
 
@@ -428,8 +437,12 @@ export const useProfileStore = create((set, get) => ({
   linkCard: async ({ card_number }) => {
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
+
     const result = await profileApi.linkCard({ card_number });
-    await get().refresh();
+
+    // 🟢 FIX: Force immediate full refresh, not silent
+    await get().fetchAndPersist({ silent: false });
+
     return result;
   },
 
@@ -441,8 +454,22 @@ export const useProfileStore = create((set, get) => ({
     if (!student) throw new Error("Student not found");
 
     await profileApi.setActiveStudent(studentId);
+
     set({ activeStudentId: studentId });
-    await storage.setLastActiveChild?.(studentId);
+
+    // 🟢 Persist to storage
+    await storage.setLastActiveChild(studentId);
+
+    // Update parent in storage
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        active_student_id: studentId,
+      };
+      await storage.saveProfile(snap.data);
+    }
+
     return { success: true };
   },
 
@@ -451,7 +478,28 @@ export const useProfileStore = create((set, get) => ({
     if (!isAuthenticated) throw new Error("Not authenticated");
 
     const result = await profileApi.unlinkChildVerify(studentId, otp, nonce);
+
+    // 🟢 FIX: Optimistically update local state with server response
+    set((state) => {
+      const newStudents = state.students.filter((s) => s.id !== studentId);
+      const newActiveId =
+        result.active_student_id ?? newStudents[0]?.id ?? null;
+
+      return {
+        students: newStudents,
+        activeStudentId: newActiveId,
+        parent: state.parent
+          ? {
+              ...state.parent,
+              active_student_id: newActiveId,
+            }
+          : null,
+      };
+    });
+
+    // Force full refresh to sync all screens
     await get().refresh();
+
     return result;
   },
 

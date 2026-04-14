@@ -46,17 +46,36 @@ export function AuthProvider({ children }) {
             return;
         }
 
-        // ─── AUTHENTICATED BUT PROFILE NOT COMPLETE ───────
-        if (!isProfileComplete) {
+        // 🟢 FIX: Handle empty children state
+        const hasChildren = students.length > 0;
+        const hasCompleteProfile = students.some((s) =>
+            s.first_name?.trim() &&
+            s.class?.trim() &&
+            s.setup_stage === 'COMPLETE'
+        );
+
+        // Case 1: Has children but profile incomplete → Updates page
+        if (hasChildren && !hasCompleteProfile) {
             if (segments[1] !== 'updates') {
                 router.replace('/(app)/updates');
             }
             return;
         }
 
-        // ─── PROFILE COMPLETE → NORMAL APP ────────────────
-        if (!inAppGroup) {
-            router.replace('/(app)/home');
+        // Case 2: No children at all → Settings/Add-child page
+        if (!hasChildren) {
+            // Don't redirect if already on settings or add-child
+            if (segments[1] !== 'settings' && segments[1] !== 'add-child') {
+                router.replace('/(app)/settings');
+            }
+            return;
+        }
+
+        // Case 3: Profile complete → Normal app flow
+        if (hasCompleteProfile) {
+            if (!inAppGroup) {
+                router.replace('/(app)/home');
+            }
         }
 
     }, [
@@ -65,7 +84,7 @@ export function AuthProvider({ children }) {
         isHydrated,
         profileHydrated,
         segments,
-        isProfileComplete,
+        students.length, // 🟢 Add students.length as dependency
     ]);
 
     return (

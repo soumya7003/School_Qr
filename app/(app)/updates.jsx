@@ -1,35 +1,19 @@
+// app/(app)/updates.jsx
+// Replace the entire file with this fixed version
+
 /**
  * app/(app)/updates.jsx
  *
- * REFACTOR NOTES:
- * ─────────────────────────────────────────────────────────────────────────────
- * 1. KEYBOARD BUG FIX — KeyboardAvoidingView now wraps the *entire* screen
- *    content (header, step bar, scroll). ProgressIndicator / InstructionBanner
- *    were previously outside KAV which broke layout on Android.
- *
- * 2. CONTACT MODAL KEYBOARD FIX — Modal now uses a ScrollView internally so
- *    the phone / relationship fields are never hidden behind the soft keyboard.
- *    KAV behavior switched to "padding" on both platforms inside the modal sheet.
- *
- * 3. ONBOARDING GATE — isNewUser blocks the native back-button and hides the
- *    header back chevron. Users MUST complete all 4 steps before the app
- *    redirects them to home.
- *
- * 4. INSTRUCTION BANNERS — always visible (not just for new users). Each step
- *    has a concise banner with a title, body copy, and a "do / don't" hint row.
- *
- * 5. PROGRESS BAR moved inside KAV so it participates in keyboard layout.
- *
- * 6. PHOTO UPLOAD — Professional avatar upload section added to Step 0 with
- *    preview, upload button, and clear guidance.
- *
- * 7. STEP INDICATOR REDESIGN — Cleaner, more professional step bar with better
- *    visual hierarchy and smooth transitions.
- * ─────────────────────────────────────────────────────────────────────────────
+ * FIXES APPLIED:
+ * - Photo upload via Cloudflare R2 presigned URLs
+ * - Empty state handling (redirects to settings)
+ * - Field name mismatch (photo_url vs profile_image)
+ * - Guard against null student
  */
 
 import Screen from '@/components/common/Screen';
 import { useAuthStore } from '@/features/auth/auth.store';
+import { profileApi } from '@/features/profile/profile.api';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing, typography } from '@/theme';
@@ -60,7 +44,7 @@ import {
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useShallow } from 'zustand/react/shallow';
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
+// ── Icons (unchanged) ─────────────────────────────────────────────────────────
 const CheckSvg = ({ c = '#fff', s = 16 }) => (
   <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
     <Path d="M20 6L9 17l-5-5" stroke={c} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
@@ -115,7 +99,7 @@ const UploadSvg = ({ c, s = 18 }) => (
   </Svg>
 );
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants (unchanged) ─────────────────────────────────────────────────────
 const BLOOD_GROUPS = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−', 'Unknown'];
 const BLOOD_GROUP_TO_ENUM = {
   'A+': 'A_POS', 'A−': 'A_NEG', 'A-': 'A_NEG', 'B+': 'B_POS', 'B−': 'B_NEG', 'B-': 'B_NEG',
@@ -129,7 +113,7 @@ const BLOOD_GROUP_FROM_ENUM = {
 };
 const PRIORITY_COLORS = ['#F97316', '#FBBF24', '#60A5FA', '#A78BFA', '#22C55E'];
 
-// Step meta — used by StepBar + InstructionBanner from the same source of truth
+// Step meta (unchanged)
 const STEPS = [
   {
     id: 0,
@@ -185,7 +169,7 @@ const STEPS = [
   },
 ];
 
-// ── Professional Step Bar ─────────────────────────────────────────────────────
+// ── StepBar (unchanged) ───────────────────────────────────────────────────────
 function StepBar({ current, completed, C }) {
   return (
     <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
@@ -197,7 +181,6 @@ function StepBar({ current, completed, C }) {
 
           return (
             <View key={step.id} style={sb.stepItem}>
-              {/* Connector line */}
               {i < STEPS.length - 1 && (
                 <View style={sb.connectorWrapper}>
                   <View
@@ -209,8 +192,6 @@ function StepBar({ current, completed, C }) {
                   />
                 </View>
               )}
-
-              {/* Step circle */}
               <View style={[
                 sb.circleContainer,
                 isActive && sb.circleActive,
@@ -234,8 +215,6 @@ function StepBar({ current, completed, C }) {
                   )}
                 </View>
               </View>
-
-              {/* Label */}
               <Text style={[
                 sb.label,
                 { color: C.tx3 },
@@ -312,13 +291,11 @@ const sb = StyleSheet.create({
   },
 });
 
-// ── Photo Upload Component (Fixed) ─────────────────────────────────────────────────────
-function PhotoUpload({ imageUri, onImageChange, C }) {
-  const [uploading, setUploading] = useState(false);
+// ── Photo Upload Component ─────────────────────────────────────────────────────
+function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
   const [hasPermission, setHasPermission] = useState(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // Check permissions on mount and cache them
   useEffect(() => {
     checkPermissions();
   }, []);
@@ -326,7 +303,6 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
   const checkPermissions = async () => {
     const { status: cameraStatus } = await ImagePicker.getCameraPermissionsAsync();
     const { status: libraryStatus } = await ImagePicker.getMediaLibraryPermissionsAsync();
-
     setHasPermission({
       camera: cameraStatus === 'granted',
       library: libraryStatus === 'granted',
@@ -334,61 +310,28 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
   };
 
   const requestLibraryPermission = async () => {
-    // If we already know permission is granted, skip the request
-    if (hasPermission?.library) {
-      return true;
-    }
-
+    if (hasPermission?.library) return true;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    // Update cached permission state
     setHasPermission(prev => ({ ...prev, library: status === 'granted' }));
-
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please allow access to your photo library to upload a profile picture.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Settings',
-            onPress: () => {
-              // Optionally link to settings
-              Linking.openSettings?.();
-            }
-          },
-        ]
-      );
+      Alert.alert('Permission Required', 'Please allow access to your photo library to upload a profile picture.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => Linking.openSettings?.() }
+      ]);
       return false;
     }
     return true;
   };
 
   const requestCameraPermission = async () => {
-    // If we already know permission is granted, skip the request
-    if (hasPermission?.camera) {
-      return true;
-    }
-
+    if (hasPermission?.camera) return true;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-
-    // Update cached permission state
     setHasPermission(prev => ({ ...prev, camera: status === 'granted' }));
-
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please allow access to your camera to take a profile picture.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Settings',
-            onPress: () => {
-              Linking.openSettings?.();
-            }
-          },
-        ]
-      );
+      Alert.alert('Permission Required', 'Please allow access to your camera to take a profile picture.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Settings', onPress: () => Linking.openSettings?.() }
+      ]);
       return false;
     }
     return true;
@@ -397,18 +340,14 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
   const pickImage = async () => {
     const hasPermission = await requestLibraryPermission();
     if (!hasPermission) return;
-
     try {
-      setUploading(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        // Don't ask for permission again if already granted
         allowsMultipleSelection: false,
       });
-
       if (!result.canceled && result.assets[0]) {
         Animated.sequence([
           Animated.timing(fadeAnim, { toValue: 0.5, duration: 100, useNativeDriver: true }),
@@ -417,25 +356,19 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
         onImageChange(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Image pick error:', error);
-      Alert.alert('Error', 'Failed to upload image. Please try again.');
-    } finally {
-      setUploading(false);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
   const takePhoto = async () => {
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) return;
-
     try {
-      setUploading(true);
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
-
       if (!result.canceled && result.assets[0]) {
         Animated.sequence([
           Animated.timing(fadeAnim, { toValue: 0.5, duration: 100, useNativeDriver: true }),
@@ -444,41 +377,30 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
         onImageChange(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Camera error:', error);
       Alert.alert('Error', 'Failed to take photo. Please try again.');
-    } finally {
-      setUploading(false);
     }
   };
 
   const handleRemove = () => {
-    Alert.alert(
-      'Remove Photo',
-      'Are you sure you want to remove this photo?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            Animated.timing(fadeAnim, {
-              toValue: 0,
-              duration: 150,
-              useNativeDriver: true
-            }).start(() => {
+    Alert.alert('Remove Photo', 'Are you sure you want to remove this photo?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true })
+            .start(() => {
               onImageChange(null);
               fadeAnim.setValue(1);
             });
-          }
-        },
-      ]
-    );
+        }
+      },
+    ]);
   };
 
   return (
     <View style={pu.container}>
       <Text style={[pu.label, { color: C.tx3 }]}>PROFILE PHOTO</Text>
-
       <View style={pu.content}>
         <Animated.View style={[pu.previewContainer, { opacity: fadeAnim }]}>
           {imageUri ? (
@@ -487,6 +409,7 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
               <TouchableOpacity
                 style={[pu.removeBtn, { backgroundColor: C.red, borderColor: '#fff' }]}
                 onPress={handleRemove}
+                disabled={uploading}
               >
                 <XSvg c="#fff" s={12} />
               </TouchableOpacity>
@@ -496,13 +419,10 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
               <View style={[pu.placeholderIcon, { backgroundColor: C.primaryBg }]}>
                 <CameraSvg c={C.primary} s={28} />
               </View>
-              <Text style={[pu.placeholderText, { color: C.tx3 }]}>
-                No photo uploaded
-              </Text>
+              <Text style={[pu.placeholderText, { color: C.tx3 }]}>No photo uploaded</Text>
             </View>
           )}
         </Animated.View>
-
         <View style={pu.actions}>
           <TouchableOpacity
             style={[pu.actionBtn, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}
@@ -513,7 +433,6 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
             <CameraSvg c={C.primary} s={16} />
             <Text style={[pu.actionText, { color: C.primary }]}>Camera</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={[pu.actionBtn, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}
             onPress={pickImage}
@@ -524,14 +443,12 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
             <Text style={[pu.actionText, { color: C.primary }]}>Gallery</Text>
           </TouchableOpacity>
         </View>
-
         {uploading && (
           <View style={[pu.loadingOverlay, { backgroundColor: 'rgba(255,255,255,0.8)' }]}>
             <ActivityIndicator size="small" color={C.primary} />
           </View>
         )}
       </View>
-
       <View style={[pu.hint, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
         <InfoSvg c={C.blue} s={12} />
         <Text style={[pu.hintText, { color: C.blue }]}>
@@ -541,119 +458,38 @@ function PhotoUpload({ imageUri, onImageChange, C }) {
     </View>
   );
 }
-
 const pu = StyleSheet.create({
-  container: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  content: {
-    position: 'relative',
-  },
-  previewContainer: {
-    alignItems: 'center',
-  },
-  previewWrapper: {
-    position: 'relative',
-  },
+  container: { gap: 8 },
+  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  content: { position: 'relative' },
+  previewContainer: { alignItems: 'center' },
+  previewWrapper: { position: 'relative' },
   preview: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
   },
   removeBtn: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', top: 0, right: 0, width: 28, height: 28, borderRadius: 14,
+    borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center',
   },
   placeholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    width: 120, height: 120, borderRadius: 60, borderWidth: 2, borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center', gap: 6,
   },
-  placeholderIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 12,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  actionText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  placeholderIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  placeholderText: { fontSize: 11, fontWeight: '500' },
+  actions: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 12 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
+  actionText: { fontSize: 13, fontWeight: '600' },
   loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 60,
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center', borderRadius: 60,
   },
-  hint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 8,
-  },
-  hintText: {
-    fontSize: 11,
-    flex: 1,
-    lineHeight: 16,
-  },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, marginTop: 8 },
+  hintText: { fontSize: 11, flex: 1, lineHeight: 16 },
 });
 
-// ── Instruction Banner ─────────────────────────────────────────────────────────
+// ── Instruction Banner (unchanged) ─────────────────────────────────────────────
 function InstructionBanner({ currentStep, isNewUser, C }) {
   const meta = STEPS[currentStep]?.banner ?? STEPS[0].banner;
   return (
@@ -706,33 +542,20 @@ const ib = StyleSheet.create({
   hintText: { fontSize: 11, lineHeight: 16, flex: 1 },
 });
 
-// ── Progress Bar ──────────────────────────────────────────────────────────────
+// ── Progress Bar (unchanged) ──────────────────────────────────────────────────
 function ProgressBar({ currentStep, totalSteps = 4, C }) {
   const progress = ((currentStep + 1) / totalSteps) * 100;
   const animatedProgress = useRef(new Animated.Value(progress)).current;
-
   useEffect(() => {
-    Animated.spring(animatedProgress, {
-      toValue: progress,
-      useNativeDriver: false,
-      tension: 50,
-      friction: 7,
-    }).start();
+    Animated.spring(animatedProgress, { toValue: progress, useNativeDriver: false, tension: 50, friction: 7 }).start();
   }, [progress]);
-
   return (
     <View style={[pb.track, { backgroundColor: C.s3 }]}>
       <Animated.View
-        style={[
-          pb.fill,
-          {
-            width: animatedProgress.interpolate({
-              inputRange: [0, 100],
-              outputRange: ['0%', '100%'],
-            }),
-            backgroundColor: C.primary
-          }
-        ]}
+        style={[pb.fill, {
+          width: animatedProgress.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
+          backgroundColor: C.primary
+        }]}
       />
     </View>
   );
@@ -742,18 +565,13 @@ const pb = StyleSheet.create({
   fill: { height: '100%', borderRadius: 2 },
 });
 
-// ── Field ─────────────────────────────────────────────────────────────────────
+// ── Field (unchanged) ─────────────────────────────────────────────────────────
 function Field({ label, value, onChangeText, placeholder, multiline, keyboardType, hint, required, C, inputRef: externalRef, onSubmitEditing, returnKeyType }) {
   const internalRef = useRef(null);
   const ref = externalRef ?? internalRef;
   const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, { toValue: value ? 1 : 0, duration: 160, useNativeDriver: false }).start();
-  }, [value]);
-
+  useEffect(() => { Animated.timing(anim, { toValue: value ? 1 : 0, duration: 160, useNativeDriver: false }).start(); }, [value]);
   const borderColor = anim.interpolate({ inputRange: [0, 1], outputRange: [C.bd2, C.primary] });
-
   return (
     <TouchableWithoutFeedback onPress={() => ref.current?.focus()}>
       <View style={fld.wrap}>
@@ -801,7 +619,7 @@ const fld = StyleSheet.create({
   hint: { fontSize: 11, fontStyle: 'italic' },
 });
 
-// ── Section Card ──────────────────────────────────────────────────────────────
+// ── Section Card (unchanged) ──────────────────────────────────────────────────
 function SectionCard({ icon, title, subtitle, children, accent, C }) {
   const ac = accent ?? C.primary;
   return (
@@ -826,7 +644,7 @@ const sc = StyleSheet.create({
   body: { padding: 16, gap: 14 },
 });
 
-// ── Blood Picker ──────────────────────────────────────────────────────────────
+// ── Blood Picker (unchanged) ──────────────────────────────────────────────────
 function BloodPicker({ value, onChange, C }) {
   return (
     <View style={{ gap: 10 }}>
@@ -847,9 +665,7 @@ function BloodPicker({ value, onChange, C }) {
       </View>
       {!value && (
         <View style={[bl.warn, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
-          <Text style={[bl.warnText, { color: C.amb }]}>
-            ⚠️  Tap a blood group above. This is shown to first responders.
-          </Text>
+          <Text style={[bl.warnText, { color: C.amb }]}>⚠️  Tap a blood group above. This is shown to first responders.</Text>
         </View>
       )}
     </View>
@@ -863,7 +679,7 @@ const bl = StyleSheet.create({
   warnText: { fontSize: 12, fontWeight: '600' },
 });
 
-// ── Contact Card ──────────────────────────────────────────────────────────────
+// ── Contact Card (unchanged) ──────────────────────────────────────────────────
 function ContactCard({ contact, index, onEdit, onDelete, C }) {
   const pc = PRIORITY_COLORS[(contact.priority - 1) % PRIORITY_COLORS.length];
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -884,9 +700,7 @@ function ContactCard({ contact, index, onEdit, onDelete, C }) {
             </View>
           )}
         </View>
-        <Text style={[ccc.meta, { color: C.tx3 }]}>
-          {contact.relationship || 'Contact'} · {contact.phone}
-        </Text>
+        <Text style={[ccc.meta, { color: C.tx3 }]}>{contact.relationship || 'Contact'} · {contact.phone}</Text>
       </View>
       <View style={ccc.actions}>
         <TouchableOpacity style={[ccc.btn, { backgroundColor: C.s4, borderColor: C.bd }]} onPress={() => onEdit(contact)} activeOpacity={0.7}>
@@ -912,13 +726,12 @@ const ccc = StyleSheet.create({
   btn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });
 
-// ── Contact Modal ─────────────────────────────────────────────────────────────
+// ── Contact Modal (unchanged) ─────────────────────────────────────────────────
 function ContactModal({ visible, contact, onSave, onClose, C }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [rel, setRel] = useState('');
-
   const phoneRef = useRef(null);
   const relRef = useRef(null);
 
@@ -948,72 +761,22 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={cm.overlay} onPress={Keyboard.dismiss}>
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={cm.kavContainer}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
+        <KeyboardAvoidingView behavior="padding" style={cm.kavContainer} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
           <Pressable style={[cm.sheet, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
             <View style={[cm.handle, { backgroundColor: C.s4 }]} />
-
             <View style={cm.sheetHead}>
               <View style={{ flex: 1 }}>
-                <Text style={[cm.sheetTitle, { color: C.tx }]}>
-                  {isEditing ? 'Edit Contact' : 'Add Emergency Contact'}
-                </Text>
-                <Text style={[cm.sheetSub, { color: C.tx3 }]}>
-                  This person will be called when your child's card is scanned.
-                </Text>
+                <Text style={[cm.sheetTitle, { color: C.tx }]}>{isEditing ? 'Edit Contact' : 'Add Emergency Contact'}</Text>
+                <Text style={[cm.sheetSub, { color: C.tx3 }]}>This person will be called when your child's card is scanned.</Text>
               </View>
-              <TouchableOpacity
-                style={[cm.closeBtn, { backgroundColor: C.s3, borderColor: C.bd }]}
-                onPress={onClose}
-              >
+              <TouchableOpacity style={[cm.closeBtn, { backgroundColor: C.s3, borderColor: C.bd }]} onPress={onClose}>
                 <XSvg c={C.tx3} s={14} />
               </TouchableOpacity>
             </View>
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={cm.fields}
-            >
-              <Field
-                label="Contact Name"
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g., Priya Sharma"
-                required
-                hint="Full name as saved in the contact's phone"
-                C={C}
-                onSubmitEditing={() => phoneRef.current?.focus()}
-                returnKeyType="next"
-              />
-              <Field
-                label="Mobile Number"
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="e.g., 98765 43210"
-                keyboardType="phone-pad"
-                required
-                hint="10-digit Indian number. International: start with +"
-                C={C}
-                inputRef={phoneRef}
-                onSubmitEditing={() => relRef.current?.focus()}
-                returnKeyType="next"
-              />
-              <Field
-                label="Relationship"
-                value={rel}
-                onChangeText={setRel}
-                placeholder="e.g., Mother, Father, Uncle"
-                hint="Optional — helps responders know who they're speaking to"
-                C={C}
-                inputRef={relRef}
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
-
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={cm.fields}>
+              <Field label="Contact Name" value={name} onChangeText={setName} placeholder="e.g., Priya Sharma" required hint="Full name as saved in the contact's phone" C={C} onSubmitEditing={() => phoneRef.current?.focus()} returnKeyType="next" />
+              <Field label="Mobile Number" value={phone} onChangeText={setPhone} placeholder="e.g., 98765 43210" keyboardType="phone-pad" required hint="10-digit Indian number. International: start with +" C={C} inputRef={phoneRef} onSubmitEditing={() => relRef.current?.focus()} returnKeyType="next" />
+              <Field label="Relationship" value={rel} onChangeText={setRel} placeholder="e.g., Mother, Father, Uncle" hint="Optional — helps responders know who they're speaking to" C={C} inputRef={relRef} returnKeyType="done" onSubmitEditing={Keyboard.dismiss} />
               <View style={[cm.rulesBox, { backgroundColor: C.s3, borderColor: C.bd }]}>
                 <Text style={[cm.rulesTitle, { color: C.tx2 }]}>Phone number rules</Text>
                 <Text style={[cm.ruleItem, { color: C.tx3 }]}>✓  Must be a reachable mobile number</Text>
@@ -1021,16 +784,9 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
                 <Text style={[cm.ruleItem, { color: C.tx3 }]}>✕  No landlines, no WhatsApp-only numbers</Text>
               </View>
             </ScrollView>
-
-            <TouchableOpacity
-              style={[cm.saveBtn, { backgroundColor: C.primary }]}
-              onPress={handleSave}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={[cm.saveBtn, { backgroundColor: C.primary }]} onPress={handleSave} activeOpacity={0.85}>
               <CheckSvg c="#fff" s={14} />
-              <Text style={cm.saveBtnText}>
-                {isEditing ? 'Save Changes' : 'Add Contact'}
-              </Text>
+              <Text style={cm.saveBtnText}>{isEditing ? 'Save Changes' : 'Add Contact'}</Text>
             </TouchableOpacity>
           </Pressable>
         </KeyboardAvoidingView>
@@ -1041,12 +797,7 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
 const cm = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   kavContainer: { width: '100%' },
-  sheet: {
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    borderWidth: 1, borderBottomWidth: 0,
-    padding: 20, paddingBottom: Platform.OS === 'ios' ? 36 : 20,
-    gap: 14, maxHeight: '90%',
-  },
+  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, padding: 20, paddingBottom: Platform.OS === 'ios' ? 36 : 20, gap: 14, maxHeight: '90%' },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   sheetTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
@@ -1060,21 +811,18 @@ const cm = StyleSheet.create({
   saveBtnText: { fontSize: 14.5, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
 
-// ── Review Row ────────────────────────────────────────────────────────────────
+// ── Review Row (unchanged) ────────────────────────────────────────────────────
 function ReviewRow({ label, value, required, C }) {
   const empty = !value || value === 'Not set' || value === 'None';
   return (
     <View style={[rv.row, { borderBottomColor: C.bd }]}>
       <Text style={[rv.label, { color: C.tx3 }]}>{label}</Text>
       <View style={{ flex: 2, alignItems: 'flex-end' }}>
-        {empty && required
-          ? (
-            <View style={[rv.missingChip, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
-              <Text style={[rv.missingText, { color: C.red }]}>Missing</Text>
-            </View>
-          )
-          : <Text style={[rv.value, { color: empty ? C.tx3 : C.tx }, empty && rv.empty]}>{value || '—'}</Text>
-        }
+        {empty && required ? (
+          <View style={[rv.missingChip, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
+            <Text style={[rv.missingText, { color: C.red }]}>Missing</Text>
+          </View>
+        ) : <Text style={[rv.value, { color: empty ? C.tx3 : C.tx }, empty && rv.empty]}>{value || '—'}</Text>}
       </View>
     </View>
   );
@@ -1088,36 +836,20 @@ const rv = StyleSheet.create({
   missingText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
 });
 
-// ── Nav Footer ────────────────────────────────────────────────────────────────
+// ── Nav Footer (unchanged) ────────────────────────────────────────────────────
 function NavFooter({ step, isNewUser, onBack, onNext, nextLabel, saving, canProceed, C }) {
   const isFirst = step === 0;
   return (
     <View style={[nf.bar, { backgroundColor: C.s2, borderTopColor: C.bd }]}>
       {(!isNewUser || step > 0) ? (
-        <TouchableOpacity
-          style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]}
-          onPress={onBack}
-          disabled={isFirst}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]} onPress={onBack} disabled={isFirst} activeOpacity={0.7}>
           <ChevLeft c={C.tx2} s={16} />
           <Text style={[nf.backText, { color: C.tx2 }]}>Back</Text>
         </TouchableOpacity>
-      ) : (
-        <View style={nf.backBtn} />
-      )}
-      <TouchableOpacity
-        style={[nf.nextBtn, { backgroundColor: C.primary }, (saving || !canProceed) && { opacity: 0.45 }]}
-        onPress={onNext}
-        disabled={saving || !canProceed}
-        activeOpacity={0.85}
-      >
+      ) : <View style={nf.backBtn} />}
+      <TouchableOpacity style={[nf.nextBtn, { backgroundColor: C.primary }, (saving || !canProceed) && { opacity: 0.45 }]} onPress={onNext} disabled={saving || !canProceed} activeOpacity={0.85}>
         <Text style={nf.nextText}>{saving ? 'Saving…' : nextLabel}</Text>
-        {!saving && (
-          step < 3
-            ? <ChevRight c="#fff" s={15} />
-            : <Text style={{ fontSize: 14 }}>⚡</Text>
-        )}
+        {!saving && (step < 3 ? <ChevRight c="#fff" s={15} /> : <Text style={{ fontSize: 14 }}>⚡</Text>)}
       </TouchableOpacity>
     </View>
   );
@@ -1138,6 +870,9 @@ export default function UpdatesScreen() {
   const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
   const patchStudent = useProfileStore((s) => s.patchStudent);
   const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
+  const students = useProfileStore((s) => s.students);
+  const isHydrated = useProfileStore((s) => s.isHydrated);
+
   const student = useProfileStore(
     useShallow((s) => s.students.find((st) => st.id === s.activeStudentId) ?? s.students[0] ?? null)
   );
@@ -1147,13 +882,14 @@ export default function UpdatesScreen() {
   const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // ── Form state ──
+  // 🟢 FIX: Use photo_url from backend
   const [firstName, setFirstName] = useState(student?.first_name ?? '');
   const [lastName, setLastName] = useState(student?.last_name ?? '');
   const [cls, setCls] = useState(student?.class ?? '');
   const [section, setSection] = useState(student?.section ?? '');
-  const [profileImage, setProfileImage] = useState(student?.profile_image ?? null);
+  const [profileImage, setProfileImage] = useState(student?.photo_url ?? null);
   const [bloodGroup, setBloodGroup] = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
   const [allergies, setAllergies] = useState(ep?.allergies ?? '');
   const [conditions, setConditions] = useState(ep?.conditions ?? '');
@@ -1169,13 +905,24 @@ export default function UpdatesScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // ── Sync from store ──
+  // 🟢 FIX: Redirect if no children (not new user)
+  useEffect(() => {
+    if (isHydrated && !isNewUser && students.length === 0) {
+      Alert.alert(
+        'No Children Linked',
+        'Please add a child from Settings to continue.',
+        [{ text: 'Go to Settings', onPress: () => router.replace('/settings') }]
+      );
+    }
+  }, [students.length, isHydrated, isNewUser]);
+
+  // Sync from store
   useEffect(() => {
     setFirstName(student?.first_name ?? '');
     setLastName(student?.last_name ?? '');
     setCls(student?.class ?? '');
     setSection(student?.section ?? '');
-    setProfileImage(student?.profile_image ?? null);
+    setProfileImage(student?.photo_url ?? null); // 🟢 FIX: photo_url
   }, [student]);
 
   useEffect(() => {
@@ -1190,32 +937,21 @@ export default function UpdatesScreen() {
 
   useEffect(() => { setContacts(rawContacts ?? []); }, [rawContacts]);
 
-  // ── Block Android hardware back during onboarding ──
+  // Block Android back during onboarding
   useEffect(() => {
     if (!isNewUser) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (step > 0) { goBack(); return true; }
-      Alert.alert(
-        'Complete Profile First',
-        'You need to add your child\'s details before you can use RESQID.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Complete Profile First', 'You need to add your child\'s details before you can use RESQID.', [{ text: 'OK' }]);
       return true;
     });
     return () => sub.remove();
   }, [isNewUser, step]);
 
-  // ── Scroll to top on step change ──
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, [step]);
+  useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: true }); }, [step]);
 
-  // ── Can proceed guard ──
-  const canProceed = step === 0
-    ? firstName.trim().length > 0 && lastName.trim().length > 0
-    : true;
+  const canProceed = step === 0 ? firstName.trim().length > 0 && lastName.trim().length > 0 : true;
 
-  // ── Step transitions ──
   const transitionStep = (n) => {
     Keyboard.dismiss();
     Animated.parallel([
@@ -1246,17 +982,80 @@ export default function UpdatesScreen() {
 
   const goBack = () => { if (step > 0) transitionStep(step - 1); };
 
-  // ── Submit ──
+  // 🟢 FIX: Upload photo to Cloudflare R2
+  const uploadPhotoToCloudflare = async (localUri) => {
+    if (!localUri) return null;
+    if (!localUri.startsWith('file://')) return localUri; // Already uploaded
+
+    try {
+      // Get file info
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const fileSize = blob.size;
+      const contentType = blob.type || 'image/jpeg';
+
+      // Step 1: Get presigned URL
+      const { uploadUrl, publicUrl, key, nonce } = await profileApi.generateStudentPhotoUploadUrl(
+        student.id,
+        contentType,
+        fileSize
+      );
+
+      // Step 2: Upload to R2
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: { 'Content-Type': contentType }
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed');
+      }
+
+      // Step 3: Confirm upload
+      const { photoUrl } = await profileApi.confirmStudentPhotoUpload(
+        student.id,
+        key,
+        nonce
+      );
+
+      return photoUrl;
+    } catch (error) {
+      console.error('Photo upload error:', error);
+      throw error;
+    }
+  };
+
+  // Submit
   const handleSubmitAll = async () => {
+    if (!student) {
+      Alert.alert('Error', 'No student selected');
+      return;
+    }
+
     setSaving(true);
     try {
+      // 🟢 Upload photo if new
+      let finalPhotoUrl = profileImage;
+      if (profileImage && profileImage.startsWith('file://')) {
+        setUploadingPhoto(true);
+        try {
+          finalPhotoUrl = await uploadPhotoToCloudflare(profileImage);
+        } catch (uploadErr) {
+          Alert.alert('Photo Upload Failed', 'Could not upload photo. Please try again.');
+          return;
+        } finally {
+          setUploadingPhoto(false);
+        }
+      }
+
       await patchStudent(student.id, {
         student: {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           class: cls.trim(),
           section: section.trim(),
-          profile_image: profileImage,
+          photo_url: finalPhotoUrl, // 🟢 FIX: Use photo_url
         },
         emergency: {
           blood_group: (BLOOD_GROUP_TO_ENUM[bloodGroup] ?? bloodGroup) || undefined,
@@ -1264,9 +1063,7 @@ export default function UpdatesScreen() {
           conditions: conditions.trim(),
           medications: medications.trim(),
           doctor_name: doctorName.trim(),
-          ...(doctorPhone.trim()
-            ? { doctor_phone: doctorPhone.trim().startsWith('+') ? doctorPhone.trim() : `+91${doctorPhone.trim().replace(/^0/, '')}` }
-            : {}),
+          ...(doctorPhone.trim() ? { doctor_phone: doctorPhone.trim().startsWith('+') ? doctorPhone.trim() : `+91${doctorPhone.trim().replace(/^0/, '')}` } : {}),
           notes: notes.trim(),
         },
         contacts: contacts.map((c, i) => ({
@@ -1288,273 +1085,134 @@ export default function UpdatesScreen() {
       }
     } catch (err) {
       console.error('Save error:', err);
-      Alert.alert('Save Failed', 'Something went wrong. Please try again.');
+      Alert.alert('Save Failed', err?.message || 'Something went wrong. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Contact handlers ──
   const handleSaveContact = (data) => {
     if (editingContact?.id) {
       setContacts((p) => p.map((c) => c.id === editingContact.id ? { ...c, ...data } : c));
     } else {
-      setContacts((p) => [
-        ...p,
-        { id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`, ...data, priority: p.length + 1, is_active: true },
-      ]);
+      setContacts((p) => [...p, { id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`, ...data, priority: p.length + 1, is_active: true }]);
     }
   };
 
   const handleDeleteContact = (contact) => {
-    Alert.alert(
-      'Remove Contact',
-      `Remove ${contact.name} from emergency contacts?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () =>
-            setContacts((p) =>
-              p.filter((c) => c.id !== contact.id).map((c, i) => ({ ...c, priority: i + 1 }))
-            ),
-        },
-      ]
-    );
+    Alert.alert('Remove Contact', `Remove ${contact.name} from emergency contacts?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => setContacts((p) => p.filter((c) => c.id !== contact.id).map((c, i) => ({ ...c, priority: i + 1 }))) },
+    ]);
   };
 
   const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
-
-  // ── Derived labels ──
-  const nextLabel = step === 3
-    ? (isNewUser ? 'Activate Card' : 'Save Changes')
-    : 'Continue';
-
-  const headerTitle = isNewUser
-    ? 'Complete Your Profile'
-    : student?.first_name
-      ? `Edit ${student.first_name}'s Profile`
-      : 'Edit Profile';
-
+  const nextLabel = step === 3 ? (isNewUser ? 'Activate Card' : 'Save Changes') : 'Continue';
+  const headerTitle = isNewUser ? 'Complete Your Profile' : student?.first_name ? `Edit ${student.first_name}'s Profile` : 'Edit Profile';
   const classLabel = cls && section ? `Class ${cls} · ${section}` : cls ? `Class ${cls}` : 'No class set';
+
+  // 🟢 Empty state guard
+  if (!student && !isNewUser && students.length === 0) {
+    return (
+      <Screen bg={C.bg} edges={['top']}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 10, color: C.tx }}>No Children Linked</Text>
+          <Text style={{ textAlign: 'center', color: C.tx3, marginBottom: 20 }}>
+            Please add a child from Settings to continue.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 }}
+            onPress={() => router.replace('/(app)/settings')}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Go to Settings</Text>
+          </TouchableOpacity>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!student && !isNewUser && students.length > 0) {
+    return (
+      <Screen bg={C.bg} edges={['top']}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={C.primary} />
+          <Text style={{ marginTop: 16, color: C.tx3 }}>Loading profile...</Text>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
-      <ContactModal
-        visible={modalVisible}
-        contact={editingContact}
-        onSave={handleSaveContact}
-        onClose={() => setModalVisible(false)}
-        C={C}
-      />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        {/* ── Header ── */}
+      <ContactModal visible={modalVisible} contact={editingContact} onSave={handleSaveContact} onClose={() => setModalVisible(false)} C={C} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
         <View style={[s.header, { borderBottomColor: C.bd }]}>
           {(!isNewUser || step > 0) ? (
             <TouchableOpacity onPress={isNewUser ? goBack : router.back} style={s.backBtn}>
               <ChevLeft c={C.tx} s={20} />
             </TouchableOpacity>
-          ) : (
-            <View style={s.backBtn} />
-          )}
+          ) : <View style={s.backBtn} />}
           <Text style={[s.headerTitle, { color: C.tx }]}>{headerTitle}</Text>
           {isNewUser ? (
             <View style={[s.badge, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
               <View style={[s.badgeDot, { backgroundColor: C.primary }]} />
               <Text style={[s.badgeText, { color: C.primary }]}>Setup</Text>
             </View>
-          ) : (
-            <View style={s.backBtn} />
-          )}
+          ) : <View style={s.backBtn} />}
         </View>
-
-        {/* ── Progress Bar (new users only) ── */}
         {isNewUser && <ProgressBar currentStep={step} C={C} />}
-
-        {/* ── Step Indicator ── */}
         <StepBar current={step} completed={completed} C={C} />
-
-        {/* ── Scrollable content ── */}
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           <InstructionBanner currentStep={step} isNewUser={isNewUser} C={C} />
-
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
-            {/* ── Step 0: Student ── */}
             {step === 0 && (
               <View style={s.stepContent}>
-                <SectionCard
-                  icon={<CameraSvg c={C.primary} s={16} />}
-                  title="Profile Photo"
-                  subtitle="Optional but recommended — helps identify your child"
-                  C={C}
-                >
-                  <PhotoUpload
-                    imageUri={profileImage}
-                    onImageChange={setProfileImage}
-                    C={C}
-                  />
+                <SectionCard icon={<CameraSvg c={C.primary} s={16} />} title="Profile Photo" subtitle="Optional but recommended — helps identify your child" C={C}>
+                  <PhotoUpload imageUri={profileImage} onImageChange={setProfileImage} uploading={uploadingPhoto || saving} C={C} />
                 </SectionCard>
-
-                <SectionCard
-                  icon={<Text style={{ fontSize: 15 }}>👤</Text>}
-                  title="Child's Name"
-                  subtitle="Required — match the name on school records"
-                  C={C}
-                >
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Child's Name" subtitle="Required — match the name on school records" C={C}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Field
-                        label="First Name"
-                        value={firstName}
-                        onChangeText={setFirstName}
-                        placeholder="e.g., Arjun"
-                        required
-                        C={C}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Field
-                        label="Last Name"
-                        value={lastName}
-                        onChangeText={setLastName}
-                        placeholder="e.g., Sharma"
-                        required
-                        C={C}
-                      />
-                    </View>
+                    <View style={{ flex: 1 }}><Field label="First Name" value={firstName} onChangeText={setFirstName} placeholder="e.g., Arjun" required C={C} /></View>
+                    <View style={{ flex: 1 }}><Field label="Last Name" value={lastName} onChangeText={setLastName} placeholder="e.g., Sharma" required C={C} /></View>
                   </View>
                 </SectionCard>
-
-                <SectionCard
-                  icon={<Text style={{ fontSize: 15 }}>🏫</Text>}
-                  title="Class & Section"
-                  subtitle="Optional — helps identify your child quickly"
-                  accent={C.blue}
-                  C={C}
-                >
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title="Class & Section" subtitle="Optional — helps identify your child quickly" accent={C.blue} C={C}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Field label="Class" value={cls} onChangeText={setCls} placeholder="e.g., 6" C={C} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Field label="Section" value={section} onChangeText={setSection} placeholder="e.g., B" C={C} />
-                    </View>
+                    <View style={{ flex: 1 }}><Field label="Class" value={cls} onChangeText={setCls} placeholder="e.g., 6" C={C} /></View>
+                    <View style={{ flex: 1 }}><Field label="Section" value={section} onChangeText={setSection} placeholder="e.g., B" C={C} /></View>
                   </View>
                 </SectionCard>
-
                 <View style={[s.note, { backgroundColor: C.s2, borderColor: C.bd }]}>
                   <Text style={{ fontSize: 12 }}>📌</Text>
-                  <Text style={[s.noteText, { color: C.tx3 }]}>
-                    First and last name are required to continue. You cannot skip this step.
-                  </Text>
+                  <Text style={[s.noteText, { color: C.tx3 }]}>First and last name are required to continue. You cannot skip this step.</Text>
                 </View>
               </View>
             )}
-
-            {/* ── Step 1: Medical ── */}
             {step === 1 && (
               <View style={s.stepContent}>
-                <SectionCard
-                  icon={<Text style={{ fontSize: 15 }}>🩸</Text>}
-                  title="Blood Group"
-                  subtitle="Critical for emergency response — tap to select"
-                  C={C}
-                >
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🩸</Text>} title="Blood Group" subtitle="Critical for emergency response — tap to select" C={C}>
                   <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
                 </SectionCard>
-
-                <SectionCard
-                  icon={<Text style={{ fontSize: 15 }}>⚠️</Text>}
-                  title="Allergies"
-                  subtitle="Medication, food, or environmental allergies"
-                  accent={C.amb}
-                  C={C}
-                >
-                  <Field
-                    label="Known Allergies"
-                    value={allergies}
-                    onChangeText={setAllergies}
-                    placeholder="e.g., Peanuts, Penicillin"
-                    multiline
-                    hint='Leave blank if none. Separate multiple allergies with commas.'
-                    C={C}
-                  />
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>⚠️</Text>} title="Allergies" subtitle="Medication, food, or environmental allergies" accent={C.amb} C={C}>
+                  <Field label="Known Allergies" value={allergies} onChangeText={setAllergies} placeholder="e.g., Peanuts, Penicillin" multiline hint="Leave blank if none. Separate multiple allergies with commas." C={C} />
                 </SectionCard>
-
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title="Medical Conditions" accent={C.blue} C={C}>
-                  <Field
-                    label="Conditions"
-                    value={conditions}
-                    onChangeText={setConditions}
-                    placeholder="e.g., Asthma, Diabetes, Epilepsy"
-                    multiline
-                    hint="Chronic or recurring conditions that affect emergency care"
-                    C={C}
-                  />
+                  <Field label="Conditions" value={conditions} onChangeText={setConditions} placeholder="e.g., Asthma, Diabetes, Epilepsy" multiline hint="Chronic or recurring conditions that affect emergency care" C={C} />
                 </SectionCard>
-
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title="Medications" accent={C.blue} C={C}>
-                  <Field
-                    label="Current Medications"
-                    value={medications}
-                    onChangeText={setMedications}
-                    placeholder="e.g., Ventolin Inhaler, Insulin"
-                    multiline
-                    hint="Include dosage if known. Leave blank if none."
-                    C={C}
-                  />
+                  <Field label="Current Medications" value={medications} onChangeText={setMedications} placeholder="e.g., Ventolin Inhaler, Insulin" multiline hint="Include dosage if known. Leave blank if none." C={C} />
                 </SectionCard>
-
-                <SectionCard
-                  icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>}
-                  title="Family Doctor"
-                  subtitle="Will be contacted if medical decision is needed"
-                  accent={C.ok}
-                  C={C}
-                >
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title="Family Doctor" subtitle="Will be contacted if medical decision is needed" accent={C.ok} C={C}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Field label="Doctor Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" C={C} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Field
-                        label="Doctor's Phone"
-                        value={doctorPhone}
-                        onChangeText={setDoctorPhone}
-                        placeholder="+91 98765 43210"
-                        keyboardType="phone-pad"
-                        C={C}
-                      />
-                    </View>
+                    <View style={{ flex: 1 }}><Field label="Doctor Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" C={C} /></View>
+                    <View style={{ flex: 1 }}><Field label="Doctor's Phone" value={doctorPhone} onChangeText={setDoctorPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" C={C} /></View>
                   </View>
                 </SectionCard>
-
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>📋</Text>} title="Additional Notes" subtitle="Any other information for responders" C={C}>
-                  <Field
-                    label="Notes"
-                    value={notes}
-                    onChangeText={setNotes}
-                    placeholder="e.g., Child panics in crowds, carries EpiPen in bag"
-                    multiline
-                    C={C}
-                  />
+                  <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="e.g., Child panics in crowds, carries EpiPen in bag" multiline C={C} />
                 </SectionCard>
               </View>
             )}
-
-            {/* ── Step 2: Contacts ── */}
             {step === 2 && (
               <View style={s.stepContent}>
                 <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
@@ -1570,23 +1228,14 @@ export default function UpdatesScreen() {
                     </View>
                   ))}
                   <View style={[s.callInfoDivider, { backgroundColor: C.bd }]} />
-                  <Text style={[s.callInfoNote, { color: C.tx3 }]}>
-                    Add at least 2 contacts. Use only reachable mobile numbers — not landlines.
-                  </Text>
+                  <Text style={[s.callInfoNote, { color: C.tx3 }]}>Add at least 2 contacts. Use only reachable mobile numbers — not landlines.</Text>
                 </View>
-
                 {sortedContacts.length === 0 ? (
                   <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
                     <Text style={{ fontSize: 32 }}>📵</Text>
                     <Text style={[s.emptyTitle, { color: C.tx }]}>No Emergency Contacts Added</Text>
-                    <Text style={[s.emptySub, { color: C.tx3 }]}>
-                      Tap the button below to add your first contact. You can add up to 5 contacts.
-                    </Text>
-                    <TouchableOpacity
-                      style={[s.emptyAddBtn, { backgroundColor: C.primary }]}
-                      onPress={() => { setEditContact(null); setModalVisible(true); }}
-                      activeOpacity={0.85}
-                    >
+                    <Text style={[s.emptySub, { color: C.tx3 }]}>Tap the button below to add your first contact. You can add up to 5 contacts.</Text>
+                    <TouchableOpacity style={[s.emptyAddBtn, { backgroundColor: C.primary }]} onPress={() => { setEditContact(null); setModalVisible(true); }} activeOpacity={0.85}>
                       <PlusSvg c="#fff" s={16} />
                       <Text style={s.emptyAddBtnText}>Add First Contact</Text>
                     </TouchableOpacity>
@@ -1594,36 +1243,16 @@ export default function UpdatesScreen() {
                 ) : (
                   <View style={{ gap: 8 }}>
                     {sortedContacts.map((c, i) => (
-                      <ContactCard
-                        key={c.id ?? `contact_${i}`}
-                        contact={c}
-                        index={i}
-                        onEdit={(con) => { setEditContact(con); setModalVisible(true); }}
-                        onDelete={handleDeleteContact}
-                        C={C}
-                      />
+                      <ContactCard key={c.id ?? `contact_${i}`} contact={c} index={i} onEdit={(con) => { setEditContact(con); setModalVisible(true); }} onDelete={handleDeleteContact} C={C} />
                     ))}
                   </View>
                 )}
-
                 {contacts.length > 0 && contacts.length < 5 && (
-                  <TouchableOpacity
-                    style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
-                    onPress={() => { setEditContact(null); setModalVisible(true); }}
-                    activeOpacity={0.75}
-                  >
-                    <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}>
-                      <PlusSvg c="#fff" s={18} />
-                    </View>
-                    <View>
-                      <Text style={[s.addBtnLabel, { color: C.primary }]}>Add Another Contact</Text>
-                      <Text style={[s.addBtnSub, { color: C.tx3 }]}>
-                        {contacts.length} of 5 contacts added
-                      </Text>
-                    </View>
+                  <TouchableOpacity style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]} onPress={() => { setEditContact(null); setModalVisible(true); }} activeOpacity={0.75}>
+                    <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}><PlusSvg c="#fff" s={18} /></View>
+                    <View><Text style={[s.addBtnLabel, { color: C.primary }]}>Add Another Contact</Text><Text style={[s.addBtnSub, { color: C.tx3 }]}>{contacts.length} of 5 contacts added</Text></View>
                   </TouchableOpacity>
                 )}
-
                 {contacts.length >= 5 && (
                   <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd }]}>
                     <Text style={{ fontSize: 12 }}>✅</Text>
@@ -1632,8 +1261,6 @@ export default function UpdatesScreen() {
                 )}
               </View>
             )}
-
-            {/* ── Step 3: Review ── */}
             {step === 3 && (
               <View style={s.stepContent}>
                 <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
@@ -1641,28 +1268,18 @@ export default function UpdatesScreen() {
                     <Image source={{ uri: profileImage }} style={s.reviewAvatarImg} />
                   ) : (
                     <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                      <Text style={[s.reviewAvatarText, { color: C.primary }]}>
-                        {firstName ? firstName[0].toUpperCase() : '?'}
-                      </Text>
+                      <Text style={[s.reviewAvatarText, { color: C.primary }]}>{firstName ? firstName[0].toUpperCase() : '?'}</Text>
                     </View>
                   )}
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.reviewName, { color: C.tx }]}>
-                      {`${firstName} ${lastName}`.trim() || 'Child'}
-                    </Text>
+                    <Text style={[s.reviewName, { color: C.tx }]}>{`${firstName} ${lastName}`.trim() || 'Child'}</Text>
                     <Text style={[s.reviewClass, { color: C.tx3 }]}>{classLabel}</Text>
                   </View>
-                  <View style={[
-                    s.reviewStatus,
-                    { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd },
-                  ]}>
+                  <View style={[s.reviewStatus, { backgroundColor: completed.length >= 3 ? C.okBg : C.s3, borderColor: completed.length >= 3 ? C.okBd : C.bd }]}>
                     <View style={[s.reviewStatusDot, { backgroundColor: completed.length >= 3 ? C.ok : C.tx3 }]} />
-                    <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>
-                      {completed.length >= 3 ? 'Ready' : 'Draft'}
-                    </Text>
+                    <Text style={[s.reviewStatusText, { color: completed.length >= 3 ? C.ok : C.tx3 }]}>{completed.length >= 3 ? 'Ready' : 'Draft'}</Text>
                   </View>
                 </View>
-
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Student Information" C={C}>
                   <ReviewRow label="First Name" value={firstName} required C={C} />
                   <ReviewRow label="Last Name" value={lastName} required C={C} />
@@ -1670,7 +1287,6 @@ export default function UpdatesScreen() {
                   <ReviewRow label="Section" value={section || 'Not set'} C={C} />
                   <ReviewRow label="Profile Photo" value={profileImage ? 'Uploaded' : 'Not uploaded'} C={C} />
                 </SectionCard>
-
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title="Medical Information" C={C}>
                   <ReviewRow label="Blood Group" value={bloodGroup || 'Not set'} C={C} />
                   <ReviewRow label="Allergies" value={allergies || 'None'} C={C} />
@@ -1679,69 +1295,34 @@ export default function UpdatesScreen() {
                   <ReviewRow label="Doctor" value={doctorName || 'Not set'} C={C} />
                   <ReviewRow label="Doctor Phone" value={doctorPhone || 'Not set'} C={C} />
                 </SectionCard>
-
-                <SectionCard
-                  icon={<Text style={{ fontSize: 15 }}>📞</Text>}
-                  title={`Emergency Contacts (${contacts.length})`}
-                  accent={C.blue}
-                  C={C}
-                >
-                  {contacts.length === 0
-                    ? (
-                      <View style={[s.reviewWarn, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
-                        <Text style={[s.reviewWarnText, { color: C.red }]}>
-                          ⚠️  No emergency contacts added. Go back to Step 3 and add at least one contact.
-                        </Text>
-                      </View>
-                    )
-                    : sortedContacts.map((c, i) => (
-                      <ReviewRow
-                        key={c.id ?? `review_${i}`}
-                        label={`#${c.priority} ${c.relationship || 'Contact'}`}
-                        value={`${c.name} · ${c.phone}`}
-                        C={C}
-                      />
-                    ))
-                  }
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>📞</Text>} title={`Emergency Contacts (${contacts.length})`} accent={C.blue} C={C}>
+                  {contacts.length === 0 ? (
+                    <View style={[s.reviewWarn, { backgroundColor: C.redBg, borderColor: C.redBd }]}>
+                      <Text style={[s.reviewWarnText, { color: C.red }]}>⚠️  No emergency contacts added. Go back to Step 3 and add at least one contact.</Text>
+                    </View>
+                  ) : sortedContacts.map((c, i) => (
+                    <ReviewRow key={c.id ?? `review_${i}`} label={`#${c.priority} ${c.relationship || 'Contact'}`} value={`${c.name} · ${c.phone}`} C={C} />
+                  ))}
                 </SectionCard>
-
                 <View style={[s.note, { backgroundColor: C.okBg, borderColor: C.okBd, flexDirection: 'row', gap: 8 }]}>
                   <Text style={{ fontSize: 14 }}>🛡️</Text>
                   <Text style={[s.noteText, { color: C.ok, flex: 1 }]}>
-                    {isNewUser
-                      ? 'Review all information carefully. Tap "Activate Card" when ready. You can update this any time from the profile screen.'
-                      : 'Changes will take effect immediately after saving.'}
+                    {isNewUser ? 'Review all information carefully. Tap "Activate Card" when ready. You can update this any time from the profile screen.' : 'Changes will take effect immediately after saving.'}
                   </Text>
                 </View>
               </View>
             )}
-
           </Animated.View>
           <View style={{ height: 24 }} />
         </ScrollView>
-
-        <NavFooter
-          step={step}
-          isNewUser={isNewUser}
-          onBack={goBack}
-          onNext={goNext}
-          nextLabel={nextLabel}
-          saving={saving}
-          canProceed={canProceed}
-          C={C}
-        />
+        <NavFooter step={step} isNewUser={isNewUser} onBack={goBack} onNext={goNext} nextLabel={nextLabel} saving={saving || uploadingPhoto} canProceed={canProceed} C={C} />
       </KeyboardAvoidingView>
     </Screen>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[3],
-    borderBottomWidth: 1,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[3], borderBottomWidth: 1 },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
   headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, flex: 1, textAlign: 'center' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
