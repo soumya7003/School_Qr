@@ -1,8 +1,14 @@
+// app/(app)/settings.jsx
+// Add useEffect for empty state redirect and fix unlink to refresh store
+
 /**
  * app/(app)/settings.jsx
  * Settings — with child removal feature
+ * 
+ * FIXES:
+ * - Auto-redirect to add-child when no children left
+ * - Force store refresh after unlink
  */
-
 import Screen from '@/components/common/Screen';
 import {
     IconBell,
@@ -26,14 +32,16 @@ import ScanHistoryPreview from '@/components/settings/ScanHistoryPreview';
 import ThemeSegment from '@/components/settings/ThemeSegment';
 import { LANGUAGES } from '@/constants/constants';
 import { useAuthStore } from '@/features/auth/auth.store';
+import { useProfileStore } from '@/features/profile/profile.store';
 import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
 import { visibilityLabel } from '@/utils/profile.utils';
 import { Feather } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
@@ -168,7 +176,7 @@ const parentStyles = StyleSheet.create({
 
 // ─── Remove Child Modal ────────────────────────────────────────────────────────
 function RemoveChildModal({ visible, child, onClose, onConfirm, C, loading }) {
-    const [step, setStep] = useState('confirm'); // 'confirm' or 'otp'
+    const [step, setStep] = useState('confirm');
     const [otp, setOtp] = useState('');
     const [nonce, setNonce] = useState('');
     const [error, setError] = useState('');
@@ -197,7 +205,6 @@ function RemoveChildModal({ visible, child, onClose, onConfirm, C, loading }) {
         setError('');
         try {
             await onConfirm(child.id, otp, nonce);
-            // Reset state before closing
             reset();
             onClose();
         } catch (err) {
@@ -220,7 +227,6 @@ function RemoveChildModal({ visible, child, onClose, onConfirm, C, loading }) {
         onClose();
     };
 
-    // Combine external and internal loading states
     const isLoading = loading || internalLoading;
 
     if (!child) return null;
@@ -428,6 +434,7 @@ const childMgr = StyleSheet.create({
     countBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
     countText: { fontSize: 12, fontWeight: '800' },
     addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+    addBtnPlus: { fontSize: 16, fontWeight: '700', marginRight: 2 },
     addBtnText: { fontSize: 13, fontWeight: '700' },
     divider: { height: 1, marginHorizontal: 0 },
     childrenList: { paddingVertical: 4 },
@@ -480,6 +487,9 @@ export default function SettingsScreen() {
         removeChild,
     } = useProfile();
 
+    const isHydrated = useProfileStore((s) => s.isHydrated);
+    const refreshProfile = useProfileStore((s) => s.refresh);
+
     const [switchingChild, setSwitchingChild] = useState(false);
     const [removeLoading, setRemoveLoading] = useState(false);
 
@@ -497,6 +507,33 @@ export default function SettingsScreen() {
     const activeToken = token;
     const activeCard = card;
     const activeEmergency = emergencyProfile;
+
+    // 🟢 FIX: useFocusEffect AFTER refreshProfile is defined
+    useFocusEffect(
+        useCallback(() => {
+            refreshProfile();
+        }, [refreshProfile])
+    );
+
+    // 🟢 FIX: Auto-redirect to add-child when no children left
+    useEffect(() => {
+        if (isHydrated && students.length === 0) {
+            const timer = setTimeout(() => {
+                Alert.alert(
+                    'No Children Linked',
+                    'Please add a child to continue using RESQID.',
+                    [
+                        {
+                            text: 'Add Child',
+                            onPress: () => router.replace('/add-child')
+                        }
+                    ]
+                );
+            }, 500);
+
+            return () => clearTimeout(timer);
+        }
+    }, [students.length, isHydrated]);
 
     const handleLogout = () => {
         Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -526,6 +563,8 @@ export default function SettingsScreen() {
             setRemoveLoading(true);
             try {
                 await removeChild({ studentId, otp, nonce });
+                // 🟢 FIX: Force store refresh after removal
+                await refreshProfile();
                 return { success: true };
             } finally {
                 setRemoveLoading(false);

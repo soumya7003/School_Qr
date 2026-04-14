@@ -67,7 +67,90 @@ export const useProfileStore = create((set, get) => ({
       console.log("[ProfileStore] Already initialized, skipping");
       return;
     }
-    // ... rest of original hydrate code
+
+    console.log("[ProfileStore] hydrate START");
+
+    // Step 1: Wait for auth to be ready
+    const authState = useAuthStore.getState();
+
+    if (!authState.isHydrated) {
+      console.log("[ProfileStore] Waiting for auth hydration...");
+      await new Promise((resolve) => {
+        const unsubscribe = useAuthStore.subscribe((state) => {
+          if (state.isHydrated) {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+      console.log("[ProfileStore] Auth hydration complete");
+    }
+
+    // Step 2: Check if authenticated
+    const isAuthenticated = useAuthStore.getState().isAuthenticated;
+    if (!isAuthenticated) {
+      console.log("[ProfileStore] Not authenticated, setting empty state");
+      set({
+        isHydrated: true,
+        isInitialized: true,
+        students: [],
+        parent: null,
+        activeStudentId: null,
+      });
+      return;
+    }
+
+    // Step 3: Load cached data IMMEDIATELY (skeleton UI)
+    try {
+      const snap = await storage.readProfile();
+
+      if (snap?.data && snap.data.students?.length > 0) {
+        console.log("[ProfileStore] Cache found, showing immediately");
+
+        let students = snap.data.students;
+        // Handle old single-student structure
+        if (!Array.isArray(students) && snap.data.student) {
+          students = [snap.data.student];
+        }
+
+        // 🟢 FIX: Use parent.active_student_id from cache, fallback to first student
+        const activeId =
+          snap.data.parent?.active_student_id ?? students[0]?.id ?? null;
+
+        set({
+          parent: snap.data.parent ?? null,
+          students: students,
+          activeStudentId: activeId,
+          lastScan: snap.data.last_scan ?? null,
+          scanCount: snap.data.scan_count ?? 0,
+          anomaly: snap.data.anomaly ?? null,
+          isHydrated: true,
+          isInitialized: true,
+          lastRefreshTime: snap.savedAt
+            ? new Date(snap.savedAt).getTime()
+            : null,
+        });
+      } else {
+        console.log("[ProfileStore] No cache found");
+        set({
+          isHydrated: true,
+          isInitialized: true,
+          students: [],
+          parent: null,
+          activeStudentId: null,
+        });
+      }
+    } catch (err) {
+      console.error("[ProfileStore] hydrate cache read error:", err);
+      set({
+        isHydrated: true,
+        isInitialized: true,
+        activeStudentId: null,
+      });
+    }
+
+    // Step 4: Silently refresh in background
+    await get()._silentRefresh();
   },
 
   // ── Silent background refresh ───────────────────────────────────────────────
@@ -164,18 +247,41 @@ export const useProfileStore = create((set, get) => ({
   },
 
   updateVisibility: async (studentId, { visibility, hidden_fields }) => {
-    if (__DEV_BYPASS_PROFILE__) {
-      console.log("[ProfileStore] Bypass – mock updateVisibility");
-      set((state) => ({
-        students: state.students.map((s) =>
-          s.id === studentId
-            ? { ...s, card_visibility: { visibility, hidden_fields, updated_by_parent: true } }
-            : s
-        ),
-      }));
-      return;
-    }
-    // [original]
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    // 🟢 FIX: Single API call - backend handles both CardVisibility and EmergencyProfile
+    await profileApi.updateVisibility(studentId, { visibility, hidden_fields });
+
+    // Update local state optimistically
+    set((state) => ({
+      students: state.students.map((s) =>
+        s.id !== studentId
+          ? s
+          : {
+              ...s,
+              card_visibility: {
+                ...(s.card_visibility ?? {}),
+                visibility,
+                hidden_fields,
+                updated_by_parent: true,
+              },
+              emergency: {
+                ...(s.emergency ?? {}),
+                visibility,
+              },
+            },
+      ),
+    }));
+
+    // Update storage cache
+    await storage.patchProfileStudent(studentId, {
+      card_visibility: { visibility, hidden_fields, updated_by_parent: true },
+      emergency: { visibility },
+    });
+
+    // Silent refresh to sync with server
+    get()._silentRefresh();
   },
 
   updateNotifications: async (prefs) => {
@@ -245,21 +351,80 @@ export const useProfileStore = create((set, get) => ({
   },
 
   linkCard: async ({ card_number }) => {
-    if (__DEV_BYPASS_PROFILE__) {
-      console.log("[ProfileStore] Bypass – mock linkCard");
-      await get().refresh();
-      return { success: true };
-    }
-    // [original]
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.linkCard({ card_number });
+
+    // 🟢 FIX: Force immediate full refresh, not silent
+    await get().fetchAndPersist({ silent: false });
+
+    return result;
   },
 
   setActiveStudentWithSync: async (studentId) => {
-    if (__DEV_BYPASS_PROFILE__) {
-      console.log("[ProfileStore] Bypass – mock setActiveStudentWithSync");
-      set({ activeStudentId: studentId });
-      return { success: true };
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const student = get().students.find((s) => s.id === studentId);
+    if (!student) throw new Error("Student not found");
+
+    await profileApi.setActiveStudent(studentId);
+
+    set({ activeStudentId: studentId });
+
+    // 🟢 Persist to storage
+    await storage.setLastActiveChild(studentId);
+
+    // Update parent in storage
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        active_student_id: studentId,
+      };
+      await storage.saveProfile(snap.data);
     }
-    // [original]
+
+    return { success: true };
+  },
+
+  unlinkChild: async (studentId, otp, nonce) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.unlinkChildVerify(studentId, otp, nonce);
+
+    // 🟢 FIX: Optimistically update local state with server response
+    set((state) => {
+      const newStudents = state.students.filter((s) => s.id !== studentId);
+      const newActiveId =
+        result.active_student_id ?? newStudents[0]?.id ?? null;
+
+      return {
+        students: newStudents,
+        activeStudentId: newActiveId,
+        parent: state.parent
+          ? {
+              ...state.parent,
+              active_student_id: newActiveId,
+            }
+          : null,
+      };
+    });
+
+    // Force full refresh to sync all screens
+    await get().refresh();
+
+    return result;
+  },
+
+  unlinkChildInit: async (studentId) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.unlinkChildInit(studentId);
+    return result;
   },
 
   clear: async () => {

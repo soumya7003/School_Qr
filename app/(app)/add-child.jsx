@@ -10,8 +10,9 @@ import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -101,6 +102,23 @@ export default function AddChildScreen() {
         return text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
     };
 
+    useFocusEffect(
+        useCallback(() => {
+            // Reset all state to initial values
+            setCardNumber('');
+            setLoading(false);
+            setError('');
+            setNewStudentId(null);
+            setStudentName('');
+            setSuccess(false);
+
+            // Optional: return cleanup function
+            return () => {
+                // Cleanup if needed
+            };
+        }, [])
+    );
+
     const handleAddChild = async () => {
         if (!cardNumber.trim()) {
             setError('Card number is required');
@@ -116,10 +134,12 @@ export default function AddChildScreen() {
             setNewStudentId(result.student_id);
             setStudentName(result.student_name || '');
 
-            // Refresh to update store with new student
+            // 🟢 FIX: Wait for refresh to complete before setting active student
             await refresh();
 
-            setActiveStudent(result.student_id);
+            // 🟢 FIX: Use setActiveStudentWithSync to persist to storage
+            await useProfileStore.getState().setActiveStudentWithSync(result.student_id);
+
             setSuccess(true);
 
         } catch (err) {

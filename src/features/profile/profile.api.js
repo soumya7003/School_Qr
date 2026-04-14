@@ -1,3 +1,6 @@
+// features/profile/profile.api.js
+// Add these methods to the profileApi object
+
 import { apiClient, authClient } from "@/lib/api/apiClient";
 import { mockApi } from "@/services/mockService";
 const USE_MOCK = false;
@@ -182,6 +185,7 @@ export const profileApi = {
     const res = await apiClient.get("/parents/me/scans", { params });
     return res?.data?.data ?? res?.data;
   },
+
   /**
    * GET /api/parents/me/children
    * Lightweight list of all children for the switcher UI
@@ -196,7 +200,7 @@ export const profileApi = {
   /**
    * POST /api/parents/me/link-card
    * Add a new child (second/third/etc.) by scanning a new card
-   * body: { card_number, phone }
+   * body: { card_number }
    * → { success, student_id, student_name, is_first_child }
    */
   linkCard: async ({ card_number }) => {
@@ -243,6 +247,66 @@ export const profileApi = {
     const res = await apiClient.post("/parents/me/unlink-child/verify", {
       student_id: studentId,
       otp,
+      nonce,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // =============================================================================
+  // 🟢 NEW: Photo Upload API Methods
+  // =============================================================================
+
+  /**
+   * POST /api/parents/me/students/:studentId/photo/upload-url
+   * Generate presigned URL for direct-to-R2 upload
+   * body: { contentType, fileSize }
+   * → { uploadUrl, publicUrl, key, nonce, expiresIn, maxSize, allowedTypes }
+   */
+  generateStudentPhotoUploadUrl: async (studentId, contentType, fileSize) => {
+    const res = await apiClient.post(
+      `/parents/me/students/${studentId}/photo/upload-url`,
+      { contentType, fileSize },
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/students/:studentId/photo/confirm
+   * Confirm upload and get final photo URL
+   * body: { key, nonce }
+   * → { photoUrl, verified: true }
+   */
+  confirmStudentPhotoUpload: async (studentId, key, nonce) => {
+    const res = await apiClient.post(
+      `/parents/me/students/${studentId}/photo/confirm`,
+      { key, nonce },
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/avatar/upload-url
+   * Generate presigned URL for parent avatar upload
+   * body: { contentType, fileSize }
+   * → { uploadUrl, publicUrl, key, nonce, expiresIn, maxSize, allowedTypes }
+   */
+  generateAvatarUploadUrl: async (contentType, fileSize) => {
+    const res = await apiClient.post(`/parents/me/avatar/upload-url`, {
+      contentType,
+      fileSize,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/avatar/confirm
+   * Confirm parent avatar upload
+   * body: { key, nonce }
+   * → { avatarUrl, verified: true }
+   */
+  confirmAvatarUpload: async (key, nonce) => {
+    const res = await apiClient.post(`/parents/me/avatar/confirm`, {
+      key,
       nonce,
     });
     return res?.data?.data ?? res?.data;
