@@ -82,6 +82,10 @@ export const useProfile = () => {
   const recentScans = lastScan ? [lastScan] : [];
   const anomalies = anomaly ? [anomaly] : [];
 
+  // unlink child
+  const unlinkChildInit = useProfileStore((s) => s.unlinkChildInit);
+  const unlinkChildVerify = useProfileStore((s) => s.unlinkChild);
+
   // ── updateVisibility — auto-injects studentId ─────────────────────────────
   const updateVisibility = (visibilityPayload) => {
     if (!student?.id) return;
@@ -162,6 +166,39 @@ export const useProfile = () => {
     }
   };
 
+  const removeChild = async ({ studentId, otp, nonce }) => {
+    try {
+      const result = await unlinkChildVerify(studentId, otp, nonce);
+      Alert.alert(
+        "Child Removed",
+        result.message || "Child has been removed from your account.",
+        [{ text: "OK" }],
+      );
+      return result;
+    } catch (error) {
+      console.error("[useProfile] removeChild error:", error);
+      Alert.alert(
+        "Failed to Remove Child",
+        error?.message || "Please try again.",
+        [{ text: "OK" }],
+      );
+      throw error;
+    }
+  };
+
+  const initiateUnlink = async (studentId) => {
+    try {
+      const result = await unlinkChildInit(studentId);
+      return result;
+    } catch (error) {
+      console.error("[useProfile] initiateUnlink error:", error);
+      Alert.alert("Failed to Send OTP", error?.message || "Please try again.", [
+        { text: "OK" },
+      ]);
+      throw error;
+    }
+  };
+
   return {
     // ── Data ──────────────────────────────────────────────────────────────────
     student,
@@ -206,5 +243,8 @@ export const useProfile = () => {
     addChildByCard,
     switchActiveStudent,
     fetchAndPersist: useProfileStore((s) => s.fetchAndPersist),
+    // unlink child
+    initiateUnlink,
+    removeChild,
   };
 };

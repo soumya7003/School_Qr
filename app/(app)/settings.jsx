@@ -1,6 +1,6 @@
 /**
  * app/(app)/settings.jsx
- * Settings — Production-grade redesign with persistent multi-child support
+ * Settings — with child removal feature
  */
 
 import Screen from '@/components/common/Screen';
@@ -30,6 +30,7 @@ import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
 import { visibilityLabel } from '@/utils/profile.utils';
+import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -37,10 +38,12 @@ import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Alert,
+    Modal,
     ScrollView,
     StyleSheet,
     Switch,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -58,18 +61,12 @@ const AVATAR_PALETTE = [
     { bg: '#FCE7F3', text: '#DB2777' },
 ];
 
-// ── Notion-style Avatar ────────────────────────────────────────────────────────
 function NotionAvatar({ name, size = 48, colorIndex = 0 }) {
     const initial = name?.charAt(0)?.toUpperCase() ?? '?';
     const colors = AVATAR_PALETTE[colorIndex % AVATAR_PALETTE.length];
     return (
-        <View style={[
-            avatarStyles.container,
-            { width: size, height: size, borderRadius: size * 0.3, backgroundColor: colors.bg }
-        ]}>
-            <Text style={[avatarStyles.text, { fontSize: size * 0.4, color: colors.text }]}>
-                {initial}
-            </Text>
+        <View style={[avatarStyles.container, { width: size, height: size, borderRadius: size * 0.3, backgroundColor: colors.bg }]}>
+            <Text style={[avatarStyles.text, { fontSize: size * 0.4, color: colors.text }]}>{initial}</Text>
         </View>
     );
 }
@@ -79,7 +76,7 @@ const avatarStyles = StyleSheet.create({
     text: { fontWeight: '700' },
 });
 
-// ── Section Header ────────────────────────────────────────────────────────────
+// ─── Section Header ────────────────────────────────────────────────────────────
 function SectionHeader({ title, accent }) {
     return (
         <View style={sectionStyles.container}>
@@ -93,26 +90,14 @@ function SectionHeader({ title, accent }) {
 
 const sectionStyles = StyleSheet.create({
     container: { marginBottom: 10, marginTop: 4 },
-    pill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        gap: 6,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 20,
-    },
+    pill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
     dot: { width: 5, height: 5, borderRadius: 3 },
     title: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
 });
 
 // ── Settings Card ─────────────────────────────────────────────────────────────
 function SettingsCard({ children, C }) {
-    return (
-        <View style={[cardStyles.container, { backgroundColor: C.s2, borderColor: C.bd }]}>
-            {children}
-        </View>
-    );
+    return <View style={[cardStyles.container, { backgroundColor: C.s2, borderColor: C.bd }]}>{children}</View>;
 }
 
 const cardStyles = StyleSheet.create({
@@ -123,62 +108,33 @@ const cardStyles = StyleSheet.create({
 function SettingsRow({ C, icon, iconBg, iconBorder, title, subtitle, onPress, isLast, rightElement, danger }) {
     const Wrapper = onPress ? TouchableOpacity : View;
     return (
-        <Wrapper
-            style={[
-                rowStyles.container,
-                !isLast && { borderBottomWidth: 1, borderBottomColor: C.bd }
-            ]}
-            onPress={onPress}
-            activeOpacity={0.7}
-        >
-            <View style={[rowStyles.iconWrap, { backgroundColor: iconBg, borderColor: iconBorder }]}>
-                {icon}
-            </View>
+        <Wrapper style={[rowStyles.container, !isLast && { borderBottomWidth: 1, borderBottomColor: C.bd }]} onPress={onPress} activeOpacity={0.7}>
+            <View style={[rowStyles.iconWrap, { backgroundColor: iconBg, borderColor: iconBorder }]}>{icon}</View>
             <View style={rowStyles.content}>
                 <Text style={[rowStyles.title, { color: danger ? C.red : C.tx }]}>{title}</Text>
                 {subtitle && <Text style={[rowStyles.subtitle, { color: C.tx3 }]}>{subtitle}</Text>}
             </View>
-            {rightElement
-                ? rightElement
-                : onPress && <IconChevronRight color={C.tx3} size={14} />}
+            {rightElement ? rightElement : onPress && <IconChevronRight color={C.tx3} size={14} />}
         </Wrapper>
     );
 }
 
 const rowStyles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-    iconWrap: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    container: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
+    iconWrap: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     content: { flex: 1, gap: 2 },
     title: { fontSize: 15, fontWeight: '600' },
     subtitle: { fontSize: 12 },
 });
 
-// ── Parent Profile Header ─────────────────────────────────────────────────────
+// ─── Parent Profile Header ─────────────────────────────────────────────────────
 function ParentHeader({ parentUser, C }) {
     const verified = parentUser?.is_phone_verified;
     const phoneNumber = parentUser?.phone ?? '+91 •••• ••••';
     const name = parentUser?.name || 'Parent';
 
     return (
-        <LinearGradient
-            colors={[C.s2, C.s3]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[parentStyles.container, { borderColor: C.bd }]}
-        >
+        <LinearGradient colors={[C.s2, C.s3]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[parentStyles.container, { borderColor: C.bd }]}>
             <View style={[parentStyles.stripe, { backgroundColor: verified ? C.ok : C.amb }]} />
             <View style={parentStyles.inner}>
                 <View style={parentStyles.topRow}>
@@ -187,14 +143,9 @@ function ParentHeader({ parentUser, C }) {
                         <Text style={[parentStyles.name, { color: C.tx }]}>{name}</Text>
                         <Text style={[parentStyles.phone, { color: C.tx2 }]}>{phoneNumber}</Text>
                     </View>
-                    <View style={[
-                        parentStyles.verifiedBadge,
-                        { backgroundColor: verified ? C.okBg : C.ambBg }
-                    ]}>
+                    <View style={[parentStyles.verifiedBadge, { backgroundColor: verified ? C.okBg : C.ambBg }]}>
                         <View style={[parentStyles.verifiedDot, { backgroundColor: verified ? C.ok : C.amb }]} />
-                        <Text style={[parentStyles.verifiedText, { color: verified ? C.ok : C.amb }]}>
-                            {verified ? 'Verified' : 'Unverified'}
-                        </Text>
+                        <Text style={[parentStyles.verifiedText, { color: verified ? C.ok : C.amb }]}>{verified ? 'Verified' : 'Unverified'}</Text>
                     </View>
                 </View>
             </View>
@@ -215,8 +166,169 @@ const parentStyles = StyleSheet.create({
     verifiedText: { fontSize: 11, fontWeight: '700' },
 });
 
-// ── Children Manager (with backend sync) ─────────────────────────────────────
-function ChildrenManager({ students, activeStudentId, switchActiveStudent, onAddChild, canAddMore, C, switchingChild }) {
+// ─── Remove Child Modal ────────────────────────────────────────────────────────
+function RemoveChildModal({ visible, child, onClose, onConfirm, C, loading }) {
+    const [step, setStep] = useState('confirm'); // 'confirm' or 'otp'
+    const [otp, setOtp] = useState('');
+    const [nonce, setNonce] = useState('');
+    const [error, setError] = useState('');
+    const [internalLoading, setInternalLoading] = useState(false);
+
+    const handleSendOtp = async () => {
+        setInternalLoading(true);
+        setError('');
+        try {
+            const result = await onConfirm(child.id);
+            setNonce(result.nonce);
+            setStep('otp');
+        } catch (err) {
+            setError(err?.message || 'Failed to send OTP');
+        } finally {
+            setInternalLoading(false);
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (!otp || otp.length < 6) {
+            setError('Enter 6-digit code');
+            return;
+        }
+        setInternalLoading(true);
+        setError('');
+        try {
+            await onConfirm(child.id, otp, nonce);
+            // Reset state before closing
+            reset();
+            onClose();
+        } catch (err) {
+            setError(err?.message || 'Invalid OTP');
+        } finally {
+            setInternalLoading(false);
+        }
+    };
+
+    const reset = () => {
+        setStep('confirm');
+        setOtp('');
+        setNonce('');
+        setError('');
+        setInternalLoading(false);
+    };
+
+    const handleClose = () => {
+        reset();
+        onClose();
+    };
+
+    // Combine external and internal loading states
+    const isLoading = loading || internalLoading;
+
+    if (!child) return null;
+
+    return (
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+            <View style={modalStyles.overlay}>
+                <View style={[modalStyles.container, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                    {step === 'confirm' ? (
+                        <>
+                            <View style={modalStyles.iconCircle}>
+                                <Feather name="alert-triangle" size={28} color={C.red} />
+                            </View>
+                            <Text style={[modalStyles.title, { color: C.tx }]}>Remove {child.name}?</Text>
+                            <Text style={[modalStyles.message, { color: C.tx3 }]}>
+                                This will remove {child.name} from your account. The card will become inactive and can be re-registered by someone else.
+                            </Text>
+                            <View style={modalStyles.buttonRow}>
+                                <TouchableOpacity
+                                    style={[modalStyles.button, modalStyles.cancelButton, { borderColor: C.bd }]}
+                                    onPress={handleClose}
+                                    disabled={isLoading}
+                                >
+                                    <Text style={[modalStyles.buttonText, { color: C.tx3 }]}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[modalStyles.button, modalStyles.removeButton, { backgroundColor: C.red }]}
+                                    onPress={handleSendOtp}
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Text style={[modalStyles.buttonText, { color: '#fff' }]}>Remove Child</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                            {error && <Text style={[modalStyles.error, { color: C.red }]}>{error}</Text>}
+                        </>
+                    ) : (
+                        <>
+                            <View style={modalStyles.iconCircle}>
+                                <Feather name="key" size={28} color={C.primary} />
+                            </View>
+                            <Text style={[modalStyles.title, { color: C.tx }]}>Verification Required</Text>
+                            <Text style={[modalStyles.message, { color: C.tx3 }]}>
+                                Enter the 6-digit code sent to your registered mobile number
+                            </Text>
+                            <TextInput
+                                style={[modalStyles.otpInput, { backgroundColor: C.s3, borderColor: C.bd, color: C.tx }]}
+                                value={otp}
+                                onChangeText={setOtp}
+                                placeholder="000000"
+                                placeholderTextColor={C.tx3}
+                                keyboardType="number-pad"
+                                maxLength={6}
+                                textAlign="center"
+                                editable={!isLoading}
+                            />
+                            <View style={modalStyles.buttonRow}>
+                                <TouchableOpacity
+                                    style={[modalStyles.button, modalStyles.cancelButton, { borderColor: C.bd }]}
+                                    onPress={handleClose}
+                                    disabled={isLoading}
+                                >
+                                    <Text style={[modalStyles.buttonText, { color: C.tx3 }]}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[modalStyles.button, modalStyles.verifyButton, { backgroundColor: C.primary }]}
+                                    onPress={handleVerifyOtp}
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Text style={[modalStyles.buttonText, { color: '#fff' }]}>Verify & Remove</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                            {error && <Text style={[modalStyles.error, { color: C.red }]}>{error}</Text>}
+                        </>
+                    )}
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
+const modalStyles = StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    container: { borderRadius: 28, borderWidth: 1, padding: 24, width: '100%', maxWidth: 340, alignItems: 'center' },
+    iconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+    title: { fontSize: 18, fontWeight: '800', marginBottom: 8, textAlign: 'center' },
+    message: { fontSize: 13, textAlign: 'center', lineHeight: 19, marginBottom: 20 },
+    buttonRow: { flexDirection: 'row', gap: 12, width: '100%' },
+    button: { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+    cancelButton: { borderWidth: 1 },
+    removeButton: {},
+    verifyButton: {},
+    buttonText: { fontSize: 14, fontWeight: '700' },
+    otpInput: { width: '100%', height: 52, borderRadius: 14, borderWidth: 1, fontSize: 20, fontWeight: '700', marginBottom: 20, letterSpacing: 4 },
+    error: { fontSize: 12, marginTop: 12, textAlign: 'center' },
+});
+
+// ─── Children Manager (with remove option) ─────────────────────────────────────
+function ChildrenManager({ students, activeStudentId, switchActiveStudent, onAddChild, onRemoveChild, canAddMore, C, switchingChild, removeLoading }) {
+    const [menuOpen, setMenuOpen] = useState(null);
+
     return (
         <View style={[childMgr.wrapper, { backgroundColor: C.s2, borderColor: C.bd }]}>
             <View style={childMgr.header}>
@@ -226,15 +338,9 @@ function ChildrenManager({ students, activeStudentId, switchActiveStudent, onAdd
                         <Text style={[childMgr.countText, { color: C.primary }]}>{students.length}</Text>
                     </View>
                 </View>
-                <TouchableOpacity
-                    style={[childMgr.addBtn, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}
-                    onPress={onAddChild}
-                    activeOpacity={0.75}
-                >
+                <TouchableOpacity style={[childMgr.addBtn, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]} onPress={onAddChild} activeOpacity={0.75}>
                     <Text style={[childMgr.addBtnPlus, { color: C.primary }]}>+</Text>
-                    <Text style={[childMgr.addBtnText, { color: C.primary }]}>
-                        {canAddMore ? 'Add Child' : 'Upgrade'}
-                    </Text>
+                    <Text style={[childMgr.addBtnText, { color: C.primary }]}>{canAddMore ? 'Add Child' : 'Upgrade'}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -246,14 +352,8 @@ function ChildrenManager({ students, activeStudentId, switchActiveStudent, onAdd
                         <Text style={childMgr.emptyEmoji}>👶</Text>
                     </View>
                     <Text style={[childMgr.emptyTitle, { color: C.tx }]}>No children added yet</Text>
-                    <Text style={[childMgr.emptySubtitle, { color: C.tx3 }]}>
-                        Add your first child to get started with RESQID
-                    </Text>
-                    <TouchableOpacity
-                        style={[childMgr.emptyAddBtn, { backgroundColor: C.primary }]}
-                        onPress={onAddChild}
-                        activeOpacity={0.8}
-                    >
+                    <Text style={[childMgr.emptySubtitle, { color: C.tx3 }]}>Add your first child to get started with RESQID</Text>
+                    <TouchableOpacity style={[childMgr.emptyAddBtn, { backgroundColor: C.primary }]} onPress={onAddChild} activeOpacity={0.8}>
                         <Text style={childMgr.emptyAddBtnText}>+ Add Child</Text>
                     </TouchableOpacity>
                 </View>
@@ -265,44 +365,36 @@ function ChildrenManager({ students, activeStudentId, switchActiveStudent, onAdd
                         const hasActiveCard = s.token?.status === 'ACTIVE';
                         return (
                             <Animated.View key={s.id} entering={FadeInRight.delay(idx * 60).duration(300)}>
-                                <TouchableOpacity
-                                    style={[
-                                        childMgr.childRow,
-                                        isActive && { backgroundColor: C.primaryBg },
-                                    ]}
-                                    onPress={async () => {
-                                        if (!isActive && !switchingChild) {
-                                            await switchActiveStudent(s.id);
-                                        }
-                                    }}
-                                    activeOpacity={0.7}
-                                    disabled={switchingChild}
-                                >
+                                <View style={[childMgr.childRow, isActive && { backgroundColor: C.primaryBg }]}>
                                     <View style={[childMgr.activeIndicator, { backgroundColor: isActive ? C.primary : 'transparent' }]} />
                                     <NotionAvatar name={name} size={42} colorIndex={idx} />
-                                    <View style={childMgr.childInfo}>
+                                    <TouchableOpacity
+                                        style={childMgr.childInfo}
+                                        onPress={() => {
+                                            if (!isActive && !switchingChild) {
+                                                switchActiveStudent(s.id);
+                                            }
+                                        }}
+                                        activeOpacity={0.7}
+                                        disabled={switchingChild}
+                                    >
                                         <Text style={[childMgr.childName, { color: isActive ? C.primary : C.tx }]}>{name}</Text>
                                         {s.class ? (
-                                            <Text style={[childMgr.childClass, { color: C.tx3 }]}>
-                                                Class {s.class}{s.section ? ` · ${s.section}` : ''}
-                                            </Text>
+                                            <Text style={[childMgr.childClass, { color: C.tx3 }]}>Class {s.class}{s.section ? ` · ${s.section}` : ''}</Text>
                                         ) : null}
-                                    </View>
+                                    </TouchableOpacity>
                                     <View style={childMgr.childRight}>
-                                        {hasActiveCard && (
-                                            <View style={[childMgr.cardBadge, { backgroundColor: C.okBg }]}>
-                                                <View style={[childMgr.cardDot, { backgroundColor: C.ok }]} />
-                                                <Text style={[childMgr.cardBadgeText, { color: C.ok }]}>Active</Text>
-                                            </View>
-                                        )}
+                                        {hasActiveCard && <View style={[childMgr.greenDot, { backgroundColor: C.ok }]} />}
                                         {isActive && (
                                             <View style={[childMgr.activePill, { backgroundColor: C.primary }]}>
                                                 <Text style={childMgr.activePillText}>Viewing</Text>
                                             </View>
                                         )}
-                                        {switchingChild && !isActive && <ActivityIndicator size="small" color={C.primary} />}
+                                        <TouchableOpacity onPress={() => setMenuOpen(s)} style={childMgr.menuBtn}>
+                                            <Feather name="more-vertical" size={18} color={C.tx3} />
+                                        </TouchableOpacity>
                                     </View>
-                                </TouchableOpacity>
+                                </View>
                                 {idx < students.length - 1 && <View style={[childMgr.rowDivider, { backgroundColor: C.bd }]} />}
                             </Animated.View>
                         );
@@ -315,6 +407,15 @@ function ChildrenManager({ students, activeStudentId, switchActiveStudent, onAdd
                     <Text style={[childMgr.planText, { color: C.amb }]}>✦ Upgrade to Premium to add more children</Text>
                 </View>
             )}
+
+            <RemoveChildModal
+                visible={!!menuOpen}
+                child={menuOpen}
+                onClose={() => setMenuOpen(null)}
+                onConfirm={onRemoveChild}
+                C={C}
+                loading={removeLoading}
+            />
         </View>
     );
 }
@@ -335,12 +436,11 @@ const childMgr = StyleSheet.create({
     childInfo: { flex: 1, gap: 2 },
     childName: { fontSize: 15, fontWeight: '600' },
     childClass: { fontSize: 12 },
-    childRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    cardBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
-    cardDot: { width: 5, height: 5, borderRadius: 3 },
-    cardBadgeText: { fontSize: 10, fontWeight: '700' },
+    childRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    greenDot: { width: 8, height: 8, borderRadius: 4 },
     activePill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
     activePillText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+    menuBtn: { padding: 6 },
     rowDivider: { height: 1, marginLeft: 73 },
     emptyState: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24, gap: 10 },
     emptyIcon: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
@@ -353,14 +453,13 @@ const childMgr = StyleSheet.create({
     planText: { fontSize: 12, fontWeight: '600' },
 });
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+// ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation();
     const { colors: C } = useTheme();
     const { parentUser, logout } = useAuthStore();
 
-    // ✅ CORRECT - Hook called inside component
     const {
         students,
         activeStudentId,
@@ -377,9 +476,12 @@ export default function SettingsScreen() {
         updateLocationConsent,
         updateNotificationPref,
         notificationPrefs,
+        initiateUnlink,
+        removeChild,
     } = useProfile();
 
     const [switchingChild, setSwitchingChild] = useState(false);
+    const [removeLoading, setRemoveLoading] = useState(false);
 
     const currentLang = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0];
     const [langModalOpen, setLangModal] = useState(false);
@@ -419,7 +521,22 @@ export default function SettingsScreen() {
         }
     };
 
-    // Wrapper for switchActiveStudent with loading state
+    const handleRemoveChild = async (studentId, otp, nonce) => {
+        if (otp && nonce) {
+            setRemoveLoading(true);
+            try {
+                await removeChild({ studentId, otp, nonce });
+                return { success: true };
+            } finally {
+                setRemoveLoading(false);
+            }
+        } else {
+            // First step - send OTP
+            const result = await initiateUnlink(studentId);
+            return result;
+        }
+    };
+
     const handleSwitchStudent = async (studentId) => {
         if (switchingChild) return;
         setSwitchingChild(true);
@@ -435,7 +552,6 @@ export default function SettingsScreen() {
             <LanguageModal visible={langModalOpen} onClose={() => setLangModal(false)} />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                {/* Page Header */}
                 <Animated.View entering={FadeInDown.delay(40).duration(350)} style={styles.pageHeader}>
                     <View>
                         <Text style={[styles.pageTitle, { color: C.tx }]}>Settings</Text>
@@ -443,19 +559,16 @@ export default function SettingsScreen() {
                     </View>
                 </Animated.View>
 
-                {/* Parent Profile */}
                 <Animated.View entering={FadeInDown.delay(80).duration(350)}>
                     <ParentHeader parentUser={parentUser} C={C} />
                 </Animated.View>
 
-                {/* Pending Updates */}
                 {(updateRequests?.length ?? 0) > 0 && (
                     <Animated.View entering={FadeInDown.delay(100).duration(350)}>
                         <PendingUpdatesBanner requests={updateRequests} />
                     </Animated.View>
                 )}
 
-                {/* Children Manager */}
                 <Animated.View entering={FadeInDown.delay(120).duration(350)}>
                     <SectionHeader title="Children" accent={C.primary} />
                     <ChildrenManager
@@ -463,13 +576,14 @@ export default function SettingsScreen() {
                         activeStudentId={activeStudentId}
                         switchActiveStudent={handleSwitchStudent}
                         onAddChild={handleAddChild}
+                        onRemoveChild={handleRemoveChild}
                         canAddMore={canAddMore}
                         C={C}
                         switchingChild={switchingChild}
+                        removeLoading={removeLoading}
                     />
                 </Animated.View>
 
-                {/* Physical Card */}
                 <Animated.View entering={FadeInDown.delay(180).duration(350)}>
                     <SectionHeader title="Physical Card" accent={C.primary} />
                     <SettingsCard C={C}>
@@ -487,7 +601,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Scan Activity */}
                 <Animated.View entering={FadeInDown.delay(220).duration(350)}>
                     <SectionHeader title="Scan Activity" accent={C.blue} />
                     <SettingsCard C={C}>
@@ -499,7 +612,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Emergency Profile */}
                 <Animated.View entering={FadeInDown.delay(260).duration(350)}>
                     <SectionHeader title="Emergency Profile" accent={C.primary} />
                     <SettingsCard C={C}>
@@ -525,7 +637,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Security */}
                 <Animated.View entering={FadeInDown.delay(300).duration(350)}>
                     <SectionHeader title="Security" accent={C.purp} />
                     <SettingsCard C={C}>
@@ -533,7 +644,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Notifications */}
                 <Animated.View entering={FadeInDown.delay(340).duration(350)}>
                     <SectionHeader title="Notifications" accent={C.ok} />
                     <SettingsCard C={C}>
@@ -598,7 +708,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Appearance */}
                 <Animated.View entering={FadeInDown.delay(380).duration(350)}>
                     <SectionHeader title="Appearance" accent={C.tx3} />
                     <SettingsCard C={C}>
@@ -624,7 +733,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Account */}
                 <Animated.View entering={FadeInDown.delay(420).duration(350)}>
                     <SectionHeader title="Account" accent={C.tx3} />
                     <SettingsCard C={C}>
@@ -658,7 +766,6 @@ export default function SettingsScreen() {
                     </SettingsCard>
                 </Animated.View>
 
-                {/* Footer */}
                 <Animated.View entering={FadeInDown.delay(460).duration(350)} style={styles.footer}>
                     <View style={[styles.footerDivider, { backgroundColor: C.bd2 }]} />
                     <Text style={[styles.footerText, { color: C.tx3 }]}>RESQID · v1.0.0</Text>

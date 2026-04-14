@@ -1,93 +1,79 @@
-// src/hooks/useInactivityLock.js
-import { authenticateForAppResume } from "@/services/biometricService";
 import { useBiometricStore } from "@/store/biometricStore";
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, PanResponder } from "react-native";
 
 const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes
 
-/**
- * Combines two lock strategies:
- * 1. Touch inactivity → lock screen with biometric
- * 2. Background → foreground → biometric lock
- *
- * Returns panHandlers to spread onto the root view.
- */
 export function useInactivityLock() {
-  const { isBiometricEnabled, isAppReady, setLocked, isLocked } =
-    useBiometricStore();
+  const {
+    hasPinSetup,
+    isBiometricEnabled, // ✅ FIX 1: include biometric in lock condition
+    isAppReady,
+    setLocked,
+    isLocked,
+    suppressLock,
+  } = useBiometricStore();
 
-  // --- Inactivity timer ---
+  // ✅ FIX 1: Lock if EITHER pin OR biometric is enabled
+  const isAnyLockEnabled = hasPinSetup || isBiometricEnabled;
+
   const timerRef = useRef(null);
 
   const lockApp = useCallback(() => {
-    if (isBiometricEnabled && !isLocked) {
-      setLocked(true);
-    }
-  }, [isBiometricEnabled, isLocked, setLocked]);
+    if (isAnyLockEnabled && !isLocked) setLocked(true);
+  }, [isAnyLockEnabled, isLocked, setLocked]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      lockApp();
-    }, INACTIVITY_TIMEOUT);
+    timerRef.current = setTimeout(lockApp, INACTIVITY_TIMEOUT);
   }, [lockApp]);
 
-  // Handle biometric unlock when app is locked
-  const handleUnlock = useCallback(async () => {
-    if (!isLocked) return;
-
-    const success = await authenticateForAppResume();
-    if (success) {
-      setLocked(false);
-      resetTimer(); // Reset inactivity timer after unlock
-    }
-  }, [isLocked, setLocked, resetTimer]);
-
-  // Listen for app state changes to trigger unlock
-  useEffect(() => {
-    if (isLocked && isAppReady) {
-      handleUnlock();
-    }
-  }, [isLocked, isAppReady, handleUnlock]);
-
-  // Stable pan responder — created once
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponderCapture: () => {
-        if (!isLocked) {
-          resetTimer();
-        }
-        return false; // don't consume the touch
+        if (!isLocked) resetTimer();
+        return false;
       },
-    }),
+    })
   ).current;
 
-  // Start inactivity timer on mount
   useEffect(() => {
-    if (!isLocked) {
-      resetTimer();
-    }
+    if (!isLocked) resetTimer();
     return () => clearTimeout(timerRef.current);
   }, [resetTimer, isLocked]);
 
-  // --- Background → foreground biometric lock ---
+  // ✅ FIX 2: Use refs to avoid stale closures in the AppState listener
+  const isAnyLockEnabledRef = useRef(isAnyLockEnabled);
+  const isAppReadyRef = useRef(isAppReady);
+  const suppressLockRef = useRef(suppressLock);
+  const isLockedRef = useRef(isLocked);
+
+  useEffect(() => { isAnyLockEnabledRef.current = isAnyLockEnabled; }, [isAnyLockEnabled]);
+  useEffect(() => { isAppReadyRef.current = isAppReady; }, [isAppReady]);
+  useEffect(() => { suppressLockRef.current = suppressLock; }, [suppressLock]);
+  useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
+
   const appStateRef = useRef(AppState.currentState);
   const wentToBackgroundRef = useRef(false);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
-      const prevState = appStateRef.current;
-
-      if (nextState === "background") {
+      if (nextState === "background" || nextState === "inactive") {
         wentToBackgroundRef.current = true;
         clearTimeout(timerRef.current);
       }
 
       if (nextState === "active") {
-        if (wentToBackgroundRef.current && isBiometricEnabled && isAppReady) {
+        // ✅ FIX 2: Read from refs — always fresh values, no stale closure
+        if (
+          wentToBackgroundRef.current &&
+          isAnyLockEnabledRef.current &&
+          isAppReadyRef.current &&
+          !suppressLockRef.current &&
+          !isLockedRef.current
+        ) {
           setLocked(true);
-        } else if (!isLocked) {
+        } else if (!isLockedRef.current) {
           resetTimer();
         }
         wentToBackgroundRef.current = false;
@@ -97,7 +83,8 @@ export function useInactivityLock() {
     });
 
     return () => subscription.remove();
-  }, [isBiometricEnabled, isAppReady, setLocked, resetTimer, isLocked]);
+  // ✅ Only depends on stable setLocked and resetTimer — no more stale captures
+  }, [setLocked, resetTimer]);
 
   return panResponder.panHandlers;
 }

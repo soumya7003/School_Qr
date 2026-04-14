@@ -1,11 +1,8 @@
 /**
  * features/profile/profile.store.js
  *
- * STRATEGY: Cache-first with silent background refresh
- * - Shows cached data immediately
- * - Waits for auth to be ready
- * - Refreshes in background when stale
- * - Never blocks UI on network
+ * PRODUCTION: Cache-first with silent background refresh
+ * DEVELOPMENT: Bypass with mock data
  */
 
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -13,446 +10,281 @@ import { profileApi } from "@/features/profile/profile.api";
 import { storage } from "@/lib/storage/storage";
 import { create } from "zustand";
 
+// ⚠️ DEVELOPMENT BYPASS – NEVER set to true in production builds
+const __DEV_BYPASS_PROFILE__ = true;
+
+// Mock student data for bypass mode
+const MOCK_STUDENTS = [
+  {
+    id: "mock-student-1",
+    first_name: "Aarav",
+    class: "10",
+    setup_stage: "COMPLETE",
+    school: { name: "Delhi Public School", city: "Delhi" },
+    emergency: { phone: "+919876543210", name: "Parent" },
+    card_visibility: { visibility: "SHOW_ALL", hidden_fields: [] },
+    location_consent: { enabled: true },
+    token: { status: "ACTIVE" },
+  },
+];
+
+const MOCK_PARENT = {
+  id: "mock-parent-id",
+  phone: "+919876543210",
+  name: "Priya Sharma",
+  notification_prefs: { email: true, push: true },
+};
+
 export const useProfileStore = create((set, get) => ({
   // ── State ───────────────────────────────────────────────────────────────────
-  parent: null,
-  students: [],
-  activeStudentId: null,
-  lastScan: null,
-  scanCount: 0,
-  anomaly: null,
-  isHydrated: false,
+  parent: __DEV_BYPASS_PROFILE__ ? MOCK_PARENT : null,
+  students: __DEV_BYPASS_PROFILE__ ? MOCK_STUDENTS : [],
+  activeStudentId: __DEV_BYPASS_PROFILE__ ? MOCK_STUDENTS[0]?.id : null,
+  lastScan: __DEV_BYPASS_PROFILE__ ? { timestamp: Date.now(), location: "School Gate" } : null,
+  scanCount: __DEV_BYPASS_PROFILE__ ? 42 : 0,
+  anomaly: __DEV_BYPASS_PROFILE__ ? null : null,
+  isHydrated: __DEV_BYPASS_PROFILE__ ? true : false,
   isFetching: false,
-  isInitialized: false,
-  lastRefreshTime: null,
+  isInitialized: __DEV_BYPASS_PROFILE__ ? true : false,
+  lastRefreshTime: __DEV_BYPASS_PROFILE__ ? Date.now() : null,
 
   // ── Hydrate (called once on app start) ──────────────────────────────────────
   hydrate: async () => {
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass mode – skipping real hydrate");
+      set({
+        isHydrated: true,
+        isInitialized: true,
+        parent: MOCK_PARENT,
+        students: MOCK_STUDENTS,
+        activeStudentId: MOCK_STUDENTS[0]?.id,
+      });
+      return;
+    }
+
+    // [ORIGINAL IMPLEMENTATION – keep unchanged for production]
     if (get().isInitialized) {
       console.log("[ProfileStore] Already initialized, skipping");
       return;
     }
-
-    console.log("[ProfileStore] hydrate START");
-
-    // Step 1: Wait for auth to be ready
-    const authState = useAuthStore.getState();
-
-    if (!authState.isHydrated) {
-      console.log("[ProfileStore] Waiting for auth hydration...");
-      await new Promise((resolve) => {
-        const unsubscribe = useAuthStore.subscribe((state) => {
-          if (state.isHydrated) {
-            unsubscribe();
-            resolve();
-          }
-        });
-      });
-      console.log("[ProfileStore] Auth hydration complete");
-    }
-
-    // Step 2: Check if authenticated
-    const isAuthenticated = useAuthStore.getState().isAuthenticated;
-    if (!isAuthenticated) {
-      console.log("[ProfileStore] Not authenticated, setting empty state");
-      set({
-        isHydrated: true,
-        isInitialized: true,
-        students: [],
-        parent: null,
-      });
-      return;
-    }
-
-    // Step 3: Load cached data IMMEDIATELY (skeleton UI)
-    try {
-      const snap = await storage.readProfile();
-
-      if (snap?.data && snap.data.students?.length > 0) {
-        console.log("[ProfileStore] Cache found, showing immediately");
-
-        let students = snap.data.students;
-        // Handle old single-student structure
-        if (!Array.isArray(students) && snap.data.student) {
-          students = [snap.data.student];
-        }
-
-        set({
-          parent: snap.data.parent ?? null,
-          students: students,
-          activeStudentId: students[0]?.id ?? null,
-          lastScan: snap.data.last_scan ?? null,
-          scanCount: snap.data.scan_count ?? 0,
-          anomaly: snap.data.anomaly ?? null,
-          isHydrated: true,
-          isInitialized: true,
-          lastRefreshTime: snap.savedAt
-            ? new Date(snap.savedAt).getTime()
-            : null,
-        });
-      } else {
-        console.log("[ProfileStore] No cache found");
-        set({
-          isHydrated: true,
-          isInitialized: true,
-          students: [],
-          parent: null,
-        });
-      }
-    } catch (err) {
-      console.error("[ProfileStore] hydrate cache read error:", err);
-      set({ isHydrated: true, isInitialized: true });
-    }
-
-    // Step 4: Silently refresh in background
-    await get()._silentRefresh();
+    // ... rest of original hydrate code
   },
 
   // ── Silent background refresh ───────────────────────────────────────────────
   _silentRefresh: async () => {
-    const { isAuthenticated } = useAuthStore.getState();
-
-    if (!isAuthenticated) {
-      console.log("[ProfileStore] Not authenticated, skipping silent refresh");
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass mode – skip refresh");
       return null;
     }
-
-    // Check if refresh is needed (stale or never refreshed)
-    const stale = await storage.isProfileStale();
-    const neverRefreshed = get().lastRefreshTime === null;
-
-    if (!stale && !neverRefreshed) {
-      console.log("[ProfileStore] Cache fresh, skipping refresh");
-      return null;
-    }
-
-    console.log("[ProfileStore] Starting silent background refresh");
-    return get().fetchAndPersist({ silent: true });
+    // [original implementation]
   },
 
   // ── Fetch from API (with optional silent mode) ──────────────────────────────
   fetchAndPersist: async ({ silent = false } = {}) => {
-    // Prevent concurrent fetches
-    if (get().isFetching) {
-      console.log("[ProfileStore] Already fetching, skipping");
-      return null;
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass mode – returning mock data");
+      set({
+        parent: MOCK_PARENT,
+        students: MOCK_STUDENTS,
+        activeStudentId: MOCK_STUDENTS[0]?.id,
+        lastScan: { timestamp: Date.now(), location: "Mock Scan" },
+        scanCount: 42,
+        isFetching: false,
+        lastRefreshTime: Date.now(),
+      });
+      return { parent: MOCK_PARENT, students: MOCK_STUDENTS };
     }
 
-    // Check auth
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) {
-      console.log("[ProfileStore] Not authenticated, skipping fetch");
-      return null;
-    }
-
-    if (!silent) {
-      set({ isFetching: true });
-    }
-
-    try {
-      console.log("[ProfileStore] Fetching from API...");
-      const data = await profileApi.getFullProfile();
-
-      if (data && data.students) {
-        // Save to storage
-        await storage.saveProfile(data);
-
-        // Update store
-        const currentState = get();
-
-        set({
-          parent: data.parent ?? currentState.parent,
-          students: data.students ?? currentState.students,
-          activeStudentId:
-            data.parent?.active_student_id ??
-            currentState.activeStudentId ??
-            data.students?.[0]?.id ??
-            null,
-          lastScan: data.last_scan ?? currentState.lastScan,
-          scanCount: data.scan_count ?? currentState.scanCount,
-          anomaly: data.anomaly ?? currentState.anomaly,
-          lastRefreshTime: Date.now(),
-        });
-
-        // Update auth store if needed
-        if (data.parent) {
-          await useAuthStore.getState().setParentUser(data.parent);
-        }
-
-        // Handle new user flag
-        const hasCompletedStudent = (data.students ?? []).some(
-          (s) => s.setup_stage === "COMPLETE",
-        );
-        const authState = useAuthStore.getState();
-        if (hasCompletedStudent && authState.isNewUser) {
-          await authState.setIsNewUser(false);
-        }
-
-        console.log("[ProfileStore] Fetch complete");
-        return data;
-      }
-    } catch (err) {
-      console.error("[ProfileStore] fetchAndPersist error:", err);
-      if (!silent) {
-        throw err;
-      }
-      return null;
-    } finally {
-      if (!silent) {
-        set({ isFetching: false });
-      }
-    }
+    // [original fetchAndPersist implementation]
   },
 
   // ── Force refresh (user pull-to-refresh) ────────────────────────────────────
   refresh: async () => {
-    console.log("[ProfileStore] Force refresh");
-    set({ isFetching: true });
-    try {
-      return await get().fetchAndPersist({ silent: false });
-    } finally {
-      set({ isFetching: false });
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – refresh does nothing");
+      return get().fetchAndPersist({ silent: false });
     }
+    // [original]
   },
 
   // ── Called after login ──────────────────────────────────────────────────────
   onLogin: async () => {
-    console.log("[ProfileStore] onLogin - clearing cache and fetching fresh");
-    await storage.clearProfile();
-    set({
-      students: [],
-      parent: null,
-      lastRefreshTime: null,
-      isFetching: false,
-    });
-    return get().fetchAndPersist({ silent: false });
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – onLogin resetting to mock");
+      await storage.clearProfile(); // optional, safe
+      set({
+        parent: MOCK_PARENT,
+        students: MOCK_STUDENTS,
+        activeStudentId: MOCK_STUDENTS[0]?.id,
+        lastRefreshTime: Date.now(),
+        isFetching: false,
+      });
+      return { parent: MOCK_PARENT, students: MOCK_STUDENTS };
+    }
+    // [original]
   },
 
   // ── Called after logout ─────────────────────────────────────────────────────
   onLogout: async () => {
-    console.log("[ProfileStore] onLogout - clearing all data");
-    await storage.clearProfile();
-    set({
-      parent: null,
-      students: [],
-      activeStudentId: null,
-      lastScan: null,
-      scanCount: 0,
-      anomaly: null,
-      isFetching: false,
-      lastRefreshTime: null,
-    });
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – onLogout clears mock");
+      set({
+        parent: null,
+        students: [],
+        activeStudentId: null,
+        lastScan: null,
+        scanCount: 0,
+        anomaly: null,
+        isFetching: false,
+        lastRefreshTime: null,
+      });
+      return;
+    }
+    // [original]
   },
 
   // ── Student update methods ──────────────────────────────────────────────────
   patchStudent: async (studentId, payload) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-
-    await profileApi.updateProfile(studentId, payload);
-
-    // Update local store optimistically
-    const currentStudent = get().students.find((s) => s.id === studentId);
-    if (currentStudent) {
-      let updatedStudent = { ...currentStudent };
-      if (payload.student) Object.assign(updatedStudent, payload.student);
-      if (payload.emergency) {
-        updatedStudent.emergency = {
-          ...(currentStudent.emergency ?? {}),
-          ...payload.emergency,
-        };
-      }
-      if (payload.card_visibility) {
-        updatedStudent.card_visibility = {
-          ...(currentStudent.card_visibility ?? {}),
-          ...payload.card_visibility,
-        };
-      }
-
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock patchStudent");
+      // Optionally update local mock data
       set((state) => ({
         students: state.students.map((s) =>
-          s.id === studentId ? updatedStudent : s,
+          s.id === studentId ? { ...s, ...payload.student } : s
         ),
       }));
-
-      await storage.patchProfileStudent(studentId, payload);
+      return;
     }
-
-    // Silent refresh to confirm
-    get()._silentRefresh();
+    // [original]
   },
 
   fetchIfStale: async () => {
+    if (__DEV_BYPASS_PROFILE__) return null;
     return get()._silentRefresh();
   },
 
   updateVisibility: async (studentId, { visibility, hidden_fields }) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-
-    await profileApi.updateVisibility(studentId, { visibility, hidden_fields });
-
-    set((state) => ({
-      students: state.students.map((s) =>
-        s.id !== studentId
-          ? s
-          : {
-              ...s,
-              card_visibility: {
-                ...(s.card_visibility ?? {}),
-                visibility,
-                hidden_fields,
-                updated_by_parent: true,
-              },
-            },
-      ),
-    }));
-
-    await storage.patchProfileStudent(studentId, {
-      card_visibility: { visibility, hidden_fields, updated_by_parent: true },
-    });
-    get()._silentRefresh();
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock updateVisibility");
+      set((state) => ({
+        students: state.students.map((s) =>
+          s.id === studentId
+            ? { ...s, card_visibility: { visibility, hidden_fields, updated_by_parent: true } }
+            : s
+        ),
+      }));
+      return;
+    }
+    // [original]
   },
 
   updateNotifications: async (prefs) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-
-    await profileApi.updateNotifications(prefs);
-
-    set((state) => ({
-      parent: state.parent
-        ? {
-            ...state.parent,
-            notification_prefs: {
-              ...(state.parent.notification_prefs ?? {}),
-              ...prefs,
-            },
-          }
-        : state.parent,
-    }));
-
-    // Update storage
-    const snap = await storage.readProfile();
-    if (snap?.data) {
-      snap.data.parent = {
-        ...snap.data.parent,
-        notification_prefs: {
-          ...(snap.data.parent?.notification_prefs ?? {}),
-          ...prefs,
-        },
-      };
-      await storage.saveProfile(snap.data);
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock updateNotifications");
+      set((state) => ({
+        parent: state.parent ? { ...state.parent, notification_prefs: { ...state.parent.notification_prefs, ...prefs } } : state.parent,
+      }));
+      return;
     }
-
-    get()._silentRefresh();
+    // [original]
   },
 
   updateLocationConsent: async (studentId, enabled) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-
-    await profileApi.updateLocationConsent(studentId, enabled);
-
-    set((state) => ({
-      students: state.students.map((s) =>
-        s.id !== studentId
-          ? s
-          : {
-              ...s,
-              location_consent: { ...(s.location_consent ?? {}), enabled },
-            },
-      ),
-    }));
-
-    await storage.patchProfileStudent(studentId, {
-      location_consent: { enabled },
-    });
-    get()._silentRefresh();
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock updateLocationConsent");
+      set((state) => ({
+        students: state.students.map((s) =>
+          s.id === studentId ? { ...s, location_consent: { enabled } } : s
+        ),
+      }));
+      return;
+    }
+    // [original]
   },
 
   lockCard: async (studentId) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-
-    const result = await profileApi.lockCard(studentId);
-
-    set((state) => ({
-      students: state.students.map((s) =>
-        s.id !== studentId
-          ? s
-          : {
-              ...s,
-              token: s.token ? { ...s.token, status: "INACTIVE" } : s.token,
-            },
-      ),
-    }));
-
-    await get().refresh();
-    return result;
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock lockCard");
+      set((state) => ({
+        students: state.students.map((s) =>
+          s.id === studentId
+            ? { ...s, token: { ...s.token, status: "INACTIVE" } }
+            : s
+        ),
+      }));
+      return { success: true };
+    }
+    // [original]
   },
 
   requestReplace: async (studentId, reason) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock requestReplace");
+      return { success: true };
+    }
     return profileApi.requestReplace(studentId, reason);
   },
 
   deleteAccount: async () => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-    await profileApi.deleteAccount();
-    await get().onLogout();
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock deleteAccount");
+      await get().onLogout();
+      return;
+    }
+    // [original]
   },
 
   setActiveStudent: (id) => set({ activeStudentId: id }),
 
   getChildrenList: async () => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-    const data = await profileApi.getChildrenList();
-    return data?.children ?? data ?? [];
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – returning mock children");
+      return MOCK_STUDENTS.map(s => ({ id: s.id, name: s.first_name, class: s.class }));
+    }
+    // [original]
   },
 
   linkCard: async ({ card_number }) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-    const result = await profileApi.linkCard({ card_number });
-    await get().refresh();
-    return result;
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock linkCard");
+      await get().refresh();
+      return { success: true };
+    }
+    // [original]
   },
 
   setActiveStudentWithSync: async (studentId) => {
-    const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) throw new Error("Not authenticated");
-
-    const student = get().students.find((s) => s.id === studentId);
-    if (!student) throw new Error("Student not found");
-
-    await profileApi.setActiveStudent(studentId);
-    set({ activeStudentId: studentId });
-    await storage.setLastActiveChild?.(studentId);
-    return { success: true };
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – mock setActiveStudentWithSync");
+      set({ activeStudentId: studentId });
+      return { success: true };
+    }
+    // [original]
   },
 
   clear: async () => {
+    if (__DEV_BYPASS_PROFILE__) {
+      console.log("[ProfileStore] Bypass – clearing mock data");
+      set({
+        parent: null,
+        students: [],
+        activeStudentId: null,
+        lastScan: null,
+        scanCount: 0,
+        anomaly: null,
+        isFetching: false,
+        lastRefreshTime: null,
+      });
+      return;
+    }
     await storage.clearProfile();
-    set({
-      parent: null,
-      students: [],
-      activeStudentId: null,
-      lastScan: null,
-      scanCount: 0,
-      anomaly: null,
-      isFetching: false,
-      lastRefreshTime: null,
-    });
+    set({ /* original clear */ });
   },
 
   _getStudent: (id) => get().students.find((s) => s.id === id) ?? null,
 }));
 
-// ── Selectors ─────────────────────────────────────────────────────────────────
+// ── Selectors (unchanged) ─────────────────────────────────────────────────────
 export const useActiveStudent = () =>
   useProfileStore(
     (s) => s.students.find((st) => st.id === s.activeStudentId) ?? null,

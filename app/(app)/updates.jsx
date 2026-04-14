@@ -20,26 +20,33 @@
  *
  * 5. PROGRESS BAR moved inside KAV so it participates in keyboard layout.
  *
- * 6. MISC UX — empty-state on contacts step now has a real CTA button;
- *    "Continue" button label updated per step context; field hint copy improved;
- *    review step shows warning chips for missing required data.
+ * 6. PHOTO UPLOAD — Professional avatar upload section added to Step 0 with
+ *    preview, upload button, and clear guidance.
+ *
+ * 7. STEP INDICATOR REDESIGN — Cleaner, more professional step bar with better
+ *    visual hierarchy and smooth transitions.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import Screen from '@/components/common/Screen';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
+import { useBiometricStore } from '@/store/biometricStore'; // ← NEW
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing, typography } from '@/theme';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   BackHandler,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -49,10 +56,11 @@ import {
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View,
+  View
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useShallow } from 'zustand/react/shallow';
+
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const CheckSvg = ({ c = '#fff', s = 16 }) => (
@@ -97,6 +105,18 @@ const InfoSvg = ({ c, s = 14 }) => (
     <Path d="M12 8h.01M12 12v4" stroke={c} strokeWidth={2} strokeLinecap="round" />
   </Svg>
 );
+const CameraSvg = ({ c, s = 20 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    <Circle cx="12" cy="13" r="4" stroke={c} strokeWidth={1.8} />
+  </Svg>
+);
+const UploadSvg = ({ c, s = 18 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BLOOD_GROUPS = ['A+', 'A−', 'B+', 'B−', 'O+', 'O−', 'AB+', 'AB−', 'Unknown'];
@@ -116,20 +136,20 @@ const PRIORITY_COLORS = ['#F97316', '#FBBF24', '#60A5FA', '#A78BFA', '#22C55E'];
 const STEPS = [
   {
     id: 0,
-    short: '01',
+    short: '1',
     labelKey: 'updates.stepStudent',
     label: 'Student',
     banner: {
       emoji: '👤',
       title: 'Add Your Child\'s Details',
-      body: 'Enter the name exactly as it appears on school records. First and last name are required — the card cannot be activated without them.',
-      dos: ['Use the full legal name', 'Match the school register spelling'],
-      donts: ['Don\'t use nicknames', 'Don\'t leave both fields empty'],
+      body: 'Enter the name exactly as it appears on school records and upload a recent photo. This helps first responders identify your child quickly.',
+      dos: ['Use the full legal name', 'Upload a clear, recent photo'],
+      donts: ['Don\'t use nicknames', 'Don\'t upload blurry or old photos'],
     },
   },
   {
     id: 1,
-    short: '02',
+    short: '2',
     labelKey: 'updates.stepMedical',
     label: 'Medical',
     banner: {
@@ -142,7 +162,7 @@ const STEPS = [
   },
   {
     id: 2,
-    short: '03',
+    short: '3',
     labelKey: 'updates.stepContacts',
     label: 'Contacts',
     banner: {
@@ -155,63 +175,418 @@ const STEPS = [
   },
   {
     id: 3,
-    short: '04',
+    short: '4',
     labelKey: 'updates.stepReview',
     label: 'Review',
     banner: {
       emoji: '✅',
       title: 'Review Before Activating',
-      body: 'Check all details carefully. Once the card is activated, this information will be used in real emergencies. You can always update it later.',
+      body: 'Check all details carefully. Once the card is activated, this information will be used in real emergencies.',
       dos: ['Verify phone numbers are correct', 'Confirm blood group is accurate'],
       donts: ['Don\'t activate with placeholder data', 'Don\'t skip reading the contact list'],
     },
   },
 ];
 
-// ── Step Bar ──────────────────────────────────────────────────────────────────
+// ── Professional Step Bar ─────────────────────────────────────────────────────
 function StepBar({ current, completed, C }) {
   return (
     <View style={[sb.wrap, { backgroundColor: C.s2, borderBottomColor: C.bd }]}>
-      {STEPS.map((step, i) => {
-        const isActive = i === current;
-        const isDone = completed.includes(i);
-        return (
-          <View key={step.id} style={sb.stepGroup}>
-            {i > 0 && (
-              <View style={[sb.line, { backgroundColor: C.bd2 }, (isDone || isActive) && { backgroundColor: C.primary }]} />
-            )}
-            <View style={[
-              sb.circle,
-              { borderColor: C.bd2, backgroundColor: C.s3 },
-              isActive && { borderColor: C.primary, backgroundColor: C.primaryBg },
-              isDone && { borderColor: C.okBd, backgroundColor: C.okBg },
-            ]}>
-              {isDone
-                ? <CheckSvg c="#22C55E" s={10} />
-                : <Text style={[sb.circleNum, { color: isActive ? C.primary : C.tx3 }]}>{step.short}</Text>
-              }
+      <View style={sb.container}>
+        {STEPS.map((step, i) => {
+          const isActive = i === current;
+          const isDone = completed.includes(i);
+          const isPast = i < current || isDone;
+
+          return (
+            <View key={step.id} style={sb.stepItem}>
+              {i < STEPS.length - 1 && (
+                <View style={sb.connectorWrapper}>
+                  <View
+                    style={[
+                      sb.connector,
+                      { backgroundColor: C.bd2 },
+                      isPast && { backgroundColor: C.primary }
+                    ]}
+                  />
+                </View>
+              )}
+              <View style={[sb.circleContainer, isActive && sb.circleActive]}>
+                <View style={[
+                  sb.circle,
+                  {
+                    backgroundColor: isDone ? C.ok : (isActive ? C.primary : C.s3),
+                    borderColor: isDone ? C.ok : (isActive ? C.primary : C.bd2),
+                  },
+                ]}>
+                  {isDone ? (
+                    <CheckSvg c="#fff" s={12} />
+                  ) : (
+                    <Text style={[sb.stepNumber, { color: isActive ? '#fff' : C.tx3 }]}>
+                      {step.short}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <Text style={[
+                sb.label,
+                { color: C.tx3 },
+                isActive && { color: C.tx, fontWeight: '700' },
+                isDone && { color: C.ok }
+              ]}>
+                {step.label}
+              </Text>
             </View>
-            <Text style={[sb.label, { color: isDone ? C.ok : isActive ? C.tx : C.tx3 }]}>{step.label}</Text>
-          </View>
-        );
-      })}
+          );
+        })}
+      </View>
     </View>
   );
 }
 const sb = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', paddingHorizontal: spacing.screenH, paddingVertical: spacing[4], borderBottomWidth: 1, gap: 0 },
-  stepGroup: { alignItems: 'center', flex: 1, position: 'relative' },
-  line: { position: 'absolute', top: 13, right: '50%', left: '-50%', height: 1 },
-  circle: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginBottom: 6, zIndex: 1 },
-  circleNum: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
-  label: { fontSize: 10, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
+  wrap: {
+    paddingHorizontal: spacing.screenH,
+    paddingVertical: spacing[4],
+    borderBottomWidth: 1,
+  },
+  container: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  stepItem: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  connectorWrapper: {
+    position: 'absolute',
+    top: 14,
+    left: '50%',
+    right: '-50%',
+    height: 2,
+    zIndex: 0,
+  },
+  connector: { height: 2, width: '100%' },
+  circleContainer: { zIndex: 1, marginBottom: 8 },
+  circleActive: {
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  circle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  stepNumber: { fontSize: 13, fontWeight: '700' },
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+});
+
+// ── Photo Upload Component ─────────────────────────────────────────────────────
+function PhotoUpload({ imageUri, onImageChange, C }) {
+  const [uploading, setUploading] = useState(false);
+  const [hasPermission, setHasPermission] = useState(null);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  const { setSuppressLock } = useBiometricStore(); // ← NEW: grab setter
+
+  useEffect(() => {
+    checkPermissions();
+  }, []);
+
+  const checkPermissions = async () => {
+    const { status: cameraStatus } = await ImagePicker.getCameraPermissionsAsync();
+    const { status: libraryStatus } = await ImagePicker.getMediaLibraryPermissionsAsync();
+    setHasPermission({
+      camera: cameraStatus === 'granted',
+      library: libraryStatus === 'granted',
+    });
+  };
+
+  const requestLibraryPermission = async () => {
+    if (hasPermission?.library) return true;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    setHasPermission(prev => ({ ...prev, library: status === 'granted' }));
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your photo library to upload a profile picture.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Settings', onPress: () => Linking.openSettings?.() },
+        ]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const requestCameraPermission = async () => {
+    if (hasPermission?.camera) return true;
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    setHasPermission(prev => ({ ...prev, camera: status === 'granted' }));
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your camera to take a profile picture.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Settings', onPress: () => Linking.openSettings?.() },
+        ]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const pickImage = async () => {
+    const permitted = await requestLibraryPermission();
+    if (!permitted) return;
+
+    setSuppressLock(true); // ← NEW: suppress biometric during picker
+    try {
+      setUploading(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        allowsMultipleSelection: false,
+      });
+      if (!result.canceled && result.assets[0]) {
+        Animated.sequence([
+          Animated.timing(fadeAnim, { toValue: 0.5, duration: 100, useNativeDriver: true }),
+          Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start();
+        onImageChange(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Image pick error:', error);
+      Alert.alert('Error', 'Failed to upload image. Please try again.');
+    } finally {
+      setSuppressLock(false); // ← NEW: always re-enable (even on cancel)
+      setUploading(false);
+    }
+  };
+
+  const takePhoto = async () => {
+    const permitted = await requestCameraPermission();
+    if (!permitted) return;
+
+    setSuppressLock(true); // ← NEW: suppress biometric during camera
+    try {
+      setUploading(true);
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        Animated.sequence([
+          Animated.timing(fadeAnim, { toValue: 0.5, duration: 100, useNativeDriver: true }),
+          Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start();
+        onImageChange(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    } finally {
+      setSuppressLock(false); // ← NEW: always re-enable (even on cancel)
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    Alert.alert(
+      'Remove Photo',
+      'Are you sure you want to remove this photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            Animated.timing(fadeAnim, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: true
+            }).start(() => {
+              onImageChange(null);
+              fadeAnim.setValue(1);
+            });
+          }
+        },
+      ]
+    );
+  };
+
+  return (
+    <View style={pu.container}>
+      <Text style={[pu.label, { color: C.tx3 }]}>PROFILE PHOTO</Text>
+
+      <View style={pu.content}>
+        <Animated.View style={[pu.previewContainer, { opacity: fadeAnim }]}>
+          {imageUri ? (
+            <View style={pu.previewWrapper}>
+              <Image source={{ uri: imageUri }} style={pu.preview} />
+              <TouchableOpacity
+                style={[pu.removeBtn, { backgroundColor: C.red, borderColor: '#fff' }]}
+                onPress={handleRemove}
+              >
+                <XSvg c="#fff" s={12} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={[pu.placeholder, { backgroundColor: C.s3, borderColor: C.bd2 }]}>
+              <View style={[pu.placeholderIcon, { backgroundColor: C.primaryBg }]}>
+                <CameraSvg c={C.primary} s={28} />
+              </View>
+              <Text style={[pu.placeholderText, { color: C.tx3 }]}>
+                No photo uploaded
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+
+        <View style={pu.actions}>
+          <TouchableOpacity
+            style={[pu.actionBtn, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}
+            onPress={takePhoto}
+            disabled={uploading}
+            activeOpacity={0.7}
+          >
+            <CameraSvg c={C.primary} s={16} />
+            <Text style={[pu.actionText, { color: C.primary }]}>Camera</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[pu.actionBtn, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}
+            onPress={pickImage}
+            disabled={uploading}
+            activeOpacity={0.7}
+          >
+            <UploadSvg c={C.primary} s={16} />
+            <Text style={[pu.actionText, { color: C.primary }]}>Gallery</Text>
+          </TouchableOpacity>
+        </View>
+
+        {uploading && (
+          <View style={[pu.loadingOverlay, { backgroundColor: 'rgba(255,255,255,0.8)' }]}>
+            <ActivityIndicator size="small" color={C.primary} />
+          </View>
+        )}
+      </View>
+
+      <View style={[pu.hint, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
+        <InfoSvg c={C.blue} s={12} />
+        <Text style={[pu.hintText, { color: C.blue }]}>
+          A clear, recent photo helps first responders identify your child quickly.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const pu = StyleSheet.create({
+  container: { gap: 8 },
+  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  content: { position: 'relative' },
+  previewContainer: { alignItems: 'center' },
+  previewWrapper: { position: 'relative' },
+  preview: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  placeholderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: { fontSize: 11, fontWeight: '500' },
+  actions: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 12 },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  actionText: { fontSize: 13, fontWeight: '600' },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 60,
+  },
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  hintText: { fontSize: 11, flex: 1, lineHeight: 16 },
 });
 
 // ── Instruction Banner ─────────────────────────────────────────────────────────
-// Always visible — shows for both new users and returning users on each step.
 function InstructionBanner({ currentStep, isNewUser, C }) {
   const meta = STEPS[currentStep]?.banner ?? STEPS[0].banner;
-  // For returning users show a more compact version (no dos/donts)
   return (
     <View style={[ib.wrap, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}>
       <View style={ib.titleRow}>
@@ -224,7 +599,6 @@ function InstructionBanner({ currentStep, isNewUser, C }) {
         )}
       </View>
       <Text style={[ib.body, { color: C.tx2 }]}>{meta.body}</Text>
-      {/* dos / donts — always show */}
       <View style={ib.hintRow}>
         <View style={ib.hintCol}>
           {meta.dos.map((d, i) => (
@@ -266,9 +640,31 @@ const ib = StyleSheet.create({
 // ── Progress Bar ──────────────────────────────────────────────────────────────
 function ProgressBar({ currentStep, totalSteps = 4, C }) {
   const progress = ((currentStep + 1) / totalSteps) * 100;
+  const animatedProgress = useRef(new Animated.Value(progress)).current;
+
+  useEffect(() => {
+    Animated.spring(animatedProgress, {
+      toValue: progress,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 7,
+    }).start();
+  }, [progress]);
+
   return (
     <View style={[pb.track, { backgroundColor: C.s3 }]}>
-      <View style={[pb.fill, { width: `${progress}%`, backgroundColor: C.primary }]} />
+      <Animated.View
+        style={[
+          pb.fill,
+          {
+            width: animatedProgress.interpolate({
+              inputRange: [0, 100],
+              outputRange: ['0%', '100%'],
+            }),
+            backgroundColor: C.primary
+          }
+        ]}
+      />
     </View>
   );
 }
@@ -448,8 +844,6 @@ const ccc = StyleSheet.create({
 });
 
 // ── Contact Modal ─────────────────────────────────────────────────────────────
-// FIX: Uses internal ScrollView + padding bottom so the phone/relationship
-// fields are never hidden behind the soft keyboard on any device.
 function ContactModal({ visible, contact, onSave, onClose, C }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
@@ -484,23 +878,15 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {/* Tapping the dark overlay dismisses the modal */}
       <Pressable style={cm.overlay} onPress={Keyboard.dismiss}>
-        {/*
-          KAV with behavior="padding" lifts the sheet up by exactly the
-          keyboard height on both iOS and Android, so no field is hidden.
-        */}
         <KeyboardAvoidingView
           behavior="padding"
           style={cm.kavContainer}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          {/* Inner Pressable stops taps on the sheet propagating to the overlay */}
           <Pressable style={[cm.sheet, { backgroundColor: C.s2, borderColor: C.bd2 }]}>
-            {/* Drag handle */}
             <View style={[cm.handle, { backgroundColor: C.s4 }]} />
 
-            {/* Header */}
             <View style={cm.sheetHead}>
               <View style={{ flex: 1 }}>
                 <Text style={[cm.sheetTitle, { color: C.tx }]}>
@@ -518,7 +904,6 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
               </TouchableOpacity>
             </View>
 
-            {/* Fields — scrollable so content never hides behind keyboard */}
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -560,7 +945,6 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
                 onSubmitEditing={Keyboard.dismiss}
               />
 
-              {/* Rules reminder inside the modal */}
               <View style={[cm.rulesBox, { backgroundColor: C.s3, borderColor: C.bd }]}>
                 <Text style={[cm.rulesTitle, { color: C.tx2 }]}>Phone number rules</Text>
                 <Text style={[cm.ruleItem, { color: C.tx3 }]}>✓  Must be a reachable mobile number</Text>
@@ -569,7 +953,6 @@ function ContactModal({ visible, contact, onSave, onClose, C }) {
               </View>
             </ScrollView>
 
-            {/* Save Button — always pinned above keyboard */}
             <TouchableOpacity
               style={[cm.saveBtn, { backgroundColor: C.primary }]}
               onPress={handleSave}
@@ -641,7 +1024,6 @@ function NavFooter({ step, isNewUser, onBack, onNext, nextLabel, saving, canProc
   const isFirst = step === 0;
   return (
     <View style={[nf.bar, { backgroundColor: C.s2, borderTopColor: C.bd }]}>
-      {/* Hide back on step 0 for new users — they must complete the flow */}
       {(!isNewUser || step > 0) ? (
         <TouchableOpacity
           style={[nf.backBtn, { borderColor: C.bd2, backgroundColor: C.s3 }, isFirst && { opacity: 0 }]}
@@ -653,7 +1035,6 @@ function NavFooter({ step, isNewUser, onBack, onNext, nextLabel, saving, canProc
           <Text style={[nf.backText, { color: C.tx2 }]}>Back</Text>
         </TouchableOpacity>
       ) : (
-        // Placeholder to keep layout balanced
         <View style={nf.backBtn} />
       )}
       <TouchableOpacity
@@ -703,6 +1084,7 @@ export default function UpdatesScreen() {
   const [lastName, setLastName] = useState(student?.last_name ?? '');
   const [cls, setCls] = useState(student?.class ?? '');
   const [section, setSection] = useState(student?.section ?? '');
+  const [profileImage, setProfileImage] = useState(student?.profile_image ?? null);
   const [bloodGroup, setBloodGroup] = useState(BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? '');
   const [allergies, setAllergies] = useState(ep?.allergies ?? '');
   const [conditions, setConditions] = useState(ep?.conditions ?? '');
@@ -724,6 +1106,7 @@ export default function UpdatesScreen() {
     setLastName(student?.last_name ?? '');
     setCls(student?.class ?? '');
     setSection(student?.section ?? '');
+    setProfileImage(student?.profile_image ?? null);
   }, [student]);
 
   useEffect(() => {
@@ -743,7 +1126,6 @@ export default function UpdatesScreen() {
     if (!isNewUser) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (step > 0) { goBack(); return true; }
-      // On step 0 for new user — eat the back press entirely
       Alert.alert(
         'Complete Profile First',
         'You need to add your child\'s details before you can use RESQID.',
@@ -805,6 +1187,7 @@ export default function UpdatesScreen() {
           last_name: lastName.trim(),
           class: cls.trim(),
           section: section.trim(),
+          profile_image: profileImage,
         },
         emergency: {
           blood_group: (BLOOD_GROUP_TO_ENUM[bloodGroup] ?? bloodGroup) || undefined,
@@ -831,7 +1214,6 @@ export default function UpdatesScreen() {
       if (isNewUser) {
         await setIsNewUser(false);
         fetchAndPersist?.().catch(() => { });
-        // AuthProvider re-routes to home
       } else {
         Alert.alert('Profile Updated ✓', "Your child's information has been saved.");
       }
@@ -890,7 +1272,6 @@ export default function UpdatesScreen() {
 
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
-      {/* Contact Modal — rendered outside KAV so it overlays everything */}
       <ContactModal
         visible={modalVisible}
         contact={editingContact}
@@ -899,14 +1280,6 @@ export default function UpdatesScreen() {
         C={C}
       />
 
-      {/*
-        ─────────────────────────────────────────────────────────────────────
-        FIX: KeyboardAvoidingView wraps the ENTIRE screen body (header, step
-        bar, progress, scroll, footer). This is the correct pattern. Putting
-        KAV only around the ScrollView means the elements above it don't
-        participate in the keyboard-avoidance layout.
-        ─────────────────────────────────────────────────────────────────────
-      */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -914,7 +1287,6 @@ export default function UpdatesScreen() {
       >
         {/* ── Header ── */}
         <View style={[s.header, { borderBottomColor: C.bd }]}>
-          {/* Hide back arrow for new users on step 0 */}
           {(!isNewUser || step > 0) ? (
             <TouchableOpacity onPress={isNewUser ? goBack : router.back} style={s.backBtn}>
               <ChevLeft c={C.tx} s={20} />
@@ -946,7 +1318,6 @@ export default function UpdatesScreen() {
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Instruction banner — always shown */}
           <InstructionBanner currentStep={step} isNewUser={isNewUser} C={C} />
 
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -954,6 +1325,19 @@ export default function UpdatesScreen() {
             {/* ── Step 0: Student ── */}
             {step === 0 && (
               <View style={s.stepContent}>
+                <SectionCard
+                  icon={<CameraSvg c={C.primary} s={16} />}
+                  title="Profile Photo"
+                  subtitle="Optional but recommended — helps identify your child"
+                  C={C}
+                >
+                  <PhotoUpload
+                    imageUri={profileImage}
+                    onImageChange={setProfileImage}
+                    C={C}
+                  />
+                </SectionCard>
+
                 <SectionCard
                   icon={<Text style={{ fontSize: 15 }}>👤</Text>}
                   title="Child's Name"
@@ -1104,7 +1488,6 @@ export default function UpdatesScreen() {
             {/* ── Step 2: Contacts ── */}
             {step === 2 && (
               <View style={s.stepContent}>
-                {/* How it works */}
                 <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
                   <Text style={[s.callInfoTitle, { color: C.tx }]}>How Emergency Calls Work</Text>
                   {[
@@ -1123,7 +1506,6 @@ export default function UpdatesScreen() {
                   </Text>
                 </View>
 
-                {/* Contact list or empty state */}
                 {sortedContacts.length === 0 ? (
                   <View style={[s.emptyContacts, { backgroundColor: C.s2, borderColor: C.bd }]}>
                     <Text style={{ fontSize: 32 }}>📵</Text>
@@ -1155,7 +1537,6 @@ export default function UpdatesScreen() {
                   </View>
                 )}
 
-                {/* Add more button */}
                 {contacts.length > 0 && contacts.length < 5 && (
                   <TouchableOpacity
                     style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]}
@@ -1186,13 +1567,16 @@ export default function UpdatesScreen() {
             {/* ── Step 3: Review ── */}
             {step === 3 && (
               <View style={s.stepContent}>
-                {/* Student summary card */}
                 <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                  <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                    <Text style={[s.reviewAvatarText, { color: C.primary }]}>
-                      {firstName ? firstName[0].toUpperCase() : '?'}
-                    </Text>
-                  </View>
+                  {profileImage ? (
+                    <Image source={{ uri: profileImage }} style={s.reviewAvatarImg} />
+                  ) : (
+                    <View style={[s.reviewAvatar, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
+                      <Text style={[s.reviewAvatarText, { color: C.primary }]}>
+                        {firstName ? firstName[0].toUpperCase() : '?'}
+                      </Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={[s.reviewName, { color: C.tx }]}>
                       {`${firstName} ${lastName}`.trim() || 'Child'}
@@ -1215,6 +1599,7 @@ export default function UpdatesScreen() {
                   <ReviewRow label="Last Name" value={lastName} required C={C} />
                   <ReviewRow label="Class" value={cls || 'Not set'} C={C} />
                   <ReviewRow label="Section" value={section || 'Not set'} C={C} />
+                  <ReviewRow label="Profile Photo" value={profileImage ? 'Uploaded' : 'Not uploaded'} C={C} />
                 </SectionCard>
 
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>❤️</Text>} title="Medical Information" C={C}>
@@ -1266,7 +1651,6 @@ export default function UpdatesScreen() {
           <View style={{ height: 24 }} />
         </ScrollView>
 
-        {/* ── Footer ── */}
         <NavFooter
           step={step}
           isNewUser={isNewUser}
@@ -1316,6 +1700,7 @@ const s = StyleSheet.create({
   addBtnSub: { fontSize: 11.5, marginTop: 2 },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 14, borderWidth: 1, padding: 16 },
   reviewAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  reviewAvatarImg: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: '#fff', flexShrink: 0 },
   reviewAvatarText: { fontSize: 20, fontWeight: '900' },
   reviewName: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
   reviewClass: { fontSize: 12, marginTop: 2 },

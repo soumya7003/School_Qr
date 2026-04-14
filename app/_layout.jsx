@@ -6,7 +6,7 @@
  * FIXED: Profile refreshes only when authenticated
  */
 
-import BiometricGate from "@/components/auth/BiometricGate";
+import SequentialLockGate from "@/components/auth/SequentialLockGate";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useProfileStore } from "@/features/profile/profile.store";
 import { useInactivityLock } from "@/hooks/useInactivityLock";
@@ -119,7 +119,7 @@ function RootLayoutContent({ handleRootLayout }) {
                     </Stack>
 
                     <StatusBar style="auto" />
-                    <BiometricGate />
+                    <SequentialLockGate />
                 </View>
             </RootErrorBoundary>
         </AppProviders>
