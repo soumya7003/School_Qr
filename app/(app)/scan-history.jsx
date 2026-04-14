@@ -1,6 +1,13 @@
 /**
  * app/(app)/scan-history.jsx
  * Scan History — Modern timeline design with smart filtering
+ * 
+ * FIXES:
+ * - Duplicate key issue resolved
+ * - Stat cards now in sticky header, not overlapping
+ * - Click scan item → opens detail modal
+ * - Location opens in maps app
+ * - Device info displayed in detail view
  */
 
 import Screen from '@/components/common/Screen';
@@ -15,8 +22,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    Linking,
+    Modal,
     Platform,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -28,9 +38,6 @@ import Svg, { Circle, Path } from 'react-native-svg';
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 const FILTERS = [
     { key: 'all', label: 'All Scans', icon: 'list' },
-    { key: 'emergency', label: 'Emergency', icon: 'alert-triangle' },
-    { key: 'success', label: 'Success', icon: 'check-circle' },
-    { key: 'flagged', label: 'Flagged', icon: 'flag' },
 ];
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
@@ -60,9 +67,26 @@ function formatTime(iso) {
     });
 }
 
+function formatDateTime(iso) {
+    return `${formatFullDate(iso)} at ${formatTime(iso)}`;
+}
+
 function getLocationString(scan) {
     const parts = [scan.ip_city, scan.ip_region, scan.ip_country].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : 'Location unavailable';
+}
+
+function hasCoordinates(scan) {
+    return scan.latitude != null && scan.longitude != null;
+}
+
+function openMaps(latitude, longitude) {
+    const url = Platform.select({
+        ios: `maps:0,0?q=${latitude},${longitude}`,
+        android: `geo:${latitude},${longitude}?q=${latitude},${longitude}`,
+        default: `https://maps.google.com/?q=${latitude},${longitude}`,
+    });
+    Linking.openURL(url);
 }
 
 // ─── Scan Result Config ───────────────────────────────────────────────────────
@@ -171,11 +195,7 @@ function FilterChip({ filter, isActive, onPress, C }) {
             onPress={onPress}
             activeOpacity={0.8}
         >
-            <Feather
-                name={filter.icon}
-                size={14}
-                color={isActive ? '#fff' : C.tx3}
-            />
+            <Feather name={filter.icon} size={14} color={isActive ? '#fff' : C.tx3} />
             <Text style={[
                 styles.filterChipText,
                 { color: isActive ? '#fff' : C.tx3 },
@@ -187,79 +207,198 @@ function FilterChip({ filter, isActive, onPress, C }) {
     );
 }
 
+// ─── Scan Detail Modal ────────────────────────────────────────────────────────
+function ScanDetailModal({ scan, visible, onClose, C }) {
+    if (!scan) return null;
+
+    const config = getScanConfig(scan.result, scan.scan_purpose, C);
+    const location = getLocationString(scan);
+    const hasLoc = hasCoordinates(scan);
+
+    return (
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={onClose}
+        >
+            <View style={[styles.modalOverlay, { backgroundColor: C.bg + 'CC' }]}>
+                <View style={[styles.modalContent, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                    {/* Header */}
+                    <View style={styles.modalHeader}>
+                        <View style={[styles.modalIcon, { backgroundColor: config.badgeBg }]}>
+                            <Feather name={config.icon} size={24} color={config.badgeColor} />
+                        </View>
+                        <Text style={[styles.modalTitle, { color: C.tx }]}>{config.label}</Text>
+                        <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+                            <Feather name="x" size={24} color={C.tx3} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.modalBody}>
+                        {/* Date & Time */}
+                        <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
+                            <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>DATE & TIME</Text>
+                            <View style={styles.detailRow}>
+                                <Feather name="calendar" size={16} color={C.primary} />
+                                <Text style={[styles.detailValue, { color: C.tx }]}>{formatDateTime(scan.created_at)}</Text>
+                            </View>
+                        </View>
+
+                        {/* Location */}
+                        <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
+                            <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>LOCATION</Text>
+                            <View style={styles.detailRow}>
+                                <Feather name="map-pin" size={16} color={C.primary} />
+                                <Text style={[styles.detailValue, { color: C.tx2 }]}>{location}</Text>
+                            </View>
+                            {hasLoc && (
+                                <TouchableOpacity
+                                    style={[styles.mapButton, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}
+                                    onPress={() => openMaps(scan.latitude, scan.longitude)}
+                                >
+                                    <Feather name="map" size={16} color={C.blue} />
+                                    <Text style={[styles.mapButtonText, { color: C.blue }]}>View on Map</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Coordinates (if available) */}
+                        {hasLoc && (
+                            <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
+                                <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>COORDINATES</Text>
+                                <View style={styles.detailRow}>
+                                    <Feather name="navigation" size={16} color={C.primary} />
+                                    <Text style={[styles.detailValue, { color: C.tx2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
+                                        {scan.latitude?.toFixed(6)}, {scan.longitude?.toFixed(6)}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Device Info */}
+                        <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
+                            <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>SCANNER DEVICE</Text>
+                            <View style={styles.detailRow}>
+                                <Feather name="smartphone" size={16} color={C.primary} />
+                                <Text style={[styles.detailValue, { color: C.tx2 }]}>
+                                    {scan.user_agent?.substring(0, 100) || 'Unknown device'}
+                                </Text>
+                            </View>
+                            {scan.device_hash && (
+                                <View style={styles.detailRow}>
+                                    <Feather name="fingerprint" size={16} color={C.primary} />
+                                    <Text style={[styles.detailValue, { color: C.tx3, fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
+                                        Device ID: {scan.device_hash}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* IP Address */}
+                        <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
+                            <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>NETWORK INFO</Text>
+                            <View style={styles.detailRow}>
+                                <Feather name="globe" size={16} color={C.primary} />
+                                <Text style={[styles.detailValue, { color: C.tx2 }]}>
+                                    IP: {scan.ip_address || 'Not recorded'}
+                                </Text>
+                            </View>
+                            {scan.response_time_ms && (
+                                <View style={styles.detailRow}>
+                                    <Feather name="zap" size={16} color={C.primary} />
+                                    <Text style={[styles.detailValue, { color: C.tx2 }]}>
+                                        Response: {scan.response_time_ms}ms
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Scan Purpose Badge */}
+                        <View style={styles.detailSection}>
+                            <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>SCAN TYPE</Text>
+                            <View style={[styles.purposeBadge, { backgroundColor: config.badgeBg }]}>
+                                <Feather name={scan.scan_purpose === 'EMERGENCY' ? 'alert-triangle' : 'qr-code'} size={14} color={config.badgeColor} />
+                                <Text style={[styles.purposeText, { color: config.badgeColor }]}>
+                                    {scan.scan_purpose === 'EMERGENCY' ? 'Emergency Scan' : 'QR Code Scan'}
+                                </Text>
+                            </View>
+                        </View>
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
 // ─── Scan Timeline Item ───────────────────────────────────────────────────────
-function ScanTimelineItem({ scan, index, C }) {
+function ScanTimelineItem({ scan, index, onPress, C }) {
     const config = getScanConfig(scan.result, scan.scan_purpose, C);
     const location = getLocationString(scan);
     const isEmergency = scan.scan_purpose === 'EMERGENCY';
 
     return (
-        <Animated.View
-            entering={FadeInUp.delay(index * 50).duration(400)}
-            layout={Layout.springify()}
-        >
-            <View style={[styles.timelineItem, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                {/* Left timeline indicator */}
-                <View style={styles.timelineLeft}>
-                    <LinearGradient
-                        colors={config.gradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                        style={styles.timelineLine}
-                    />
-                    <View style={[styles.timelineDot, {
-                        backgroundColor: config.badgeColor,
-                        shadowColor: config.badgeColor,
-                    }]}>
-                        <Feather name={config.icon} size={14} color="#fff" />
-                    </View>
-                </View>
-
-                {/* Content */}
-                <View style={styles.timelineContent}>
-                    <View style={styles.timelineHeader}>
-                        <View style={styles.timelineHeaderLeft}>
-                            <Text style={[styles.timelineTitle, { color: C.tx }]}>
-                                {config.label}
-                            </Text>
-                            {isEmergency && (
-                                <View style={[styles.emergencyBadge, { backgroundColor: C.redBg }]}>
-                                    <Text style={[styles.emergencyBadgeText, { color: C.red }]}>EMERGENCY</Text>
-                                </View>
-                            )}
+        <TouchableOpacity onPress={() => onPress(scan)} activeOpacity={0.7}>
+            <Animated.View
+                entering={FadeInUp.delay(index * 50).duration(400)}
+                layout={Layout.springify()}
+            >
+                <View style={[styles.timelineItem, { backgroundColor: C.s2, borderColor: C.bd }]}>
+                    {/* Left timeline indicator */}
+                    <View style={styles.timelineLeft}>
+                        <LinearGradient
+                            colors={config.gradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.timelineLine}
+                        />
+                        <View style={[styles.timelineDot, {
+                            backgroundColor: config.badgeColor,
+                            shadowColor: config.badgeColor,
+                        }]}>
+                            <Feather name={config.icon} size={14} color="#fff" />
                         </View>
-                        <Text style={[styles.timelineTime, { color: C.tx3 }]}>
-                            {formatRelativeTime(scan.created_at)}
-                        </Text>
                     </View>
 
-                    <View style={styles.timelineDetails}>
-                        <View style={styles.detailRow}>
-                            <Feather name="map-pin" size={13} color={C.tx3} />
-                            <Text style={[styles.detailText, { color: C.tx2 }]} numberOfLines={1}>
-                                {location}
+                    {/* Content */}
+                    <View style={styles.timelineContent}>
+                        <View style={styles.timelineHeader}>
+                            <View style={styles.timelineHeaderLeft}>
+                                <Text style={[styles.timelineTitle, { color: C.tx }]}>
+                                    {config.label}
+                                </Text>
+                                {isEmergency && (
+                                    <View style={[styles.emergencyBadge, { backgroundColor: C.redBg }]}>
+                                        <Text style={[styles.emergencyBadgeText, { color: C.red }]}>EMERGENCY</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <Text style={[styles.timelineTime, { color: C.tx3 }]}>
+                                {formatRelativeTime(scan.created_at)}
                             </Text>
                         </View>
 
-                        <View style={styles.detailRow}>
-                            <Feather name="calendar" size={13} color={C.tx3} />
-                            <Text style={[styles.detailText, { color: C.tx2 }]}>
-                                {formatFullDate(scan.created_at)} · {formatTime(scan.created_at)}
-                            </Text>
-                        </View>
-
-                        {scan.response_time_ms && (
+                        <View style={styles.timelineDetails}>
                             <View style={styles.detailRow}>
-                                <Feather name="zap" size={13} color={C.tx3} />
-                                <Text style={[styles.detailText, { color: C.tx2 }]}>
-                                    Response time: {scan.response_time_ms}ms
+                                <Feather name="map-pin" size={13} color={C.tx3} />
+                                <Text style={[styles.detailText, { color: C.tx2 }]} numberOfLines={1}>
+                                    {location}
                                 </Text>
                             </View>
-                        )}
+
+                            <View style={styles.detailRow}>
+                                <Feather name="calendar" size={13} color={C.tx3} />
+                                <Text style={[styles.detailText, { color: C.tx2 }]}>
+                                    {formatFullDate(scan.created_at)} · {formatTime(scan.created_at)}
+                                </Text>
+                            </View>
+                        </View>
                     </View>
+
+                    <Feather name="chevron-right" size={18} color={C.tx3} />
                 </View>
-            </View>
-        </Animated.View>
+            </Animated.View>
+        </TouchableOpacity>
     );
 }
 
@@ -301,6 +440,8 @@ export default function ScanHistoryScreen() {
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [activeFilter, setActiveFilter] = useState('all');
+    const [selectedScan, setSelectedScan] = useState(null);
+    const [modalVisible, setModalVisible] = useState(false);
 
     const stats = useMemo(() => {
         const emergency = scans.filter(s => s.scan_purpose === 'EMERGENCY').length;
@@ -343,19 +484,25 @@ export default function ScanHistoryScreen() {
 
     const handleRefresh = () => loadScans(true);
     const handleLoadMore = () => { if (hasMore && !loading) loadScans(false); };
+    const handleFilterChange = (key) => { if (key === activeFilter) return; setActiveFilter(key); };
+    const handleScanPress = (scan) => { setSelectedScan(scan); setModalVisible(true); };
+    const handleCloseModal = () => { setModalVisible(false); setSelectedScan(null); };
 
-    const handleFilterChange = (key) => {
-        if (key === activeFilter) return;
-        setActiveFilter(key);
+    const renderItem = ({ item, index }) => (
+        <ScanTimelineItem scan={item} index={index} onPress={handleScanPress} C={C} />
+    );
+
+    const keyExtractor = (item, index) => {
+        if (item.id) return `${item.id}-${index}`;
+        return `scan-${index}-${item.created_at || Date.now()}`;
     };
 
-    // ── ListHeader now owns the stats grid so everything scrolls together ──
     const ListHeader = () => (
         <View style={styles.listHeaderContainer}>
             {/* Stats Grid */}
             <Animated.View entering={FadeInUp.delay(50).duration(400)}>
                 <View style={styles.statsGrid}>
-                    <StatCard label="Total Scans" value={stats.total + (hasMore ? '+' : '')} icon="activity" color={C.blue} gradientColors={[C.blue, '#1D4ED8']} delay={0} C={C} />
+                    <StatCard label="Total Scans" value={stats.total} icon="activity" color={C.blue} gradientColors={[C.blue, '#1D4ED8']} delay={0} C={C} />
                     <StatCard label="Emergency" value={stats.emergency} icon="alert-triangle" color={C.red} gradientColors={[C.red, '#991B1B']} delay={50} C={C} />
                     <StatCard label="Success" value={stats.success} icon="check-circle" color={C.ok} gradientColors={[C.ok, '#0D9488']} delay={100} C={C} />
                     <StatCard label="Flagged" value={stats.flagged} icon="flag" color={C.amb} gradientColors={[C.amb, '#B45309']} delay={150} C={C} />
@@ -445,11 +592,11 @@ export default function ScanHistoryScreen() {
                 <View style={styles.headerRight} />
             </Animated.View>
 
-            {/* FlatList owns everything below the header */}
+            {/* FlatList */}
             <FlatList
                 data={scans}
-                keyExtractor={(item, i) => item.id ?? String(i)}
-                renderItem={({ item, index }) => <ScanTimelineItem scan={item} index={index} C={C} />}
+                keyExtractor={keyExtractor}
+                renderItem={renderItem}
                 ListHeaderComponent={ListHeader}
                 ListEmptyComponent={!loading && !refreshing ? <EmptyState C={C} /> : null}
                 ListFooterComponent={ListFooter}
@@ -460,6 +607,14 @@ export default function ScanHistoryScreen() {
                     <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.primary} colors={[C.primary]} progressBackgroundColor={C.s2} />
                 }
                 showsVerticalScrollIndicator={false}
+            />
+
+            {/* Detail Modal */}
+            <ScanDetailModal
+                scan={selectedScan}
+                visible={modalVisible}
+                onClose={handleCloseModal}
+                C={C}
             />
         </Screen>
     );
@@ -488,7 +643,6 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
     headerSubtitle: { fontSize: 12, marginTop: 1, fontWeight: '500' },
     headerRight: { width: 42 },
-    // statsWrapper removed — stats now live inside listHeaderContainer
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     statCard: { flex: 1, minWidth: '45%', borderRadius: 20, borderWidth: 1, padding: 16, alignItems: 'center', position: 'relative', overflow: 'hidden' },
     statIconBg: { position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: 40 },
@@ -527,4 +681,19 @@ const styles = StyleSheet.create({
     footerContainer: { paddingVertical: 20, alignItems: 'center' },
     endMessage: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 30, borderWidth: 1 },
     endMessageText: { fontSize: 13, fontWeight: '600' },
+    // Modal styles
+    modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
+    modalContent: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, maxHeight: '85%', overflow: 'hidden' },
+    modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+    modalIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    modalTitle: { flex: 1, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+    modalClose: { padding: 4 },
+    modalBody: { padding: 20, gap: 20 },
+    detailSection: { gap: 10, paddingBottom: 16, borderBottomWidth: 1 },
+    detailSectionTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+    detailValue: { flex: 1, fontSize: 14, lineHeight: 20 },
+    mapButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
+    mapButtonText: { fontSize: 13, fontWeight: '700' },
+    purposeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
+    purposeText: { fontSize: 12, fontWeight: '700' },
 });

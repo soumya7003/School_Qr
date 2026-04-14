@@ -290,7 +290,13 @@ export const useProfileStore = create((set, get) => ({
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
+    // Update both cardVisibility AND emergency profile visibility
     await profileApi.updateVisibility(studentId, { visibility, hidden_fields });
+
+    // Also update emergency profile visibility
+    await profileApi.updateProfile(studentId, {
+      emergency: { visibility },
+    });
 
     set((state) => ({
       students: state.students.map((s) =>
@@ -304,12 +310,17 @@ export const useProfileStore = create((set, get) => ({
                 hidden_fields,
                 updated_by_parent: true,
               },
+              emergency: {
+                ...(s.emergency ?? {}),
+                visibility,
+              },
             },
       ),
     }));
 
     await storage.patchProfileStudent(studentId, {
       card_visibility: { visibility, hidden_fields, updated_by_parent: true },
+      emergency: { visibility },
     });
     get()._silentRefresh();
   },
@@ -433,6 +444,23 @@ export const useProfileStore = create((set, get) => ({
     set({ activeStudentId: studentId });
     await storage.setLastActiveChild?.(studentId);
     return { success: true };
+  },
+
+  unlinkChild: async (studentId, otp, nonce) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.unlinkChildVerify(studentId, otp, nonce);
+    await get().refresh();
+    return result;
+  },
+
+  unlinkChildInit: async (studentId) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.unlinkChildInit(studentId);
+    return result;
   },
 
   clear: async () => {

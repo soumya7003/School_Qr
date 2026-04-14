@@ -219,4 +219,32 @@ export const profileApi = {
     });
     return res?.data?.data ?? res?.data;
   },
+
+  /**
+   * POST /api/parents/me/unlink-child/init
+   * Send OTP to parent's phone for unlinking child
+   * body: { student_id }
+   * → { nonce, expiresIn, masked_phone }
+   */
+  unlinkChildInit: async (studentId) => {
+    const res = await apiClient.post("/parents/me/unlink-child/init", {
+      student_id: studentId,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/unlink-child/verify
+   * Verify OTP and remove child from parent account
+   * body: { student_id, otp, nonce }
+   * → { success, message, remaining_children, active_student_id }
+   */
+  unlinkChildVerify: async (studentId, otp, nonce) => {
+    const res = await apiClient.post("/parents/me/unlink-child/verify", {
+      student_id: studentId,
+      otp,
+      nonce,
+    });
+    return res?.data?.data ?? res?.data;
+  },
 };
