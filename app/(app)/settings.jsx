@@ -519,18 +519,21 @@ export default function SettingsScreen() {
     useEffect(() => {
         if (isHydrated && students.length === 0) {
             const timer = setTimeout(() => {
-                Alert.alert(
-                    'No Children Linked',
-                    'Please add a child to continue using RESQID.',
-                    [
-                        {
-                            text: 'Add Child',
-                            onPress: () => router.replace('/add-child')
-                        }
-                    ]
-                );
+                const currentStudents = useProfileStore.getState().students;
+                // 🟢 Only show alert if still empty AND not already on add-child screen
+                if (currentStudents.length === 0) {
+                    Alert.alert(
+                        'No Children Linked',
+                        'Please add a child to continue using RESQID.',
+                        [
+                            {
+                                text: 'Add Child',
+                                onPress: () => router.replace('/add-child')
+                            }
+                        ]
+                    );
+                }
             }, 500);
-
             return () => clearTimeout(timer);
         }
     }, [students.length, isHydrated]);
@@ -562,15 +565,21 @@ export default function SettingsScreen() {
         if (otp && nonce) {
             setRemoveLoading(true);
             try {
-                await removeChild({ studentId, otp, nonce });
-                // 🟢 FIX: Force store refresh after removal
+                const result = await removeChild({ studentId, otp, nonce });
+                // 🟢 Force store refresh and wait for it
                 await refreshProfile();
+
+                // 🟢 Check if we need to redirect
+                const currentStudents = useProfileStore.getState().students;
+                if (currentStudents.length === 0) {
+                    router.replace('/add-child');
+                }
+
                 return { success: true };
             } finally {
                 setRemoveLoading(false);
             }
         } else {
-            // First step - send OTP
             const result = await initiateUnlink(studentId);
             return result;
         }

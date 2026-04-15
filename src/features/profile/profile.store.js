@@ -228,9 +228,29 @@ export const useProfileStore = create((set, get) => ({
 
   // ── Student update methods ──────────────────────────────────────────────────
   patchStudent: async (studentId, payload) => {
-    if (__DEV_BYPASS_PROFILE__) {
-      console.log("[ProfileStore] Bypass – mock patchStudent");
-      // Optionally update local mock data
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    console.log("[ProfileStore] patchStudent called with:", {
+      studentId,
+      payload,
+    });
+
+    const result = await profileApi.updateProfile(studentId, payload);
+    console.log("[ProfileStore] API result:", result);
+
+    // Update local store optimistically
+    const currentStudent = get().students.find((s) => s.id === studentId);
+    if (currentStudent) {
+      let updatedStudent = { ...currentStudent };
+      if (payload.student) Object.assign(updatedStudent, payload.student);
+      if (payload.emergency) {
+        updatedStudent.emergency = {
+          ...(currentStudent.emergency ?? {}),
+          ...payload.emergency,
+        };
+      }
+
       set((state) => ({
         students: state.students.map((s) =>
           s.id === studentId ? { ...s, ...payload.student } : s
@@ -238,7 +258,11 @@ export const useProfileStore = create((set, get) => ({
       }));
       return;
     }
-    // [original]
+
+    // 🟢 FIX: Force immediate refresh, not silent
+    await get().refresh();
+
+    return result;
   },
 
   fetchIfStale: async () => {
@@ -356,8 +380,8 @@ export const useProfileStore = create((set, get) => ({
 
     const result = await profileApi.linkCard({ card_number });
 
-    // 🟢 FIX: Force immediate full refresh, not silent
-    await get().fetchAndPersist({ silent: false });
+    // 🟢 FIX: Wait for refresh to complete
+    await get().refresh();
 
     return result;
   },
