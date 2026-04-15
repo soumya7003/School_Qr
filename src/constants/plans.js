@@ -1,0 +1,1 @@
+export const MAX_FREE_CHILDREN = 3;

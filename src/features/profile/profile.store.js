@@ -259,7 +259,13 @@ export const useProfileStore = create((set, get) => ({
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
-    await profileApi.updateProfile(studentId, payload);
+    console.log("[ProfileStore] patchStudent called with:", {
+      studentId,
+      payload,
+    });
+
+    const result = await profileApi.updateProfile(studentId, payload);
+    console.log("[ProfileStore] API result:", result);
 
     // Update local store optimistically
     const currentStudent = get().students.find((s) => s.id === studentId);
@@ -272,12 +278,6 @@ export const useProfileStore = create((set, get) => ({
           ...payload.emergency,
         };
       }
-      if (payload.card_visibility) {
-        updatedStudent.card_visibility = {
-          ...(currentStudent.card_visibility ?? {}),
-          ...payload.card_visibility,
-        };
-      }
 
       set((state) => ({
         students: state.students.map((s) =>
@@ -288,8 +288,10 @@ export const useProfileStore = create((set, get) => ({
       await storage.patchProfileStudent(studentId, payload);
     }
 
-    // Silent refresh to confirm
-    get()._silentRefresh();
+    // 🟢 FIX: Force immediate refresh, not silent
+    await get().refresh();
+
+    return result;
   },
 
   fetchIfStale: async () => {
@@ -440,8 +442,8 @@ export const useProfileStore = create((set, get) => ({
 
     const result = await profileApi.linkCard({ card_number });
 
-    // 🟢 FIX: Force immediate full refresh, not silent
-    await get().fetchAndPersist({ silent: false });
+    // 🟢 FIX: Wait for refresh to complete
+    await get().refresh();
 
     return result;
   },
