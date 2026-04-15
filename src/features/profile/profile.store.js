@@ -440,12 +440,81 @@ export const useProfileStore = create((set, get) => ({
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
-    const result = await profileApi.linkCard({ card_number });
+    console.log("[ProfileStore] linkCard - Starting with card:", card_number);
 
-    // 🟢 FIX: Wait for refresh to complete
-    await get().refresh();
+    try {
+      const result = await profileApi.linkCard({ card_number });
+      console.log("[ProfileStore] linkCard - Raw API result:", result);
 
-    return result;
+      // 🟢 Extract student info from response (handle different response shapes)
+      const studentId = result?.student_id || result?.student?.id;
+      const studentName =
+        result?.student_name ||
+        `${result?.student?.first_name || ""} ${result?.student?.last_name || ""}`.trim();
+
+      console.log("[ProfileStore] linkCard - Extracted:", {
+        studentId,
+        studentName,
+      });
+
+      // 🟢 Clear cache to force fresh fetch
+      await storage.clearProfile();
+
+      // 🟢 Force fetch with cache-busting
+      await get().fetchAndPersist({ silent: false });
+
+      // 🟢 Verify the student was added
+      const currentState = get();
+      const studentExists = currentState.students.some(
+        (s) => s.id === studentId,
+      );
+
+      console.log("[ProfileStore] linkCard - After refresh:", {
+        studentsCount: currentState.students.length,
+        studentExists,
+        students: currentState.students.map((s) => ({
+          id: s.id,
+          name: s.first_name,
+        })),
+      });
+
+      // Return normalized result
+      return {
+        success: true,
+        student_id: studentId,
+        student_name: studentName,
+        is_first_child: result?.is_first_child || false,
+      };
+    } catch (error) {
+      console.error("[ProfileStore] linkCard error:", error);
+
+      // Check if it's a successful response that axios threw
+      const responseData = error?.response?.data?.data || error?.response?.data;
+      if (
+        responseData &&
+        (responseData.student_id || responseData.student?.id)
+      ) {
+        console.log(
+          "[ProfileStore] linkCard - Success in error object:",
+          responseData,
+        );
+
+        // Clear cache and refresh
+        await storage.clearProfile();
+        await get().fetchAndPersist({ silent: false });
+
+        return {
+          success: true,
+          student_id: responseData.student_id || responseData.student?.id,
+          student_name:
+            responseData.student_name ||
+            `${responseData.student?.first_name || ""} ${responseData.student?.last_name || ""}`.trim(),
+          is_first_child: responseData?.is_first_child || false,
+        };
+      }
+
+      throw error;
+    }
   },
 
   setActiveStudentWithSync: async (studentId) => {

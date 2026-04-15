@@ -515,12 +515,24 @@ export default function SettingsScreen() {
         }, [refreshProfile])
     );
 
+    const isFetching = useProfileStore((s) => s.isFetching);
+    const lastRefreshTime = useProfileStore((s) => s.lastRefreshTime);
+
     // 🟢 FIX: Auto-redirect to add-child when no children left
     useEffect(() => {
-        if (isHydrated && students.length === 0) {
+        // 🔥 CRITICAL: Only check after profile is fully loaded and NOT fetching
+        // This prevents false positives during initial load
+        if (!isHydrated || isFetching) return;
+
+        // Also ensure we have at least attempted to load data (lastRefreshTime exists)
+        // This prevents redirect before the first fetch completes
+        const hasAttemptedLoad = lastRefreshTime !== null || students.length > 0;
+        if (!hasAttemptedLoad) return;
+
+        // Now we can safely check if there are truly no children
+        if (students.length === 0) {
             const timer = setTimeout(() => {
                 const currentStudents = useProfileStore.getState().students;
-                // 🟢 Only show alert if still empty AND not already on add-child screen
                 if (currentStudents.length === 0) {
                     Alert.alert(
                         'No Children Linked',
@@ -533,10 +545,10 @@ export default function SettingsScreen() {
                         ]
                     );
                 }
-            }, 500);
+            }, 300); // Reduced from 500ms since we already waited for data
             return () => clearTimeout(timer);
         }
-    }, [students.length, isHydrated]);
+    }, [students.length, isHydrated, isFetching, lastRefreshTime]);
 
     const handleLogout = () => {
         Alert.alert('Log Out', 'Are you sure you want to log out?', [

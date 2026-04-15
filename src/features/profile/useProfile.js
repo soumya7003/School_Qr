@@ -121,22 +121,73 @@ export const useProfile = () => {
     }
   };
 
+  // In useProfile.js, replace addChildByCard:
+
   const addChildByCard = async ({ card_number }) => {
     try {
+      console.log("[useProfile] addChildByCard - Starting with:", card_number);
+
       const result = await linkCard({ card_number });
-      Alert.alert(
-        "Child Added! 🎉",
-        `${result.student_name || "Your child"} has been added to your account.`,
-        [{ text: "OK" }],
-      );
+      console.log("[useProfile] addChildByCard - Result:", result);
+
+      if (result?.student_id) {
+        // Only show success alert if we have a student ID
+        Alert.alert(
+          "Child Added! 🎉",
+          `${result.student_name || "Your child"} has been added to your account.`,
+          [{ text: "OK" }],
+        );
+      }
+
       return result;
     } catch (error) {
       console.error("[useProfile] addChildByCard error:", error);
-      Alert.alert(
-        "Failed to Add Child",
-        error?.message || "Please check the card number and try again.",
-        [{ text: "OK" }],
-      );
+
+      // Check if it's actually a success response
+      const responseData = error?.response?.data?.data || error?.response?.data;
+      if (responseData?.student_id) {
+        // It was successful despite being thrown as error
+        Alert.alert(
+          "Child Added! 🎉",
+          `${responseData.student_name || "Your child"} has been added to your account.`,
+          [{ text: "OK" }],
+        );
+        return {
+          success: true,
+          student_id: responseData.student_id,
+          student_name: responseData.student_name,
+        };
+      }
+
+      // Real error - show appropriate message
+      const errorMessage = error?.response?.data?.message || error?.message;
+
+      if (
+        errorMessage?.includes("not found") ||
+        error?.response?.status === 404
+      ) {
+        Alert.alert(
+          "Card Not Found",
+          "Please check the card number and try again.",
+          [{ text: "OK" }],
+        );
+      } else if (
+        errorMessage?.includes("already linked") ||
+        error?.response?.status === 409
+      ) {
+        Alert.alert(
+          "Already Linked",
+          "This card is already linked to an account.",
+          [{ text: "OK" }],
+        );
+      } else {
+        Alert.alert(
+          "Failed to Add Child",
+          errorMessage || "Please check the card number and try again.",
+          [{ text: "OK" }],
+        );
+      }
+
       throw error;
     }
   };

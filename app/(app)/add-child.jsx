@@ -119,6 +119,8 @@ export default function AddChildScreen() {
         }, [])
     );
 
+    // In add-child.jsx, replace handleAddChild:
+
     const handleAddChild = async () => {
         if (!cardNumber.trim()) {
             setError('Card number is required');
@@ -131,26 +133,60 @@ export default function AddChildScreen() {
         try {
             const result = await addChildByCard({ card_number: cardNumber });
 
-            setNewStudentId(result.student_id);
-            setStudentName(result.student_name || '');
+            console.log('[AddChild] Result:', result);
 
-            // 🟢 FIX: Wait for refresh to complete before setting active student
-            await refresh();
+            // Check if we have a student ID
+            const studentId = result?.student_id;
 
-            // 🟢 FIX: Set the new student as active
-            await useProfileStore.getState().setActiveStudentWithSync(result.student_id);
+            if (studentId) {
+                setNewStudentId(studentId);
+                setStudentName(result?.student_name || '');
 
-            setSuccess(true);
+                // Wait for store to update
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Set the new student as active
+                try {
+                    await useProfileStore.getState().setActiveStudentWithSync(studentId);
+                } catch (syncError) {
+                    console.warn('[AddChild] Failed to sync active student:', syncError);
+                    // Fallback: just set it locally
+                    useProfileStore.setState({ activeStudentId: studentId });
+                }
+
+                setSuccess(true);
+            } else {
+                // No student ID in response - check if store has it
+                const storeState = useProfileStore.getState();
+                const newStudent = storeState.students[storeState.students.length - 1];
+
+                if (newStudent) {
+                    setNewStudentId(newStudent.id);
+                    setStudentName(`${newStudent.first_name || ''} ${newStudent.last_name || ''}`.trim());
+                    await useProfileStore.getState().setActiveStudentWithSync(newStudent.id);
+                    setSuccess(true);
+                } else {
+                    throw new Error('No student information received');
+                }
+            }
         } catch (err) {
-            if (__DEV__) console.error('Add child error:', err);
-            if (err?.message?.includes('404')) {
+            console.error('[AddChild] Error:', err);
+
+            // Don't show error if we already succeeded
+            if (success) return;
+
+            // Handle specific error cases
+            const errorMessage = err?.response?.data?.message || err?.message || '';
+
+            if (err?.response?.status === 404 || errorMessage.includes('not found')) {
                 setError('Card not found. Check the number printed on your card.');
-            } else if (err?.message?.includes('409')) {
+            } else if (err?.response?.status === 409 || errorMessage.includes('already linked')) {
                 setError('This card is already linked to another parent.');
-            } else if (err?.message?.includes('already linked')) {
+            } else if (errorMessage.includes('already linked to your account')) {
                 setError('This child is already linked to your account.');
             } else {
-                setError(err?.message || 'Failed to add child. Please try again.');
+                // Only show generic error if we don't have a specific one
+                setError(errorMessage || 'Failed to add child. Please try again.');
             }
         } finally {
             setLoading(false);

@@ -2,12 +2,11 @@
  * app/(app)/scan-history.jsx
  * Scan History — Modern timeline design with smart filtering
  * 
- * FIXES:
- * - Duplicate key issue resolved
- * - Stat cards now in sticky header, not overlapping
- * - Click scan item → opens detail modal
- * - Location opens in maps app
- * - Device info displayed in detail view
+ * FEATURES:
+ * - On-demand reverse geocoding when modal opens
+ * - Skeleton loading for place name fetch
+ * - In-memory caching to avoid duplicate API calls
+ * - Graceful fallback to coordinates if geocoding fails
  */
 
 import Screen from '@/components/common/Screen';
@@ -32,8 +31,27 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInRight, FadeInUp, Layout } from 'react-native-reanimated';
+import Animated, {
+    FadeInDown,
+    FadeInRight,
+    FadeInUp,
+    Layout,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
+
+// Dynamically import expo-location to handle potential native module issues
+let Location;
+try {
+    Location = require('expo-location');
+} catch (error) {
+    console.warn('[scan-history] expo-location not available:', error.message);
+    Location = null;
+}
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 const FILTERS = [
@@ -86,7 +104,162 @@ function openMaps(latitude, longitude) {
         android: `geo:${latitude},${longitude}?q=${latitude},${longitude}`,
         default: `https://maps.google.com/?q=${latitude},${longitude}`,
     });
-    Linking.openURL(url);
+    Linking.openURL(url).catch(err => {
+        console.warn('[openMaps] Failed to open maps:', err);
+    });
+}
+
+// ─── Alternative Geocoding using OpenStreetMap (Fallback) ─────────────────────
+async function fetchPlaceNameFromOSM(latitude, longitude) {
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'RESQID/1.0',
+                'Accept-Language': 'en',
+            },
+        });
+
+        if (!response.ok) throw new Error('OSM API failed');
+
+        const data = await response.json();
+
+        if (data && data.display_name) {
+            return data.display_name;
+        }
+        return null;
+    } catch (error) {
+        console.warn('[OSM Geocoding] Failed:', error.message);
+        return null;
+    }
+}
+
+// ─── Reverse Geocoding Cache (in-memory session cache) ───────────────────────
+const geocodeCache = new Map();
+
+function getCacheKey(latitude, longitude) {
+    return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+}
+
+// ─── Custom Hook for Reverse Geocoding ───────────────────────────────────────
+function useReverseGeocode(latitude, longitude, shouldFetch) {
+    const [placeName, setPlaceName] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [usingFallback, setUsingFallback] = useState(false);
+
+    useEffect(() => {
+        if (!shouldFetch || latitude == null || longitude == null) {
+            return;
+        }
+
+        const cacheKey = getCacheKey(latitude, longitude);
+
+        // Check cache first
+        if (geocodeCache.has(cacheKey)) {
+            setPlaceName(geocodeCache.get(cacheKey));
+            return;
+        }
+
+        let cancelled = false;
+
+        async function fetchPlaceName() {
+            try {
+                setLoading(true);
+                setError(null);
+                setUsingFallback(false);
+
+                let result = null;
+
+                // Try expo-location first
+                if (Location && Location.reverseGeocodeAsync) {
+                    try {
+                        const results = await Location.reverseGeocodeAsync({
+                            latitude,
+                            longitude,
+                        });
+
+                        if (!cancelled && results && results.length > 0) {
+                            const parts = [
+                                results[0].street,
+                                results[0].district,
+                                results[0].city || results[0].subregion,
+                                results[0].region,
+                                results[0].country,
+                            ].filter(Boolean);
+
+                            result = parts.join(', ');
+                        }
+                    } catch (locError) {
+                        console.warn('[Expo Location] Failed, falling back to OSM:', locError.message);
+                    }
+                }
+
+                // Fallback to OpenStreetMap if expo-location fails or returns nothing
+                if (!result && !cancelled) {
+                    setUsingFallback(true);
+                    result = await fetchPlaceNameFromOSM(latitude, longitude);
+                }
+
+                if (cancelled) return;
+
+                const finalPlaceName = result || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+
+                // Cache the result
+                geocodeCache.set(cacheKey, finalPlaceName);
+                setPlaceName(finalPlaceName);
+            } catch (err) {
+                if (!cancelled) {
+                    console.warn('[ReverseGeocode] Failed:', err.message);
+                    setError(err.message);
+                    const fallback = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                    setPlaceName(fallback);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        fetchPlaceName();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [latitude, longitude, shouldFetch]);
+
+    return { placeName, loading, error, usingFallback };
+}
+
+// ─── Skeleton Loading Component ───────────────────────────────────────────────
+function LocationSkeleton({ C }) {
+    const opacity = useSharedValue(0.5);
+
+    useEffect(() => {
+        opacity.value = withRepeat(
+            withSequence(
+                withTiming(1, { duration: 800 }),
+                withTiming(0.5, { duration: 800 })
+            ),
+            -1,
+            true
+        );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+    }));
+
+    return (
+        <Animated.View style={[styles.skeletonContainer, animatedStyle]}>
+            <View style={[styles.skeletonIcon, { backgroundColor: C.s3 }]} />
+            <View style={styles.skeletonTextContainer}>
+                <View style={[styles.skeletonText, { backgroundColor: C.s3, width: '80%' }]} />
+                <View style={[styles.skeletonTextSmall, { backgroundColor: C.s3, width: '40%' }]} />
+            </View>
+        </Animated.View>
+    );
 }
 
 // ─── Scan Result Config ───────────────────────────────────────────────────────
@@ -212,8 +385,15 @@ function ScanDetailModal({ scan, visible, onClose, C }) {
     if (!scan) return null;
 
     const config = getScanConfig(scan.result, scan.scan_purpose, C);
-    const location = getLocationString(scan);
-    const hasLoc = hasCoordinates(scan);
+    const ipLocation = getLocationString(scan);
+    const hasGpsLocation = hasCoordinates(scan);
+
+    // Fetch place name only when modal is visible
+    const { placeName, loading: locationLoading, usingFallback } = useReverseGeocode(
+        scan.latitude,
+        scan.longitude,
+        visible && hasGpsLocation
+    );
 
     return (
         <Modal
@@ -245,36 +425,78 @@ function ScanDetailModal({ scan, visible, onClose, C }) {
                             </View>
                         </View>
 
-                        {/* Location */}
+                        {/* Location - Updated with GPS place name */}
                         <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
                             <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>LOCATION</Text>
-                            <View style={styles.detailRow}>
-                                <Feather name="map-pin" size={16} color={C.primary} />
-                                <Text style={[styles.detailValue, { color: C.tx2 }]}>{location}</Text>
-                            </View>
-                            {hasLoc && (
+
+                            {/* GPS-derived location (primary) */}
+                            {hasGpsLocation && (
+                                <View style={styles.locationGroup}>
+                                    {locationLoading ? (
+                                        <LocationSkeleton C={C} />
+                                    ) : (
+                                        <>
+                                            <View style={styles.detailRow}>
+                                                <Feather name="map-pin" size={16} color={C.ok} />
+                                                <Text style={[styles.detailLabel, { color: C.tx3 }]}>GPS:</Text>
+                                                <Text
+                                                    style={[styles.detailValue, { color: C.tx, flex: 1 }]}
+                                                    numberOfLines={3}
+                                                >
+                                                    {placeName}
+                                                    {usingFallback && placeName && !placeName.includes(',') && (
+                                                        <Text style={{ color: C.tx3, fontSize: 11 }}>
+                                                            {' '}(via OpenStreetMap)
+                                                        </Text>
+                                                    )}
+                                                </Text>
+                                            </View>
+                                            {/* Always show coordinates as secondary info */}
+                                            <View style={styles.detailSection}>
+                                                <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>SCAN TYPE</Text>
+                                                <View style={[styles.purposeBadge, { backgroundColor: config.badgeBg }]}>
+                                                    <Feather
+                                                        name={scan.scan_purpose === 'EMERGENCY' ? 'alert-triangle' : 'maximize'}
+                                                        size={14}
+                                                        color={config.badgeColor}
+                                                    />
+                                                    <Text style={[styles.purposeText, { color: config.badgeColor }]}>
+                                                        {scan.scan_purpose === 'EMERGENCY' ? 'Emergency Scan' : 'QR Code Scan'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </>
+                                    )}
+                                </View>
+                            )}
+
+                            {/* IP-derived location (secondary) */}
+                            {ipLocation !== 'Location unavailable' && (
+                                <View style={[styles.detailRow, { marginTop: hasGpsLocation ? 8 : 0 }]}>
+                                    <Feather name="wifi" size={16} color={hasGpsLocation ? C.tx3 : C.primary} />
+                                    <Text style={[styles.detailLabel, { color: C.tx3 }]}>
+                                        {hasGpsLocation ? 'IP:' : 'Location:'}
+                                    </Text>
+                                    <Text
+                                        style={[styles.detailValue, { color: hasGpsLocation ? C.tx3 : C.tx2, flex: 1 }]}
+                                        numberOfLines={2}
+                                    >
+                                        {ipLocation}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* Map button for GPS coordinates */}
+                            {hasGpsLocation && (
                                 <TouchableOpacity
-                                    style={[styles.mapButton, { backgroundColor: C.blueBg, borderColor: C.blueBd }]}
+                                    style={[styles.mapButton, { backgroundColor: C.blueBg, borderColor: C.blueBd, marginTop: 12 }]}
                                     onPress={() => openMaps(scan.latitude, scan.longitude)}
                                 >
                                     <Feather name="map" size={16} color={C.blue} />
-                                    <Text style={[styles.mapButtonText, { color: C.blue }]}>View on Map</Text>
+                                    <Text style={[styles.mapButtonText, { color: C.blue }]}>Open in Maps</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
-
-                        {/* Coordinates (if available) */}
-                        {hasLoc && (
-                            <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
-                                <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>COORDINATES</Text>
-                                <View style={styles.detailRow}>
-                                    <Feather name="navigation" size={16} color={C.primary} />
-                                    <Text style={[styles.detailValue, { color: C.tx2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
-                                        {scan.latitude?.toFixed(6)}, {scan.longitude?.toFixed(6)}
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
 
                         {/* Device Info */}
                         <View style={[styles.detailSection, { borderBottomColor: C.bd }]}>
@@ -318,7 +540,7 @@ function ScanDetailModal({ scan, visible, onClose, C }) {
                         <View style={styles.detailSection}>
                             <Text style={[styles.detailSectionTitle, { color: C.tx3 }]}>SCAN TYPE</Text>
                             <View style={[styles.purposeBadge, { backgroundColor: config.badgeBg }]}>
-                                <Feather name={scan.scan_purpose === 'EMERGENCY' ? 'alert-triangle' : 'qr-code'} size={14} color={config.badgeColor} />
+                                <Feather name={scan.scan_purpose === 'EMERGENCY' ? 'alert-triangle' : 'grid'} size={14} color={config.badgeColor} />
                                 <Text style={[styles.purposeText, { color: config.badgeColor }]}>
                                     {scan.scan_purpose === 'EMERGENCY' ? 'Emergency Scan' : 'QR Code Scan'}
                                 </Text>
@@ -691,9 +913,18 @@ const styles = StyleSheet.create({
     modalBody: { padding: 20, gap: 20 },
     detailSection: { gap: 10, paddingBottom: 16, borderBottomWidth: 1 },
     detailSectionTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+    detailLabel: { fontSize: 13, fontWeight: '600', width: 45 },
     detailValue: { flex: 1, fontSize: 14, lineHeight: 20 },
+    coordText: { fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+    locationGroup: { gap: 4 },
     mapButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
     mapButtonText: { fontSize: 13, fontWeight: '700' },
     purposeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start' },
     purposeText: { fontSize: 12, fontWeight: '700' },
+    // Skeleton styles
+    skeletonContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+    skeletonIcon: { width: 16, height: 16, borderRadius: 4 },
+    skeletonTextContainer: { flex: 1, gap: 4 },
+    skeletonText: { height: 14, borderRadius: 6 },
+    skeletonTextSmall: { height: 10, borderRadius: 4 },
 });
