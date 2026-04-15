@@ -7,9 +7,22 @@ import Screen from '@/components/common/Screen';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
+
+const APP_VERSION = '1.0.0';
+const APP_BUILD = '100';
+
+// Fallback FAQs in case translation file is missing
+const DEFAULT_FAQS = [
+    { q: 'How do I create a QR code?', a: 'Go to the QR section and follow the steps to generate your unique safety QR code.' },
+    { q: 'Is my data secure?', a: 'Yes, we use end-to-end encryption to protect all your personal information.' },
+    { q: 'How do I enable biometric login?', a: 'Go to Settings and enable fingerprint or face recognition for your device.' },
+    { q: 'Can I scan QR codes offline?', a: 'QR scanning requires an internet connection for real-time verification.' },
+    { q: 'How do I update my emergency contacts?', a: 'Navigate to Settings > Emergency Contacts to add or edit your emergency numbers.' },
+];
 
 const BackIcon = ({ c }) => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
@@ -26,17 +39,6 @@ const ExternalIcon = ({ c }) => (
         <Path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
 );
-
-const FAQS = [
-    { q: "What happens when someone scans my child's card?", a: "They see your child's name, photo, and emergency contacts based on your visibility setting. Every scan is logged and you get a notification." },
-    { q: 'Are phone numbers visible to strangers?', a: 'Never. All calls go through our secure relay system. The person scanning cannot see your actual phone number.' },
-    { q: 'What does "HIDDEN" visibility mode do?', a: "When set to Hidden, scanning the card shows only that it's a registered RESQID card, with no personal info." },
-    { q: 'My card shows INACTIVE status. What does that mean?', a: "INACTIVE means the card has been manually deactivated. Go to the QR tab and tap Activate to re-enable it." },
-    { q: 'How do I replace a lost or damaged card?', a: "Go to Settings → Physical Card → Deactivate / Replace Card, then contact your school to request a replacement." },
-    { q: 'What is a "Scan Anomaly"?', a: "An anomaly is flagged when the system detects unusual activity — like multiple rapid scans. You'll be notified immediately." },
-    { q: "Can I update my child's medical info myself?", a: 'Yes. Go to the Updates tab and edit any field. Changes are submitted to the school for approval.' },
-    { q: 'How long are scan logs kept?', a: 'Scan logs are retained for 12 months, then automatically deleted.' },
-];
 
 function FaqItem({ faq, delay, C }) {
     const [open, setOpen] = useState(false);
@@ -80,69 +82,96 @@ function ContactCard({ iconBg, iconEl, title, subtitle, value, onPress, delay, C
 export default function SupportScreen() {
     const router = useRouter();
     const { colors: C } = useTheme();
+    const { t } = useTranslation();
+
+    // Get FAQs from translation with fallback to DEFAULT_FAQS
+    const faqs = Array.isArray(t('support.faqs', { returnObjects: true }))
+        ? t('support.faqs', { returnObjects: true })
+        : DEFAULT_FAQS;
 
     return (
         <Screen bg={C.bg} edges={['top', 'left', 'right']}>
+            {/* ── Header ── */}
             <Animated.View entering={FadeInDown.delay(0).duration(350)} style={[su.header, { borderBottomColor: C.bd }]}>
                 <TouchableOpacity style={[su.backBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => router.back()} activeOpacity={0.7}>
                     <BackIcon c={C.tx} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text style={[su.pageTitle, { color: C.tx }]}>Help & Support</Text>
-                    <Text style={[su.pageSubtitle, { color: C.tx3 }]}>We're here to help</Text>
+                    <Text style={[su.pageTitle, { color: C.tx }]}>{t('support.pageTitle')}</Text>
+                    <Text style={[su.pageSubtitle, { color: C.tx3 }]}>{t('support.pageSubtitle')}</Text>
                 </View>
             </Animated.View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={su.scroll}>
 
+                {/* ── Contact Us ── */}
                 <Animated.View entering={FadeInDown.delay(60).duration(400)}>
-                    <Text style={[su.sectionLabel, { color: C.tx3 }]}>CONTACT US</Text>
+                    <Text style={[su.sectionLabel, { color: C.tx3 }]}>{t('support.sectionContact')}</Text>
                 </Animated.View>
 
                 <ContactCard
                     iconBg={C.okBg} iconEl={<Text style={{ fontSize: 16 }}>💬</Text>}
-                    title="WhatsApp Support" subtitle="Typically replies in under 2 hours" value="Chat Now"
-                    onPress={() => Linking.openURL('https://wa.me/911234567890')} delay={80} C={C}
+                    title={t('support.whatsappTitle')}
+                    subtitle={t('support.whatsappSub')}
+                    value={t('support.whatsappValue')}
+                    onPress={() => Linking.openURL('https://wa.me/916294690079')} delay={80} C={C}
                 />
                 <ContactCard
                     iconBg={C.blueBg} iconEl={<Text style={{ fontSize: 16 }}>✉️</Text>}
-                    title="Email Support" subtitle="support@resqid.in" value="Email"
-                    onPress={() => Linking.openURL('mailto:support@resqid.in')} delay={110} C={C}
+                    title={t('support.emailTitle')}
+                    subtitle={t('support.emailSub')}
+                    value={t('support.emailValue')}
+                    onPress={() => Linking.openURL('mailto:support@getresqid.in')} delay={110} C={C}
                 />
                 <ContactCard
                     iconBg={C.ambBg} iconEl={<Text style={{ fontSize: 16 }}>📞</Text>}
-                    title="Call Support" subtitle="Mon–Sat, 9AM–6PM IST" value="Call"
-                    onPress={() => Linking.openURL('tel:+911234567890')} delay={140} C={C}
+                    title={t('support.callTitle')}
+                    subtitle={t('support.callSub')}
+                    value={t('support.callValue')}
+                    onPress={() => Linking.openURL('tel:+916294690079')} delay={140} C={C}
                 />
 
+                {/* ── FAQs ── */}
                 <Animated.View entering={FadeInDown.delay(170).duration(400)}>
-                    <Text style={[su.sectionLabel, { color: C.tx3, marginTop: 8 }]}>FREQUENTLY ASKED QUESTIONS</Text>
+                    <Text style={[su.sectionLabel, { color: C.tx3, marginTop: 8 }]}>{t('support.sectionFaq')}</Text>
                 </Animated.View>
 
                 <View style={[su.faqList, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                    {FAQS.map((faq, i) => <FaqItem key={i} faq={faq} delay={200 + i * 25} C={C} />)}
+                    {faqs && faqs.length > 0 ? (
+                        faqs.map((faq, i) => (
+                            <FaqItem key={i} faq={faq} delay={200 + i * 25} C={C} />
+                        ))
+                    ) : (
+                        <View style={su.emptyFaq}>
+                            <Text style={[su.emptyFaqText, { color: C.tx3 }]}>No FAQs available</Text>
+                        </View>
+                    )}
                 </View>
 
+                {/* ── Legal ── */}
                 <Animated.View entering={FadeInDown.delay(440).duration(400)}>
-                    <Text style={[su.sectionLabel, { color: C.tx3, marginTop: 8 }]}>LEGAL</Text>
+                    <Text style={[su.sectionLabel, { color: C.tx3, marginTop: 8 }]}>{t('support.sectionLegal')}</Text>
                 </Animated.View>
 
                 <Animated.View entering={FadeInDown.delay(460).duration(400)} style={su.legalRow}>
-                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://resqid.in/privacy')} activeOpacity={0.7}>
+                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://getresqid.in/privacy-policy')} activeOpacity={0.7}>
                         <Text style={{ fontSize: 14 }}>🛡️</Text>
-                        <Text style={[su.legalBtnText, { color: C.tx2 }]}>Privacy Policy</Text>
+                        <Text style={[su.legalBtnText, { color: C.tx2 }]}>{t('support.privacyPolicy')}</Text>
                         <ExternalIcon c={C.primary} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://resqid.in/terms')} activeOpacity={0.7}>
+                    <TouchableOpacity style={[su.legalBtn, { backgroundColor: C.s2, borderColor: C.bd }]} onPress={() => Linking.openURL('https://getresqid.in/terms-of-service')} activeOpacity={0.7}>
                         <Text style={{ fontSize: 14 }}>📋</Text>
-                        <Text style={[su.legalBtnText, { color: C.tx2 }]}>Terms of Use</Text>
+                        <Text style={[su.legalBtnText, { color: C.tx2 }]}>{t('support.termsOfUse')}</Text>
                         <ExternalIcon c={C.primary} />
                     </TouchableOpacity>
                 </Animated.View>
 
+                {/* ── Version ── */}
                 <Animated.View entering={FadeInDown.delay(480).duration(400)} style={su.versionRow}>
-                    <Text style={[su.versionText, { color: C.tx3 }]}>RESQID v1.0.0  ·  Build 100</Text>
-                    <Text style={[su.versionSub, { color: C.tx3 }]}>Emergency ID Card Platform</Text>
+                    <Text style={[su.versionText, { color: C.tx3 }]}>
+                        {t('support.version', { version: APP_VERSION, build: APP_BUILD })}
+                    </Text>
+                    <Text style={[su.versionSub, { color: C.tx3 }]}>{t('support.versionSub')}</Text>
                 </Animated.View>
 
             </ScrollView>
@@ -167,6 +196,8 @@ const su = StyleSheet.create({
     faqHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
     faqQ: { fontSize: 14, fontWeight: '600', flex: 1, lineHeight: 20 },
     faqA: { fontSize: 13, lineHeight: 18, marginTop: 12 },
+    emptyFaq: { padding: 16, alignItems: 'center', justifyContent: 'center' },
+    emptyFaqText: { fontSize: 13, fontStyle: 'italic' },
     legalRow: { flexDirection: 'row', gap: 8 },
     legalBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 13, borderWidth: 1, padding: 14 },
     legalBtnText: { fontSize: 13, fontWeight: '600', flex: 1 },

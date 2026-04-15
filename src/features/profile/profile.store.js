@@ -1,33 +1,11 @@
 /**
  * features/profile/profile.store.js
  *
- * BUGS FIXED:
- *
- *   [FIX-1] fetchAndPersist isNewUser auto-correct fires too eagerly:
- *           The original logic was:
- *             if (hasCompletedStudent) await setIsNewUser(false)
- *           This ran even during the registration flow when fetchAndPersist
- *           is called right after loginSuccess. On registration the student
- *           setup_stage is NOT 'COMPLETE', so setIsNewUser(false) should NOT
- *           fire. This was actually correct logic — but the check was only for
- *           'COMPLETE'. Added defensive check: only auto-correct if the store
- *           currently has isNewUser=true (no point calling setIsNewUser(false)
- *           if it's already false — avoids a spurious SecureStore write on
- *           every profile refresh for existing users).
- *
- *   [FIX-2] hydrate() set isHydrated=true even when students array is empty
- *           (snap.data exists but students = []). This caused AuthProvider to
- *           see profileHydrated=true + hasStudents=false and block routing to
- *           /updates. Now isHydrated is set to true regardless (correct), but
- *           the AuthProvider no longer uses hasStudents as a gate (fixed there).
- *           No change needed here for that specific bug — documenting for clarity.
- *
- *   [FIX-3] clear() set isHydrated: false which caused a brief re-hydration
- *           cycle after logout. The root _layout.jsx calls hydrate() again on
- *           mount but the profile store being un-hydrated while auth store is
- *           already hydrated caused AuthProvider to block (waits for both).
- *           Fixed: clear() keeps isHydrated: true so AuthProvider's guard can
- *           immediately fire the logout redirect to /(auth)/login.
+ * STRATEGY: Cache-first with silent background refresh
+ * - Shows cached data immediately
+ * - Waits for auth to be ready
+ * - Refreshes in background when stale
+ * - Never blocks UI on network
  */
 
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -45,153 +23,287 @@ export const useProfileStore = create((set, get) => ({
   anomaly: null,
   isHydrated: false,
   isFetching: false,
+  isInitialized: false,
+  lastRefreshTime: null,
 
-  // ── Hydrate ─────────────────────────────────────────────────────────────────
+  // ── Hydrate (called once on app start) ──────────────────────────────────────
   hydrate: async () => {
+    if (get().isInitialized) {
+      console.log("[ProfileStore] Already initialized, skipping");
+      return;
+    }
+
+    console.log("[ProfileStore] hydrate START");
+
+    // Step 1: Wait for auth to be ready
+    const authState = useAuthStore.getState();
+
+    if (!authState.isHydrated) {
+      console.log("[ProfileStore] Waiting for auth hydration...");
+      await new Promise((resolve) => {
+        const unsubscribe = useAuthStore.subscribe((state) => {
+          if (state.isHydrated) {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+      console.log("[ProfileStore] Auth hydration complete");
+    }
+
+    // Step 2: Check if authenticated
+    const isAuthenticated = useAuthStore.getState().isAuthenticated;
+    if (!isAuthenticated) {
+      console.log("[ProfileStore] Not authenticated, setting empty state");
+      set({
+        isHydrated: true,
+        isInitialized: true,
+        students: [],
+        parent: null,
+        activeStudentId: null,
+      });
+      return;
+    }
+
+    // Step 3: Load cached data IMMEDIATELY (skeleton UI)
     try {
       const snap = await storage.readProfile();
-      if (snap?.data) {
-        const { parent, students, last_scan, scan_count, anomaly } = snap.data;
+
+      if (snap?.data && snap.data.students?.length > 0) {
+        console.log("[ProfileStore] Cache found, showing immediately");
+
+        let students = snap.data.students;
+        // Handle old single-student structure
+        if (!Array.isArray(students) && snap.data.student) {
+          students = [snap.data.student];
+        }
+
+        // 🟢 FIX: Use parent.active_student_id from cache, fallback to first student
+        const activeId =
+          snap.data.parent?.active_student_id ?? students[0]?.id ?? null;
+
         set({
-          parent: parent ?? null,
-          students: students ?? [],
-          activeStudentId: students?.[0]?.id ?? null,
-          lastScan: last_scan ?? null,
-          scanCount: scan_count ?? 0,
-          anomaly: anomaly ?? null,
+          parent: snap.data.parent ?? null,
+          students: students,
+          activeStudentId: activeId,
+          lastScan: snap.data.last_scan ?? null,
+          scanCount: snap.data.scan_count ?? 0,
+          anomaly: snap.data.anomaly ?? null,
           isHydrated: true,
+          isInitialized: true,
+          lastRefreshTime: snap.savedAt
+            ? new Date(snap.savedAt).getTime()
+            : null,
         });
       } else {
-        set({ isHydrated: true });
+        console.log("[ProfileStore] No cache found");
+        set({
+          isHydrated: true,
+          isInitialized: true,
+          students: [],
+          parent: null,
+          activeStudentId: null,
+        });
       }
-    } catch {
-      set({ isHydrated: true });
+    } catch (err) {
+      console.error("[ProfileStore] hydrate cache read error:", err);
+      set({
+        isHydrated: true,
+        isInitialized: true,
+        activeStudentId: null,
+      });
+    }
+
+    // Step 4: Silently refresh in background
+    await get()._silentRefresh();
+  },
+
+  // ── Silent background refresh ───────────────────────────────────────────────
+  _silentRefresh: async () => {
+    const { isAuthenticated } = useAuthStore.getState();
+
+    if (!isAuthenticated) {
+      console.log("[ProfileStore] Not authenticated, skipping silent refresh");
+      return null;
+    }
+
+    // Check if refresh is needed (stale or never refreshed)
+    const stale = await storage.isProfileStale();
+    const neverRefreshed = get().lastRefreshTime === null;
+
+    if (!stale && !neverRefreshed) {
+      console.log("[ProfileStore] Cache fresh, skipping refresh");
+      return null;
+    }
+
+    console.log("[ProfileStore] Starting silent background refresh");
+    return get().fetchAndPersist({ silent: true });
+  },
+
+  // ── Fetch from API (with optional silent mode) ──────────────────────────────
+  fetchAndPersist: async ({ silent = false } = {}) => {
+    // Prevent concurrent fetches
+    if (get().isFetching) {
+      console.log("[ProfileStore] Already fetching, skipping");
+      return null;
+    }
+
+    // Check auth
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) {
+      console.log("[ProfileStore] Not authenticated, skipping fetch");
+      return null;
+    }
+
+    if (!silent) {
+      set({ isFetching: true });
+    }
+
+    try {
+      console.log("[ProfileStore] Fetching from API...");
+      const data = await profileApi.getFullProfile();
+
+      if (data && data.students) {
+        // Save to storage
+        await storage.saveProfile(data);
+
+        // Update store
+        const currentState = get();
+
+        set({
+          parent: data.parent ?? currentState.parent,
+          students: data.students ?? currentState.students,
+          activeStudentId:
+            data.parent?.active_student_id ??
+            currentState.activeStudentId ??
+            data.students?.[0]?.id ??
+            null,
+          lastScan: data.last_scan ?? currentState.lastScan,
+          scanCount: data.scan_count ?? currentState.scanCount,
+          anomaly: data.anomaly ?? currentState.anomaly,
+          lastRefreshTime: Date.now(),
+        });
+
+        // Update auth store if needed
+        if (data.parent) {
+          await useAuthStore.getState().setParentUser(data.parent);
+        }
+
+        // Handle new user flag
+        const hasCompletedStudent = (data.students ?? []).some(
+          (s) => s.setup_stage === "COMPLETE",
+        );
+        const authState = useAuthStore.getState();
+        if (hasCompletedStudent && authState.isNewUser) {
+          await authState.setIsNewUser(false);
+        }
+
+        console.log("[ProfileStore] Fetch complete");
+        return data;
+      }
+    } catch (err) {
+      console.error("[ProfileStore] fetchAndPersist error:", err);
+      if (!silent) {
+        throw err;
+      }
+      return null;
+    } finally {
+      if (!silent) {
+        set({ isFetching: false });
+      }
     }
   },
 
-  // ── Fetch + Persist ─────────────────────────────────────────────────────────
-  fetchAndPersist: async () => {
-    if (get().isFetching) return;
+  // ── Force refresh (user pull-to-refresh) ────────────────────────────────────
+  refresh: async () => {
+    console.log("[ProfileStore] Force refresh");
     set({ isFetching: true });
-
     try {
-      const data = await profileApi.getFullProfile();
-
-      await storage.saveProfile(data);
-
-      if (data.parent) {
-        await useAuthStore.getState().setParentUser(data.parent);
-      }
-
-      // [FIX-1] Only auto-correct isNewUser→false when:
-      //   a) The auth store currently has isNewUser=true (avoid pointless write)
-      //   b) A student with setup_stage='COMPLETE' exists in the response
-      // This prevents the correction from firing mid-registration where
-      // isNewUser=true was just set and the student is not yet COMPLETE.
-      const hasCompletedStudent = (data.students ?? []).some(
-        (s) => s.setup_stage === "COMPLETE",
-      );
-      const authState = useAuthStore.getState();
-      if (hasCompletedStudent && authState.isNewUser) {
-        await authState.setIsNewUser(false);
-      }
-
-      set({
-        parent: data.parent ?? null,
-        students: data.students ?? [],
-        activeStudentId:
-          get().activeStudentId ?? data.students?.[0]?.id ?? null,
-        lastScan: data.last_scan ?? null,
-        scanCount: data.scan_count ?? 0,
-        anomaly: data.anomaly ?? null,
-      });
-
-      return data;
+      return await get().fetchAndPersist({ silent: false });
     } finally {
       set({ isFetching: false });
     }
   },
 
-  // ── Fetch If Stale ──────────────────────────────────────────────────────────
-  fetchIfStale: async () => {
-    const stale = await storage.isProfileStale();
-    if (stale) return get().fetchAndPersist();
+  // ── Called after login ──────────────────────────────────────────────────────
+  onLogin: async () => {
+    console.log("[ProfileStore] onLogin - clearing cache and fetching fresh");
+    await storage.clearProfile();
+    set({
+      students: [],
+      parent: null,
+      lastRefreshTime: null,
+      isFetching: false,
+    });
+    return get().fetchAndPersist({ silent: false });
   },
 
-  // ── Patch Student ────────────────────────────────────────────────────────────
+  // ── Called after logout ─────────────────────────────────────────────────────
+  onLogout: async () => {
+    console.log("[ProfileStore] onLogout - clearing all data");
+    await storage.clearProfile();
+    set({
+      parent: null,
+      students: [],
+      activeStudentId: null,
+      lastScan: null,
+      scanCount: 0,
+      anomaly: null,
+      isFetching: false,
+      lastRefreshTime: null,
+    });
+  },
+
+  // ── Student update methods ──────────────────────────────────────────────────
   patchStudent: async (studentId, payload) => {
-    const result = await profileApi.updateProfile(studentId, payload);
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
 
-    const currentStudent =
-      get().students.find((s) => s.id === studentId) ?? null;
+    await profileApi.updateProfile(studentId, payload);
 
-    set((state) => ({
-      students: state.students.map((s) => {
-        if (s.id !== studentId) return s;
-        const updated = { ...s };
-        if (payload.student) Object.assign(updated, payload.student);
-        if (payload.emergency)
-          updated.emergency = {
-            ...(updated.emergency ?? {}),
-            ...payload.emergency,
-          };
-        if (payload.contacts !== undefined)
-          updated.emergency = {
-            ...(updated.emergency ?? {}),
-            contacts: payload.contacts,
-          };
-        if (payload.card_visibility)
-          updated.card_visibility = {
-            ...(updated.card_visibility ?? {}),
-            ...payload.card_visibility,
-          };
-        return updated;
-      }),
-    }));
+    // Update local store optimistically
+    const currentStudent = get().students.find((s) => s.id === studentId);
+    if (currentStudent) {
+      let updatedStudent = { ...currentStudent };
+      if (payload.student) Object.assign(updatedStudent, payload.student);
+      if (payload.emergency) {
+        updatedStudent.emergency = {
+          ...(currentStudent.emergency ?? {}),
+          ...payload.emergency,
+        };
+      }
+      if (payload.card_visibility) {
+        updatedStudent.card_visibility = {
+          ...(currentStudent.card_visibility ?? {}),
+          ...payload.card_visibility,
+        };
+      }
 
-    await storage.patchProfileStudent(studentId, {
-      ...(payload.student ?? {}),
-      ...(payload.emergency
-        ? {
-            emergency: {
-              ...(currentStudent?.emergency ?? {}),
-              ...payload.emergency,
-              ...(payload.contacts !== undefined
-                ? { contacts: payload.contacts }
-                : {}),
-            },
-          }
-        : {}),
-      ...(payload.contacts !== undefined && !payload.emergency
-        ? {
-            emergency: {
-              ...(currentStudent?.emergency ?? {}),
-              contacts: payload.contacts,
-            },
-          }
-        : {}),
-      ...(payload.card_visibility
-        ? {
-            card_visibility: {
-              ...(currentStudent?.card_visibility ?? {}),
-              ...payload.card_visibility,
-            },
-          }
-        : {}),
-    });
+      set((state) => ({
+        students: state.students.map((s) =>
+          s.id === studentId ? updatedStudent : s,
+        ),
+      }));
 
-    if (result?.cache_invalidated) {
-      await get().fetchAndPersist();
+      await storage.patchProfileStudent(studentId, payload);
     }
+
+    // Silent refresh to confirm
+    get()._silentRefresh();
   },
 
-  // ── Update Visibility ────────────────────────────────────────────────────────
-  updateVisibility: async (studentId, { visibility, hidden_fields }) => {
-    const result = await profileApi.updateVisibility(studentId, {
-      visibility,
-      hidden_fields,
-    });
+  fetchIfStale: async () => {
+    return get()._silentRefresh();
+  },
 
+  updateVisibility: async (studentId, { visibility, hidden_fields }) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    // 🟢 FIX: Single API call - backend handles both CardVisibility and EmergencyProfile
+    await profileApi.updateVisibility(studentId, { visibility, hidden_fields });
+
+    // Update local state optimistically
     set((state) => ({
       students: state.students.map((s) =>
         s.id !== studentId
@@ -204,16 +316,29 @@ export const useProfileStore = create((set, get) => ({
                 hidden_fields,
                 updated_by_parent: true,
               },
+              emergency: {
+                ...(s.emergency ?? {}),
+                visibility,
+              },
             },
       ),
     }));
 
-    if (result?.cache_invalidated) await get().fetchAndPersist();
+    // Update storage cache
+    await storage.patchProfileStudent(studentId, {
+      card_visibility: { visibility, hidden_fields, updated_by_parent: true },
+      emergency: { visibility },
+    });
+
+    // Silent refresh to sync with server
+    get()._silentRefresh();
   },
 
-  // ── Update Notifications ─────────────────────────────────────────────────────
   updateNotifications: async (prefs) => {
-    const result = await profileApi.updateNotifications(prefs);
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    await profileApi.updateNotifications(prefs);
 
     set((state) => ({
       parent: state.parent
@@ -227,12 +352,27 @@ export const useProfileStore = create((set, get) => ({
         : state.parent,
     }));
 
-    if (result?.cache_invalidated) await get().fetchAndPersist();
+    // Update storage
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        notification_prefs: {
+          ...(snap.data.parent?.notification_prefs ?? {}),
+          ...prefs,
+        },
+      };
+      await storage.saveProfile(snap.data);
+    }
+
+    get()._silentRefresh();
   },
 
-  // ── Update Location Consent ──────────────────────────────────────────────────
   updateLocationConsent: async (studentId, enabled) => {
-    const result = await profileApi.updateLocationConsent(studentId, enabled);
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    await profileApi.updateLocationConsent(studentId, enabled);
 
     set((state) => ({
       students: state.students.map((s) =>
@@ -245,11 +385,16 @@ export const useProfileStore = create((set, get) => ({
       ),
     }));
 
-    if (result?.cache_invalidated) await get().fetchAndPersist();
+    await storage.patchProfileStudent(studentId, {
+      location_consent: { enabled },
+    });
+    get()._silentRefresh();
   },
 
-  // ── Lock Card ────────────────────────────────────────────────────────────────
   lockCard: async (studentId) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
     const result = await profileApi.lockCard(studentId);
 
     set((state) => ({
@@ -263,28 +408,109 @@ export const useProfileStore = create((set, get) => ({
       ),
     }));
 
-    await get().fetchAndPersist();
+    await get().refresh();
     return result;
   },
 
-  // ── Request Replace ──────────────────────────────────────────────────────────
   requestReplace: async (studentId, reason) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
     return profileApi.requestReplace(studentId, reason);
   },
 
-  // ── Delete Account ───────────────────────────────────────────────────────────
   deleteAccount: async () => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
     await profileApi.deleteAccount();
-    await get().clear();
+    await get().onLogout();
   },
 
-  // ── Active Student ───────────────────────────────────────────────────────────
   setActiveStudent: (id) => set({ activeStudentId: id }),
 
-  // ── Clear ────────────────────────────────────────────────────────────────────
-  // [FIX-3] isHydrated stays true after clear() so AuthProvider can immediately
-  // fire the logout redirect. Setting it false caused a stuck state where both
-  // stores needed re-hydration simultaneously after logout.
+  getChildrenList: async () => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+    const data = await profileApi.getChildrenList();
+    return data?.children ?? data ?? [];
+  },
+
+  linkCard: async ({ card_number }) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.linkCard({ card_number });
+
+    // 🟢 FIX: Force immediate full refresh, not silent
+    await get().fetchAndPersist({ silent: false });
+
+    return result;
+  },
+
+  setActiveStudentWithSync: async (studentId) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const student = get().students.find((s) => s.id === studentId);
+    if (!student) throw new Error("Student not found");
+
+    await profileApi.setActiveStudent(studentId);
+
+    set({ activeStudentId: studentId });
+
+    // 🟢 Persist to storage
+    await storage.setLastActiveChild(studentId);
+
+    // Update parent in storage
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        active_student_id: studentId,
+      };
+      await storage.saveProfile(snap.data);
+    }
+
+    return { success: true };
+  },
+
+  unlinkChild: async (studentId, otp, nonce) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.unlinkChildVerify(studentId, otp, nonce);
+
+    // 🟢 FIX: Optimistically update local state with server response
+    set((state) => {
+      const newStudents = state.students.filter((s) => s.id !== studentId);
+      const newActiveId =
+        result.active_student_id ?? newStudents[0]?.id ?? null;
+
+      return {
+        students: newStudents,
+        activeStudentId: newActiveId,
+        parent: state.parent
+          ? {
+              ...state.parent,
+              active_student_id: newActiveId,
+            }
+          : null,
+      };
+    });
+
+    // Force full refresh to sync all screens
+    await get().refresh();
+
+    return result;
+  },
+
+  unlinkChildInit: async (studentId) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.unlinkChildInit(studentId);
+    return result;
+  },
+
   clear: async () => {
     await storage.clearProfile();
     set({
@@ -294,8 +520,8 @@ export const useProfileStore = create((set, get) => ({
       lastScan: null,
       scanCount: 0,
       anomaly: null,
-      isHydrated: true, // [FIX-3] was: false
       isFetching: false,
+      lastRefreshTime: null,
     });
   },
 
@@ -343,3 +569,4 @@ export const useNotificationPrefs = () =>
 export const useLastScan = () => useProfileStore((s) => s.lastScan);
 export const useScanCount = () => useProfileStore((s) => s.scanCount);
 export const useUnresolvedAnomaly = () => useProfileStore((s) => s.anomaly);
+export const useIsFetchingProfile = () => useProfileStore((s) => s.isFetching);

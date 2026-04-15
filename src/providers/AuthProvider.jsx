@@ -2,12 +2,15 @@ import { authApi } from '@/features/auth/auth.api';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { storage } from '@/lib/storage/storage';
-import { router, useSegments } from 'expo-router';
+import { router, useRootNavigationState, useSegments } from 'expo-router';
 import { createContext, useCallback, useEffect } from 'react';
 
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+    // ✅ FIX: Only bypass in development, never in production
+    const __DEV_BYPASS__ = false;
+
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const isHydrated = useAuthStore((s) => s.isHydrated);
 
@@ -15,17 +18,20 @@ export function AuthProvider({ children }) {
     const students = useProfileStore((s) => s.students);
 
     const segments = useSegments();
+    const navigationState = useRootNavigationState();
 
-    // ✅ CORE LOGIC: profile completion check
-    const isProfileComplete =
+    // ✅ FIX: Profile complete check includes basic student info
+    const isProfileComplete = __DEV_BYPASS__ ? true : (
         students.length > 0 &&
-        students.some(
-            (s) =>
-                s.emergency?.blood_group &&
-                (s.emergency?.contacts?.length ?? 0) > 0
-        );
+        students.some((s) =>
+            s.first_name?.trim() &&
+            s.class?.trim() &&
+            s.setup_stage === 'COMPLETE'
+        )
+    );
 
     useEffect(() => {
+        if (!navigationState?.key) return;
         if (!isHydrated || !profileHydrated) return;
 
         const inAuthGroup = segments[0] === '(auth)';
@@ -40,26 +46,45 @@ export function AuthProvider({ children }) {
             return;
         }
 
-        // ─── AUTHENTICATED BUT PROFILE NOT COMPLETE ───────
-        if (!isProfileComplete) {
-            // 🔴 FORCE user to updates page only
+        // 🟢 FIX: Handle empty children state
+        const hasChildren = students.length > 0;
+        const hasCompleteProfile = students.some((s) =>
+            s.first_name?.trim() &&
+            s.class?.trim() &&
+            s.setup_stage === 'COMPLETE'
+        );
+
+        // Case 1: Has children but profile incomplete → Updates page
+        if (hasChildren && !hasCompleteProfile) {
             if (segments[1] !== 'updates') {
                 router.replace('/(app)/updates');
             }
             return;
         }
 
-        // ─── PROFILE COMPLETE → NORMAL APP ────────────────
-        if (!inAppGroup) {
-            router.replace('/(app)/home');
+        // Case 2: No children at all → Settings/Add-child page
+        if (!hasChildren) {
+            // Don't redirect if already on settings or add-child
+            if (segments[1] !== 'settings' && segments[1] !== 'add-child') {
+                router.replace('/(app)/settings');
+            }
+            return;
+        }
+
+        // Case 3: Profile complete → Normal app flow
+        if (hasCompleteProfile) {
+            if (!inAppGroup) {
+                router.replace('/(app)/home');
+            }
         }
 
     }, [
+        navigationState?.key,
         isAuthenticated,
         isHydrated,
         profileHydrated,
         segments,
-        isProfileComplete,
+        students.length, // 🟢 Add students.length as dependency
     ]);
 
     return (
@@ -69,9 +94,6 @@ export function AuthProvider({ children }) {
     );
 }
 
-/**
- * LOGIN SUCCESS
- */
 export function useLoginSuccess() {
     const loginSuccess = useAuthStore((s) => s.loginSuccess);
     const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
@@ -88,17 +110,14 @@ export function useLoginSuccess() {
 
             try {
                 await fetchAndPersist();
-            } catch {
-                // non-fatal
+            } catch (err) {
+                console.warn('[useLoginSuccess] Profile fetch failed:', err?.message);
             }
         },
         [loginSuccess, fetchAndPersist]
     );
 }
 
-/**
- * REGISTRATION SUCCESS
- */
 export function useRegistrationSuccess() {
     const loginSuccess = useAuthStore((s) => s.loginSuccess);
     const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
@@ -110,22 +129,19 @@ export function useRegistrationSuccess() {
                 accessToken,
                 refreshToken,
                 expiresAt,
-                true // still useful for backend meaning, but NOT for routing
+                true
             );
 
             try {
                 await fetchAndPersist();
-            } catch {
-                // non-fatal
+            } catch (err) {
+                console.warn('[useRegistrationSuccess] Profile fetch failed:', err?.message);
             }
         },
         [loginSuccess, fetchAndPersist]
     );
 }
 
-/**
- * LOGOUT
- */
 export function useLogout() {
     const logout = useAuthStore((s) => s.logout);
     const clearProfile = useProfileStore((s) => s.clear);

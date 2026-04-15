@@ -1,84 +1,9 @@
-/**
- * features/profile/profile.api.js
- *
- * ALL endpoints verified against:
- *   auth.routes.js       → mounted at /api/auth
- *   parent.routes.js     → mounted at /api/parents
- *   parent.service.js    → exact response shapes
- *   parent.validation.js → exact request shapes
- *
- * ── Registration (unauthenticated — authClient) ──────────────────────────────
- *
- * POST /api/auth/register/init
- *   body: { card_number, phone }
- *   → { success, data: { nonce, masked_phone, student_first_name? } }
- *
- * POST /api/auth/register/verify
- *   body: { nonce, otp, phone }
- *   → { success, data: { accessToken, refreshToken, expiresAt,
- *                         isNewUser, parent_id, student_id } }
- *
- * ── Profile (authenticated — apiClient with Bearer token) ───────────────────
- *
- * GET /api/parents/me
- *   → { success, data: {
- *         parent: { id, name, is_phone_verified, notification_prefs },
- *         students: [{
- *           id, first_name, last_name, class, section, photo_url,
- *           setup_stage, relationship, is_primary,
- *           school: { id, name, code, city },
- *           token: { id, status, expires_at, card_number, qr_url } | null,
- *           emergency: {
- *             blood_group, allergies, conditions, medications,
- *             doctor_name, doctor_phone, notes, visibility,
- *             is_visible, contacts: [{ id, name, phone, relationship,
- *                                      priority, display_order,
- *                                      call_enabled, whatsapp_enabled }]
- *           } | null,
- *           card_visibility: { visibility, hidden_fields, updated_by_parent } | null,
- *           location_consent: { enabled } | null,
- *         }],
- *         last_scan: { id, result, ip_city, ip_region, ip_country,
- *                       scan_purpose, created_at, latitude, longitude } | null,
- *         scan_count: number,
- *         anomaly: { id, anomaly_type, severity, reason, created_at } | null,
- *         cache_ttl_days: 30,
- *       }
- *     }
- *
- * PATCH /api/parents/me/profile
- *   body: { student_id (required), student?, emergency?, contacts? }
- *   → { success, data: { cache_invalidated: true } }
- *
- * PATCH /api/parents/me/visibility
- *   body: { student_id, visibility, hidden_fields }
- *   → { success, data: { cache_invalidated: true } }
- *
- * PATCH /api/parents/me/notifications
- *   body: any subset of notification pref fields
- *   → { success, data: { cache_invalidated: true } }
- *
- * PATCH /api/parents/me/location-consent
- *   body: { student_id, enabled }
- *   → { success, data: { cache_invalidated: true } }
- *
- * POST /api/parents/me/lock-card
- *   body: { student_id, confirmation: "LOCK" }
- *   → { success, data: { locked: true, count: number, cache_invalidated: true } }
- *
- * POST /api/parents/me/request-replace
- *   body: { student_id, reason }
- *   → { success, data: { id, created_at } }
- *
- * DELETE /api/parents/me
- *   → { success, message: "Account deleted" }
- *
- * GET /api/parents/me/scans
- *   query: { cursor?, limit?, filter? }
- *   → { success, data: { scans, anomalies, hasMore, nextCursor } }
- */
+// features/profile/profile.api.js
+// Add these methods to the profileApi object
 
 import { apiClient, authClient } from "@/lib/api/apiClient";
+import { mockApi } from "@/services/mockService";
+const USE_MOCK = false;
 
 // ── Guards ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +70,7 @@ export const profileApi = {
    * Re-fetched when stale OR when any write returns { cache_invalidated: true }.
    */
   getFullProfile: async () => {
+    if (USE_MOCK) return mockApi.getFullProfile();
     const res = await apiClient.get("/parents/me");
     return res?.data?.data ?? res?.data;
   },
@@ -257,6 +183,132 @@ export const profileApi = {
     const params = { limit, filter };
     if (cursor) params.cursor = cursor;
     const res = await apiClient.get("/parents/me/scans", { params });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * GET /api/parents/me/children
+   * Lightweight list of all children for the switcher UI
+   * → { children: [{ id, first_name, last_name, class, section, token_status, is_primary }] }
+   */
+  getChildrenList: async () => {
+    if (USE_MOCK) return mockApi.getChildrenList();
+    const res = await apiClient.get("/parents/me/children");
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/link-card
+   * Add a new child (second/third/etc.) by scanning a new card
+   * body: { card_number }
+   * → { success, student_id, student_name, is_first_child }
+   */
+  linkCard: async ({ card_number }) => {
+    const res = await apiClient.post("/parents/me/link-card", {
+      card_number,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * PATCH /api/parents/me/active-student
+   * Switch the active student for this parent
+   * body: { student_id }
+   * → { success, active_student_id }
+   */
+  setActiveStudent: async (studentId) => {
+    if (USE_MOCK) return mockApi.setActiveStudent(studentId);
+    const res = await apiClient.patch("/parents/me/active-student", {
+      student_id: studentId,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/unlink-child/init
+   * Send OTP to parent's phone for unlinking child
+   * body: { student_id }
+   * → { nonce, expiresIn, masked_phone }
+   */
+  unlinkChildInit: async (studentId) => {
+    const res = await apiClient.post("/parents/me/unlink-child/init", {
+      student_id: studentId,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/unlink-child/verify
+   * Verify OTP and remove child from parent account
+   * body: { student_id, otp, nonce }
+   * → { success, message, remaining_children, active_student_id }
+   */
+  unlinkChildVerify: async (studentId, otp, nonce) => {
+    const res = await apiClient.post("/parents/me/unlink-child/verify", {
+      student_id: studentId,
+      otp,
+      nonce,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // =============================================================================
+  // 🟢 NEW: Photo Upload API Methods
+  // =============================================================================
+
+  /**
+   * POST /api/parents/me/students/:studentId/photo/upload-url
+   * Generate presigned URL for direct-to-R2 upload
+   * body: { contentType, fileSize }
+   * → { uploadUrl, publicUrl, key, nonce, expiresIn, maxSize, allowedTypes }
+   */
+  generateStudentPhotoUploadUrl: async (studentId, contentType, fileSize) => {
+    const res = await apiClient.post(
+      `/parents/me/students/${studentId}/photo/upload-url`,
+      { contentType, fileSize },
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/students/:studentId/photo/confirm
+   * Confirm upload and get final photo URL
+   * body: { key, nonce }
+   * → { photoUrl, verified: true }
+   */
+  confirmStudentPhotoUpload: async (studentId, key, nonce) => {
+    const res = await apiClient.post(
+      `/parents/me/students/${studentId}/photo/confirm`,
+      { key, nonce },
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/avatar/upload-url
+   * Generate presigned URL for parent avatar upload
+   * body: { contentType, fileSize }
+   * → { uploadUrl, publicUrl, key, nonce, expiresIn, maxSize, allowedTypes }
+   */
+  generateAvatarUploadUrl: async (contentType, fileSize) => {
+    const res = await apiClient.post(`/parents/me/avatar/upload-url`, {
+      contentType,
+      fileSize,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/avatar/confirm
+   * Confirm parent avatar upload
+   * body: { key, nonce }
+   * → { avatarUrl, verified: true }
+   */
+  confirmAvatarUpload: async (key, nonce) => {
+    const res = await apiClient.post(`/parents/me/avatar/confirm`, {
+      key,
+      nonce,
+    });
     return res?.data?.data ?? res?.data;
   },
 };

@@ -1,8 +1,6 @@
 /**
  * TabBar — Custom bottom tab bar.
- *
  * Used in app/(app)/_layout.jsx as the tabBar prop.
- * Tabs: HOME | QR | SOS | UPDATE | SETTINGS
  */
 
 import { colors, spacing, typography } from '@/theme';
@@ -119,14 +117,18 @@ function TabItem({ label, icon, active, onPress }) {
     );
 }
 
-// ── Tabs config ───────────────────────────────────────────────────────────────
-
+// ── Tabs config with related routes ───────────────────────────────────────────
 const TABS = [
-    { name: 'home', label: 'HOME', Icon: HomeIcon },
-    { name: 'qr', label: 'QR', Icon: QrIcon },
-    { name: 'emergency', label: 'SOS', Icon: EmergencyIcon },
-    { name: 'updates', label: 'UPDATE', Icon: UpdatesIcon },
-    { name: 'settings', label: 'SETTINGS', Icon: SettingsIcon },
+    { name: 'home', label: 'HOME', Icon: HomeIcon, relatedRoutes: [] },
+    { name: 'qr', label: 'QR', Icon: QrIcon, relatedRoutes: [] },
+    { name: 'emergency', label: 'SOS', Icon: EmergencyIcon, relatedRoutes: [] },
+    { name: 'updates', label: 'UPDATE', Icon: UpdatesIcon, relatedRoutes: [] },
+    {
+        name: 'settings',
+        label: 'SETTINGS',
+        Icon: SettingsIcon,
+        relatedRoutes: ['scan-history', 'visibility', 'support', 'change-phone', 'add-child']
+    },
 ];
 
 // ── Main TabBar ───────────────────────────────────────────────────────────────
@@ -134,11 +136,26 @@ const TABS = [
 export default function TabBar({ state, navigation }) {
     const insets = useSafeAreaInsets();
 
+    const getCurrentRouteName = () => {
+        const currentRoute = state.routes[state.index];
+        return currentRoute?.name;
+    };
+
+    const isTabActive = (tab, currentRouteName) => {
+        // Exact match
+        if (currentRouteName === tab.name) return true;
+        // Check related routes
+        if (tab.relatedRoutes?.includes(currentRouteName)) return true;
+        return false;
+    };
+
+    const currentRouteName = getCurrentRouteName();
+
     return (
         <View style={[styles.container, { paddingBottom: insets.bottom || spacing[3] }]}>
             <View style={styles.bar}>
                 {TABS.map((tab, index) => {
-                    const isFocused = state.routes[state.index]?.name === tab.name;
+                    const isFocused = isTabActive(tab, currentRouteName);
 
                     return (
                         <TabItem

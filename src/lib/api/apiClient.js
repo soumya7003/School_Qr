@@ -10,10 +10,11 @@
  *   2. Attaches X-Request-ID for tracing
  *   3. Attaches X-Timestamp for replay attack prevention
  *   4. Attaches X-Device-Fingerprint for single-device login enforcement
- *   5. Attaches X-App-Version + X-Platform for server-side analytics
- *   6. Attaches AbortController for cancellation
- *   7. Proactively refreshes token if < 5 min from expiry
- *   8. Attaches Authorization: Bearer <token>
+ *   5. Attaches X-Device-ID for device identification
+ *   6. Attaches X-App-Version + X-Platform for server-side analytics
+ *   7. Attaches AbortController for cancellation
+ *   8. Proactively refreshes token if < 5 min from expiry
+ *   9. Attaches Authorization: Bearer <token>
  *
  * Response interceptor:
  *   1. Cleans up AbortController on success AND all error paths
@@ -54,6 +55,19 @@ export const authClient = axios.create({
   baseURL: BASE_URL,
   timeout: TIMEOUTS.AUTH,
   headers: { "Content-Type": "application/json", Accept: "application/json" },
+});
+
+// Add device ID to auth client requests
+authClient.interceptors.request.use(async (config) => {
+  try {
+    const fingerprint = await getDeviceFingerprint().catch(() => "unknown");
+    config.headers["X-Device-ID"] = fingerprint;
+    config.headers["X-Device-Fingerprint"] = fingerprint;
+  } catch {
+    config.headers["X-Device-ID"] = "unknown";
+    config.headers["X-Device-Fingerprint"] = "unknown";
+  }
+  return config;
 });
 
 // ── Main client ───────────────────────────────────────────────────────────────
@@ -176,13 +190,12 @@ apiClient.interceptors.request.use(
     }
 
     // 3. Timestamp — backend can reject requests older than N seconds
-    //    Prevents replay attacks where attacker re-sends captured requests
     config.headers["X-Timestamp"] = Date.now().toString();
 
-    // 4. Device fingerprint — backend enforces single-device login
-    //    Backend middleware: reject if fingerprint != session's registered fingerprint
+    // 4. Device fingerprint and Device ID
     const fingerprint = await getCachedFingerprint();
     config.headers["X-Device-Fingerprint"] = fingerprint;
+    config.headers["X-Device-ID"] = fingerprint;
 
     // 5. App metadata — useful for server-side analytics + version gating
     config.headers["X-App-Version"] =
@@ -206,7 +219,6 @@ apiClient.interceptors.request.use(
             refresh.resolve(token);
           } catch (err) {
             refresh.reject(err);
-            // Fall through — let 401 response handler deal with it
           }
         } else {
           await refresh.enqueue();
@@ -251,6 +263,23 @@ apiClient.interceptors.response.use(
 
     const { status } = err.response;
 
+    // ✅ ADDED: Debug logging for 400 errors
+    if (status === 400) {
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.error("🔴 API 400 ERROR DEBUG:");
+      console.error("URL:", req?.url);
+      console.error("Method:", req?.method);
+      console.error(
+        "Response Data:",
+        JSON.stringify(err.response?.data, null, 2),
+      );
+      console.error("Request Headers:", JSON.stringify(req?.headers, null, 2));
+      if (req?.data) {
+        console.error("Request Body:", JSON.stringify(req?.data, null, 2));
+      }
+      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    }
+
     // ── 401: Token expired — refresh + retry ──────────────────────────────────
     if (status === 401 && !req._retry) {
       req._retry = true;
@@ -287,8 +316,6 @@ apiClient.interceptors.response.use(
     }
 
     // ── 403: Forbidden — device fingerprint mismatch or account suspended ─────
-    // This fires when backend rejects the X-Device-Fingerprint header,
-    // meaning this account is now logged in on a different device.
     if (status === 403) {
       await triggerLogout();
       return Promise.reject(new ApiError(ApiCode.FORBIDDEN, 403, err));

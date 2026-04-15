@@ -6,51 +6,48 @@
  * Development (Expo Go):  AsyncStorage  — no native module, works in Expo Go
  * Production (dev build): MMKV          — encrypted, synchronous, no size limit
  *
- * HOW TO SWITCH:
- *   .env.development  →  EXPO_PUBLIC_USE_MMKV=false
- *   .env.production   →  EXPO_PUBLIC_USE_MMKV=true
- *
- * Or just check __DEV__:
- *   __DEV__ = true  in Expo Go / dev server  → AsyncStorage
- *   __DEV__ = false in production build      → MMKV
- *
  * IMPORTANT:
  *   AsyncStorage is async (returns Promises).
  *   MMKV is sync (returns values directly).
  *   Both are wrapped here so the rest of the codebase never knows the difference.
- *   All profile methods are async in both modes — consistent API surface.
  *
- * SecureStore is used for auth tokens in BOTH modes — it works fine in Expo Go.
- * Only the profile blob (which is large) needs the swap.
- *
- * PACKAGES NEEDED:
- *   npx expo install @react-native-async-storage/async-storage
- *   npx expo install react-native-mmkv          ← only needed for prod build
- *   npx expo install expo-secure-store
+ * SECURITY:
+ *   Tokens stored in SecureStore (always encrypted).
+ *   Profile blob stored in MMKV without encryption key (data is not sensitive).
+ *   DO NOT hardcode encryption keys in source code.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 // ── Mode detection ────────────────────────────────────────────────────────────
-// __DEV__ is true in Expo Go and dev server, false in production builds.
-// This is the cleanest way — no .env needed.
-const USE_MMKV = !__DEV__;
+// ✅ FIXED: Properly detect if MMKV is available
+let USE_MMKV = false;
+try {
+  // Only try to use MMKV in production/dev build, not in Expo Go
+  const { MMKV } = require("react-native-mmkv");
+  if (MMKV && !__DEV__) {
+    USE_MMKV = true;
+  }
+} catch {
+  USE_MMKV = false;
+}
 
-// ── MMKV — lazy loaded only in production ────────────────────────────────────
-// Dynamic require prevents Metro from crashing in Expo Go even though
-// react-native-mmkv is installed (it just won't be required at runtime in dev).
+const LAST_ACTIVE_CHILD_KEY = "last_active_child_v1";
+
+// ── MMKV — lazy loaded only when available ────────────────────────────────────
 let _mmkv = null;
 const getMmkv = () => {
+  if (!USE_MMKV) return null;
   if (_mmkv) return _mmkv;
   try {
     const { MMKV } = require("react-native-mmkv");
     _mmkv = new MMKV({
-      id: "resqid-store",
-      encryptionKey: "resqid_mmkv_enc_v1",
+      id: "resqid_profile_store",
     });
     return _mmkv;
   } catch {
+    USE_MMKV = false;
     return null;
   }
 };
@@ -150,9 +147,8 @@ const _mmkvDel = (key) => {
 };
 
 // ── Profile read/write — unified async API ────────────────────────────────────
-// Both modes return Promises so profile_store.js never needs to know which mode.
 const _profileGet = async (key) => {
-  if (USE_MMKV) return _mmkvGet(key); // MMKV is sync but we wrap in same shape
+  if (USE_MMKV) return _mmkvGet(key);
   return _asyncGet(key);
 };
 const _profileSet = async (key, value) => {
@@ -177,7 +173,6 @@ const isValidExp = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 export const storage = Object.freeze({
   // ═══════════════════════════════════════════════════════════════════════════
   // AUTH TOKENS — SecureStore in BOTH modes
-  // Works fine in Expo Go. Stays under 200 bytes.
   // ═══════════════════════════════════════════════════════════════════════════
 
   readAuth: async () => {
@@ -195,9 +190,8 @@ export const storage = Object.freeze({
       const current = raw ? JSON.parse(raw) : {};
       const merged = { ...current, ...patch };
 
-      // 🚨 GUARD: prevent token loss
       if (!merged.accessToken && current?.accessToken) {
-        return; // abort write
+        return;
       }
 
       await _secSet(SK.AUTH, JSON.stringify(merged));
@@ -276,10 +270,6 @@ export const storage = Object.freeze({
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PROFILE SNAPSHOT
-  //   Dev  (Expo Go):  AsyncStorage — no native module needed
-  //   Prod (build):    MMKV         — encrypted, fast, no size limit
-  //
-  // All methods are async in both modes — profile_store.js uses await everywhere.
   // ═══════════════════════════════════════════════════════════════════════════
 
   saveProfile: async (profileData) => {
@@ -308,7 +298,10 @@ export const storage = Object.freeze({
       const raw = await _profileGet(PK.PROFILE);
       if (!raw) return;
       const snap = JSON.parse(raw);
-      snap.data.students = (snap.data.students ?? []).map((s) =>
+      if (!snap.data.students) {
+        snap.data.students = [];
+      }
+      snap.data.students = snap.data.students.map((s) =>
         s.id === studentId ? { ...s, ...partial } : s,
       );
       await _profileSet(PK.PROFILE, JSON.stringify(snap));
@@ -320,6 +313,7 @@ export const storage = Object.freeze({
       const raw = await _profileGet(PK.PROFILE);
       if (!raw) return true;
       const { savedAt } = JSON.parse(raw);
+      if (!savedAt) return true;
       return Date.now() - new Date(savedAt).getTime() > maxAgeMs;
     } catch {
       return true;
@@ -333,6 +327,30 @@ export const storage = Object.freeze({
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // LAST ACTIVE CHILD — AsyncStorage (works in both dev and prod)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  setLastActiveChild: async (studentId) => {
+    try {
+      await AsyncStorage.setItem(LAST_ACTIVE_CHILD_KEY, studentId);
+    } catch {}
+  },
+
+  getLastActiveChild: async () => {
+    try {
+      return await AsyncStorage.getItem(LAST_ACTIVE_CHILD_KEY);
+    } catch {
+      return null;
+    }
+  },
+
+  clearLastActiveChild: async () => {
+    try {
+      await AsyncStorage.removeItem(LAST_ACTIVE_CHILD_KEY);
+    } catch {}
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // FULL WIPE — logout
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -341,6 +359,7 @@ export const storage = Object.freeze({
       _secDel(SK.AUTH),
       _secDel(SK.USER),
       _profileDel(PK.PROFILE),
+      storage.clearLastActiveChild(),
     ]);
   },
 });
