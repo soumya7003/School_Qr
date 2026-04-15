@@ -137,13 +137,12 @@ export default function AddChildScreen() {
             // 🟢 FIX: Wait for refresh to complete before setting active student
             await refresh();
 
-            // 🟢 FIX: Use setActiveStudentWithSync to persist to storage
+            // 🟢 FIX: Set the new student as active
             await useProfileStore.getState().setActiveStudentWithSync(result.student_id);
 
             setSuccess(true);
-
         } catch (err) {
-            console.error('Add child error:', err);
+            if (__DEV__) console.error('Add child error:', err);
             if (err?.message?.includes('404')) {
                 setError('Card not found. Check the number printed on your card.');
             } else if (err?.message?.includes('409')) {
@@ -159,6 +158,7 @@ export default function AddChildScreen() {
     };
 
     const handleCompleteProfile = () => {
+        // 🟢 Navigate to updates with the new student ID
         router.push({
             pathname: '/(app)/updates',
             params: { studentId: newStudentId, isNewStudent: 'true' }
