@@ -1,47 +1,36 @@
-// src/components/profile/BloodPicker.jsx
-import { BLOOD_GROUPS } from '@/constants/profile';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// src/components/profile/SectionCard.jsx
+import { StyleSheet, Text, View } from 'react-native';
 
-export function BloodPicker({ value, onChange, C }) {
+export function SectionCard({ icon, title, subtitle, children, accent, C }) {
+    const ac = accent ?? C.primary;
+
     return (
-        <View style={{ gap: 10 }}>
-            <View style={styles.grid}>
-                {BLOOD_GROUPS.map((bg) => {
-                    const sel = value === bg;
-                    return (
-                        <TouchableOpacity
-                            key={bg}
-                            style={[
-                                styles.chip,
-                                { borderColor: C.bd2, backgroundColor: C.s3 },
-                                sel && { borderColor: C.primaryBd, backgroundColor: C.primaryBg }
-                            ]}
-                            onPress={() => onChange(bg)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={[styles.text, { color: sel ? C.primary : C.tx2 }]}>{bg}</Text>
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
-            {!value && (
-                <View style={[styles.warn, { backgroundColor: C.ambBg, borderColor: C.ambBd }]}>
-                    <Text style={[styles.warnText, { color: C.amb }]}>
-                        ⚠️  Tap a blood group above. This is shown to first responders.
-                    </Text>
+        <View style={[styles.card, { backgroundColor: C.s2, borderColor: C.bd }]}>
+            <View style={[styles.head, { borderLeftColor: ac, borderBottomColor: C.bd }]}>
+                <View style={[styles.iconWrap, { backgroundColor: ac + '12', borderColor: ac + '30' }]}>
+                    {icon}
                 </View>
-            )}
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.title, { color: C.tx }]}>{title}</Text>
+                    {subtitle && <Text style={[styles.sub, { color: C.tx3 }]}>{subtitle}</Text>}
+                </View>
+            </View>
+            <View style={styles.body}>{children}</View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: {
-        paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1,
-        minWidth: 54, alignItems: 'center', justifyContent: 'center'
+    card: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+    head: {
+        flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16,
+        paddingVertical: 14, borderBottomWidth: 1, borderLeftWidth: 3
     },
-    text: { fontSize: 13, fontWeight: '700' },
-    warn: { borderRadius: 8, borderWidth: 1, padding: 10 },
-    warnText: { fontSize: 12, fontWeight: '600' },
+    iconWrap: {
+        width: 34, height: 34, borderRadius: 9, borderWidth: 1,
+        alignItems: 'center', justifyContent: 'center'
+    },
+    title: { fontSize: 13.5, fontWeight: '700' },
+    sub: { fontSize: 11, marginTop: 1 },
+    body: { padding: 16, gap: 14 },
 });

@@ -1,4 +1,4 @@
-// src/features/profile/hooks/useProfileForm.js
+// src/features/profile/hooks/useProfileForm.js - FIXED
 import { BLOOD_GROUP_FROM_ENUM } from "@/constants/profile";
 import { useEffect, useMemo, useState } from "react";
 
@@ -13,7 +13,7 @@ export function useProfileForm(student) {
   const [lastName, setLastName] = useState(student?.last_name ?? "");
   const [cls, setCls] = useState(student?.class ?? "");
   const [section, setSection] = useState(student?.section ?? "");
-  const [profileImage, setProfileImage] = useState(student?.photo_url ?? null);
+  const [profileImage, setProfileImage] = useState(null); // ✅ Start with null
   const [bloodGroup, setBloodGroup] = useState(
     BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? "",
   );
@@ -25,12 +25,22 @@ export function useProfileForm(student) {
   const [notes, setNotes] = useState(ep?.notes ?? "");
   const [contacts, setContacts] = useState(rawContacts ?? []);
 
+  // ✅ Helper to get proper image URL
+  const getPhotoUrl = (photoKey) => {
+    if (!photoKey) return null;
+    if (photoKey.startsWith("https://") || photoKey.startsWith("file://")) {
+      return photoKey;
+    }
+    return `https://assets.getresqid.in/${photoKey}`;
+  };
+
   useEffect(() => {
     setFirstName(student?.first_name ?? "");
     setLastName(student?.last_name ?? "");
     setCls(student?.class ?? "");
     setSection(student?.section ?? "");
-    setProfileImage(student?.photo_url ?? null);
+    // ✅ Convert photo_url to proper URL
+    setProfileImage(getPhotoUrl(student?.photo_url));
   }, [student]);
 
   useEffect(() => {
@@ -81,5 +91,6 @@ export function useProfileForm(student) {
     setContacts,
     sortedContacts,
     canProceed,
+    getPhotoUrl, // ✅ Export helper
   };
 }

@@ -1,4 +1,4 @@
-// src/components/profile/PhotoUpload.jsx
+// src/components/profile/PhotoUpload.jsx - FIXED
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -6,6 +6,7 @@ import { CameraSvg, InfoSvg, UploadSvg, XSvg } from './icons/profile.icon.index'
 
 export function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
     const [hasPermission, setHasPermission] = useState(null);
+    const [imageError, setImageError] = useState(false);
     const fadeAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -59,8 +60,10 @@ export function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
                 aspect: [1, 1],
                 quality: 0.8,
                 allowsMultipleSelection: false,
+                base64: false,
             });
             if (!result.canceled && result.assets[0]) {
+                setImageError(false);
                 Animated.sequence([
                     Animated.timing(fadeAnim, { toValue: 0.5, duration: 100, useNativeDriver: true }),
                     Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -80,8 +83,10 @@ export function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.8,
+                base64: false,
             });
             if (!result.canceled && result.assets[0]) {
+                setImageError(false);
                 Animated.sequence([
                     Animated.timing(fadeAnim, { toValue: 0.5, duration: 100, useNativeDriver: true }),
                     Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -110,14 +115,24 @@ export function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
         ]);
     };
 
+    const handleImageError = () => {
+        setImageError(true);
+        console.log('[PhotoUpload] Image failed to load:', imageUri);
+    };
+
     return (
         <View style={styles.container}>
             <Text style={[styles.label, { color: C.tx3 }]}>PROFILE PHOTO</Text>
             <View style={styles.content}>
                 <Animated.View style={[styles.previewContainer, { opacity: fadeAnim }]}>
-                    {imageUri ? (
+                    {imageUri && !imageError ? (
                         <View style={styles.previewWrapper}>
-                            <Image source={{ uri: imageUri }} style={styles.preview} />
+                            <Image
+                                source={{ uri: imageUri }}
+                                style={styles.preview}
+                                onError={handleImageError}
+                                resizeMode="cover"
+                            />
                             <TouchableOpacity
                                 style={[styles.removeBtn, { backgroundColor: C.red, borderColor: '#fff' }]}
                                 onPress={handleRemove}
@@ -131,7 +146,9 @@ export function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
                             <View style={[styles.placeholderIcon, { backgroundColor: C.primaryBg }]}>
                                 <CameraSvg c={C.primary} s={28} />
                             </View>
-                            <Text style={[styles.placeholderText, { color: C.tx3 }]}>No photo uploaded</Text>
+                            <Text style={[styles.placeholderText, { color: C.tx3 }]}>
+                                {imageError ? 'Failed to load image' : 'No photo uploaded'}
+                            </Text>
                         </View>
                     )}
                 </Animated.View>
@@ -156,8 +173,8 @@ export function PhotoUpload({ imageUri, onImageChange, uploading, C }) {
                     </TouchableOpacity>
                 </View>
                 {uploading && (
-                    <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(255,255,255,0.8)' }]}>
-                        <ActivityIndicator size="small" color={C.primary} />
+                    <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                        <ActivityIndicator size="small" color="#fff" />
                     </View>
                 )}
             </View>
@@ -178,26 +195,82 @@ const styles = StyleSheet.create({
     previewContainer: { alignItems: 'center' },
     previewWrapper: { position: 'relative' },
     preview: {
-        width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#fff',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        borderWidth: 3,
+        borderColor: '#fff',
+        backgroundColor: '#f0f0f0', // ✅ Added background color
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     removeBtn: {
-        position: 'absolute', top: 0, right: 0, width: 28, height: 28, borderRadius: 14,
-        borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     placeholder: {
-        width: 120, height: 120, borderRadius: 60, borderWidth: 2, borderStyle: 'dashed',
-        alignItems: 'center', justifyContent: 'center', gap: 6,
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
     },
-    placeholderIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+    placeholderIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
     placeholderText: { fontSize: 11, fontWeight: '500' },
-    actions: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 12 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
+    actions: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 10,
+        marginTop: 12
+    },
+    actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+        borderWidth: 1
+    },
     actionText: { fontSize: 13, fontWeight: '600' },
     loadingOverlay: {
-        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-        alignItems: 'center', justifyContent: 'center', borderRadius: 60,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 60,
     },
-    hint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, marginTop: 8 },
+    hint: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        marginTop: 8
+    },
     hintText: { fontSize: 11, flex: 1, lineHeight: 16 },
 });
