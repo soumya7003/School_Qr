@@ -1,254 +1,59 @@
-/**
- * app/(app)/add-child.jsx
- * Add Child Screen — Existing parent adds new child by card scan
- * No OTP — direct link, then redirect to updates page for profile completion
- */
-
+import { ScrollView, View, Text, TextInput, Alert, TouchableOpacity } from 'react-native';
 import Screen from '@/components/common/Screen';
-import { useProfileStore } from '@/features/profile/profile.store';
-import { useProfile } from '@/features/profile/useProfile';
 import { useTheme } from '@/providers/ThemeProvider';
-import { spacing } from '@/theme';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { useProfileForm } from '@/features/profile/hooks';
+import { PhotoUpload, BloodPicker } from '@/components/profile';
+import { addChildStyles as styles } from '@/styles/add-child.style';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-
-function CardInput({ value, onChange, error, C }) {
-    return (
-        <View style={cardInputStyles.container}>
-            <View style={[cardInputStyles.iconWrapper, { backgroundColor: C.primaryBg, borderColor: C.primaryBd }]}>
-                <MaterialCommunityIcons name="credit-card-chip" size={22} color={C.primary} />
-            </View>
-            <View style={cardInputStyles.inputWrapper}>
-                <Text style={[cardInputStyles.label, { color: C.tx3 }]}>Card Number</Text>
-                <TextInput
-                    style={[cardInputStyles.input, { color: C.tx, borderBottomColor: error ? C.red : C.bd }]}
-                    value={value}
-                    onChangeText={onChange}
-                    placeholder="e.g., RQ-XXXX-XXXXXXXX"
-                    placeholderTextColor={C.tx3}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                />
-                {error && <Text style={[cardInputStyles.error, { color: C.red }]}>{error}</Text>}
-            </View>
-        </View>
-    );
-}
-
-const cardInputStyles = StyleSheet.create({
-    container: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 16 },
-    iconWrapper: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-    inputWrapper: { flex: 1 },
-    label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 6 },
-    input: { fontSize: 16, fontWeight: '500', paddingVertical: 8, borderBottomWidth: 1 },
-    error: { fontSize: 11, marginTop: 6 },
-});
-
-function SuccessCard({ studentName, onContinue, C }) {
-    return (
-        <Animated.View entering={FadeInUp.delay(200).duration(500)} style={[successStyles.card, { backgroundColor: C.s2, borderColor: C.bd }]}>
-            <View style={[successStyles.iconCircle, { backgroundColor: C.okBg }]}>
-                <Feather name="check" size={32} color={C.ok} />
-            </View>
-            <Text style={[successStyles.title, { color: C.tx }]}>Card Linked!</Text>
-            <Text style={[successStyles.message, { color: C.tx3 }]}>
-                {studentName ? `${studentName} has been` : 'Your child has been'} added. Please complete their profile.
-            </Text>
-            <TouchableOpacity style={[successStyles.button, { backgroundColor: C.primary }]} onPress={onContinue}>
-                <Text style={successStyles.buttonText}>Complete Profile</Text>
-                <Feather name="arrow-right" size={18} color="#fff" />
-            </TouchableOpacity>
-        </Animated.View>
-    );
-}
-
-const successStyles = StyleSheet.create({
-    card: { borderRadius: 24, borderWidth: 1, padding: 24, alignItems: 'center', gap: 16 },
-    iconCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-    title: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
-    message: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-    button: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 30, marginTop: 8 },
-    buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-});
 
 export default function AddChildScreen() {
-    const router = useRouter();
-    const { colors: C } = useTheme();
-    const { addChildByCard, refresh } = useProfile();
-    const setActiveStudent = useProfileStore((s) => s.setActiveStudent);
+  const { colors: C } = useTheme();
+  const router = useRouter();
+  const addStudent = useProfileStore((s) => s.addStudent);
+  const { form, updateField } = useProfileForm();
 
-    const [cardNumber, setCardNumber] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [newStudentId, setNewStudentId] = useState(null);
-    const [studentName, setStudentName] = useState('');
-    const [success, setSuccess] = useState(false);
-
-    const formatCardNumber = (text) => {
-        return text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-    };
-
-    useFocusEffect(
-        useCallback(() => {
-            // Reset all state to initial values
-            setCardNumber('');
-            setLoading(false);
-            setError('');
-            setNewStudentId(null);
-            setStudentName('');
-            setSuccess(false);
-
-            // Optional: return cleanup function
-            return () => {
-                // Cleanup if needed
-            };
-        }, [])
-    );
-
-    const handleAddChild = async () => {
-        if (!cardNumber.trim()) {
-            setError('Card number is required');
-            return;
-        }
-
-        setLoading(true);
-        setError('');
-
-        try {
-            const result = await addChildByCard({ card_number: cardNumber });
-
-            setNewStudentId(result.student_id);
-            setStudentName(result.student_name || '');
-
-            // 🟢 FIX: Wait for refresh to complete before setting active student
-            await refresh();
-
-            // 🟢 FIX: Set the new student as active
-            await useProfileStore.getState().setActiveStudentWithSync(result.student_id);
-
-            setSuccess(true);
-        } catch (err) {
-            if (__DEV__) console.error('Add child error:', err);
-            if (err?.message?.includes('404')) {
-                setError('Card not found. Check the number printed on your card.');
-            } else if (err?.message?.includes('409')) {
-                setError('This card is already linked to another parent.');
-            } else if (err?.message?.includes('already linked')) {
-                setError('This child is already linked to your account.');
-            } else {
-                setError(err?.message || 'Failed to add child. Please try again.');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleCompleteProfile = () => {
-        // 🟢 Navigate to updates with the new student ID
-        router.push({
-            pathname: '/(app)/updates',
-            params: { studentId: newStudentId, isNewStudent: 'true' }
-        });
-    };
-
-    if (success) {
-        return (
-            <Screen bg={C.bg} edges={['top', 'left', 'right']}>
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <SuccessCard
-                        studentName={studentName}
-                        onContinue={handleCompleteProfile}
-                        C={C}
-                    />
-                </ScrollView>
-            </Screen>
-        );
+  const handleSave = async () => {
+    if (!form.first_name.trim()) {
+      Alert.alert('Error', 'First name is required');
+      return;
     }
+    const payload = {
+      ...form,
+      emergency: {
+        blood_group: form.blood_group,
+        allergies: form.allergies,
+        conditions: form.conditions,
+        medications: form.medications,
+        doctor_name: form.doctor_name,
+        doctor_phone: form.doctor_phone,
+        notes: form.notes,
+        contacts: [],
+      },
+    };
+    await addStudent(payload);
+    router.back();
+  };
 
-    return (
-        <Screen bg={C.bg} edges={['top', 'left', 'right']}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Feather name="arrow-left" size={24} color={C.tx} />
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: C.tx }]}>Add Child</Text>
-                    <View style={{ width: 40 }} />
-                </Animated.View>
+  return (
+    <Screen bg={C.bg}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={[styles.title, { color: C.tx }]}>Add New Child</Text>
+        <Text style={[styles.subtitle, { color: C.tx3 }]}>Enter basic details to get started</Text>
 
-                <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.scrollContent}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.formCard}>
-                        <View style={[styles.card, { backgroundColor: C.s2, borderColor: C.bd }]}>
-                            <CardInput
-                                value={cardNumber}
-                                onChange={(text) => { setCardNumber(formatCardNumber(text)); setError(''); }}
-                                error={error}
-                                C={C}
-                            />
-                        </View>
+        <PhotoUpload photoUrl={form.photo_url} onPhotoSelected={(uri) => updateField('photo_url', uri)} />
+        <TextInput style={[styles.input, { backgroundColor: C.s3, borderColor: C.bd, color: C.tx }]} placeholder="First Name" value={form.first_name} onChangeText={(v) => updateField('first_name', v)} />
+        <TextInput style={[styles.input, { backgroundColor: C.s3, borderColor: C.bd, color: C.tx }]} placeholder="Last Name" value={form.last_name} onChangeText={(v) => updateField('last_name', v)} />
+        <TextInput style={[styles.input, { backgroundColor: C.s3, borderColor: C.bd, color: C.tx }]} placeholder="Class" value={form.class} onChangeText={(v) => updateField('class', v)} />
+        <TextInput style={[styles.input, { backgroundColor: C.s3, borderColor: C.bd, color: C.tx }]} placeholder="Section" value={form.section} onChangeText={(v) => updateField('section', v)} />
 
-                        <View style={styles.infoBox}>
-                            <Feather name="info" size={14} color={C.blue} />
-                            <Text style={[styles.infoText, { color: C.tx3 }]}>
-                                Enter the card number printed on your child's RESQID card. The child will be added to your account immediately.
-                            </Text>
-                        </View>
+        <Text style={{ color: C.tx2, marginBottom: 8 }}>Blood Group (optional)</Text>
+        <BloodPicker value={form.blood_group} onChange={(v) => updateField('blood_group', v)} />
 
-                        <TouchableOpacity
-                            style={[styles.nextButton, { backgroundColor: C.primary, opacity: loading ? 0.7 : 1 }]}
-                            onPress={handleAddChild}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="#fff" size="small" />
-                            ) : (
-                                <>
-                                    <Text style={styles.nextButtonText}>Add Child</Text>
-                                    <Feather name="plus" size={18} color="#fff" />
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </Animated.View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </Screen>
-    );
+        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: C.primary }]} onPress={handleSave}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Create Profile</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </Screen>
+  );
 }
-
-const styles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: spacing.screenH,
-        paddingTop: spacing[5],
-        paddingBottom: spacing[3],
-    },
-    backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-    scrollContent: { paddingHorizontal: spacing.screenH, paddingBottom: spacing[12], gap: 20 },
-    formCard: { gap: 20 },
-    card: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
-    infoBox: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingVertical: 4 },
-    infoText: { flex: 1, fontSize: 12, lineHeight: 18 },
-    nextButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 30, marginTop: 8 },
-    nextButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});
