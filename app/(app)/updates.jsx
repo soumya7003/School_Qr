@@ -1,8 +1,7 @@
-// app/(app)/updates.jsx
+// app/(app)/updates.jsx - FIXED
 import Screen from '@/components/common/Screen';
 import {
   BloodPicker,
-  CameraSvg,
   ChevLeft,
   ContactCard,
   ContactModal,
@@ -28,7 +27,7 @@ import { useProfileStore } from '@/features/profile/profile.store';
 import { useTheme } from '@/providers/ThemeProvider';
 import { updatesStyles as s } from '@/styles/updates.style';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -42,8 +41,16 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useShallow } from 'zustand/react/shallow';
+
+// Camera icon inline
+const CameraIcon = ({ c, s = 20 }) => (
+  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    <Circle cx="12" cy="13" r="4" stroke={c} strokeWidth={1.8} />
+  </Svg>
+);
 
 export default function UpdatesScreen() {
   const { colors: C } = useTheme();
@@ -75,7 +82,7 @@ export default function UpdatesScreen() {
   } = useContactManagement(sortedContacts);
 
   const {
-    step, completed, fadeAnim, slideAnim, goNext, goBack, markAllCompleted,
+    step, completed, goNext, goBack, markAllCompleted,
   } = useProfileSteps(0);
 
   const scrollRef = useRef(null);
@@ -230,10 +237,10 @@ export default function UpdatesScreen() {
         <StepBar current={step} completed={completed} C={C} />
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           <InstructionBanner currentStep={step} isNewUser={isNewUser} C={C} />
-          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          <View>
             {step === 0 && (
               <View style={s.stepContent}>
-                <SectionCard icon={<CameraSvg c={C.primary} s={16} />} title="Profile Photo" subtitle="Optional but recommended — helps identify your child" C={C}>
+                <SectionCard icon={<CameraIcon c={C.primary} s={16} />} title="Profile Photo" subtitle="Optional but recommended — helps identify your child" C={C}>
                   <PhotoUpload imageUri={profileImage} onImageChange={setProfileImage} uploading={uploading || saving} C={C} />
                 </SectionCard>
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Child's Name" subtitle="Required — match the name on school records" C={C}>
@@ -337,7 +344,7 @@ export default function UpdatesScreen() {
                 </SectionCard>
               </View>
             )}
-          </Animated.View>
+          </View>
         </ScrollView>
         <NavFooter step={step} isNewUser={isNewUser} onBack={goBack} onNext={handleNext} nextLabel={nextLabel} saving={saving || uploading} canProceed={canProceed} C={C} />
       </KeyboardAvoidingView>

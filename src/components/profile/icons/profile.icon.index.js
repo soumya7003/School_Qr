@@ -104,6 +104,7 @@ export const InfoSvg = ({ c, s = 14 }) => (
   </Svg>
 );
 
+// ✅ Make sure this is exported
 export const CameraSvg = ({ c, s = 20 }) => (
   <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
     <Path
