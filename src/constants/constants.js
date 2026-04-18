@@ -33,19 +33,44 @@ export const THEME_OPTIONS = [
 
 // ✅ FIX: Single color object – use colors.js or tokens.js instead
 // Keeping only what's needed for components that haven't migrated yet
-export const COLORS = {
+const COLORS = {
+  // Backgrounds
   bg: "#0D0D0F",
   bgDeep: "#120909",
+
+  // Primary colors
   red: "#FF3B30",
   redDark: "#C8211A",
   white: "#FFFFFF",
+  green: "#2ECC71",
+  blue: "#007AFF",
+
+  // Text opacity variants
+  white90: "rgba(255,255,255,0.90)",
+  white60: "rgba(255,255,255,0.60)",
+  white35: "rgba(255,255,255,0.35)",
+  white15: "rgba(255,255,255,0.15)",
   textMuted: "rgba(255,255,255,0.42)",
   textDim: "rgba(255,255,255,0.22)",
+
+  // Glow effects
+  redGlow: "rgba(255,59,48,0.12)",
+  greenGlow: "rgba(46,204,113,0.15)",
+
+  // Borders
+  borderRed: "rgba(255,59,48,0.25)",
   ringBorder: "rgba(255,59,48,0.20)",
   cardBorder: "rgba(255,255,255,0.06)",
-  secondaryBg: "rgba(255,255,255,0.07)",
   secondaryBorder: "rgba(255,255,255,0.10)",
-  green: "#2ECC71",
+
+  // Surfaces
+  secondaryBg: "rgba(255,255,255,0.07)",
+
+  // Toast specific
+  s2: "#1C1C1E",
+  tx: "#FFFFFF",
+  tx3: "rgba(255,255,255,0.60)",
+  ok: "#2ECC71",
 };
 
 // ✅ FIX: Remove duplicate C and Login_C – use COLORS or import from theme

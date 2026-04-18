@@ -1,5 +1,4 @@
 // features/profile/profile.api.js
-// Add these methods to the profileApi object
 
 import { apiClient, authClient } from "@/lib/api/apiClient";
 import { mockApi } from "@/services/mockService";
@@ -16,12 +15,6 @@ function assertRegVerifyResponse(data) {
 // ── Registration API (unauthenticated) ────────────────────────────────────────
 
 export const registrationApi = {
-  /**
-   * POST /api/auth/register/init
-   * Validates card → sends OTP → returns nonce.
-   * Returns { nonce, masked_phone, student_first_name? }
-   * nonce is opaque — pass straight to verifyRegistration.
-   */
   initRegistration: async ({ card_number, phone }) => {
     const res = await authClient.post("/auth/register/init", {
       card_number,
@@ -30,15 +23,6 @@ export const registrationApi = {
     return res?.data?.data ?? res?.data ?? res;
   },
 
-  /**
-   * POST /api/auth/register/verify
-   * phone MUST be included — backend encrypts and stores it for the ParentUser.
-   *
-   * Returns normalised shape for otp.jsx → onRegistrationSuccess:
-   * { accessToken, refreshToken, expiresAt, isNewUser: true, parent_id, student_id }
-   *
-   * NOTE: parent_id is snake_case here (differs from login's parent.id shape).
-   */
   verifyRegistration: async ({ nonce, otp, phone }) => {
     const res = await authClient.post("/auth/register/verify", {
       nonce,
@@ -65,9 +49,8 @@ export const registrationApi = {
 export const profileApi = {
   /**
    * GET /api/parents/me
-   * Full home data — parent + all students + last_scan + anomaly + scan_count.
-   * Device caches this for 30 days (cache_ttl_days in response).
-   * Re-fetched when stale OR when any write returns { cache_invalidated: true }.
+   * Full home data — parent + all students (each with last_scan, anomaly,
+   * scan_count embedded) + global last_scan scoped to active student.
    */
   getFullProfile: async () => {
     if (USE_MOCK) return mockApi.getFullProfile();
@@ -77,12 +60,7 @@ export const profileApi = {
 
   /**
    * PATCH /api/parents/me/profile
-   * Batched update: student info + emergency profile + contacts in one DB tx.
-   * student_id is REQUIRED. All other sections are optional (partial update).
-   * At least one of student / emergency / contacts must be present.
-   *
    * body: { student_id, student?, emergency?, contacts? }
-   * → { cache_invalidated: true }
    */
   updateProfile: async (studentId, payload) => {
     const res = await apiClient.patch("/parents/me/profile", {
@@ -94,8 +72,6 @@ export const profileApi = {
 
   /**
    * PATCH /api/parents/me/visibility
-   * body: { student_id, visibility: "PUBLIC"|"MINIMAL"|"HIDDEN", hidden_fields: string[] }
-   * → { cache_invalidated: true }
    */
   updateVisibility: async (studentId, { visibility, hidden_fields }) => {
     const res = await apiClient.patch("/parents/me/visibility", {
@@ -108,12 +84,6 @@ export const profileApi = {
 
   /**
    * PATCH /api/parents/me/notifications
-   * body: any subset of ParentNotificationPref boolean/string fields.
-   * Accepted keys (all optional):
-   *   scan_notify_enabled, scan_notify_push, scan_notify_sms,
-   *   anomaly_notify_push, anomaly_notify_sms, card_expiry_notify,
-   *   quiet_hours_enabled, quiet_hours_start ("HH:MM"), quiet_hours_end ("HH:MM")
-   * → { cache_invalidated: true }
    */
   updateNotifications: async (prefs) => {
     const res = await apiClient.patch("/parents/me/notifications", prefs);
@@ -122,8 +92,6 @@ export const profileApi = {
 
   /**
    * PATCH /api/parents/me/location-consent
-   * body: { student_id, enabled: boolean }
-   * → { cache_invalidated: true }
    */
   updateLocationConsent: async (studentId, enabled) => {
     const res = await apiClient.patch("/parents/me/location-consent", {
@@ -135,10 +103,6 @@ export const profileApi = {
 
   /**
    * POST /api/parents/me/lock-card
-   * Sets token status: ACTIVE → INACTIVE.
-   * confirmation: "LOCK" is required (prevents accidental locks).
-   * body: { student_id, confirmation: "LOCK" }
-   * → { locked: true, count: number, cache_invalidated: true }
    */
   lockCard: async (studentId) => {
     const res = await apiClient.post("/parents/me/lock-card", {
@@ -150,9 +114,6 @@ export const profileApi = {
 
   /**
    * POST /api/parents/me/request-replace
-   * Logs a card replacement request (stored in ParentEditLog).
-   * body: { student_id, reason: string (min 5 chars) }
-   * → { id, created_at }
    */
   requestReplace: async (studentId, reason) => {
     const res = await apiClient.post("/parents/me/request-replace", {
@@ -164,9 +125,6 @@ export const profileApi = {
 
   /**
    * DELETE /api/parents/me
-   * Soft-deletes the parent account (status → DELETED, deleted_at set).
-   * Call auth.store.logout() immediately after this resolves.
-   * → { success, message: "Account deleted" }
    */
   deleteAccount: async () => {
     const res = await apiClient.delete("/parents/me");
@@ -175,12 +133,17 @@ export const profileApi = {
 
   /**
    * GET /api/parents/me/scans
-   * Cursor-paginated scan history + recent anomalies.
-   * query: { cursor?, limit? (1–50, default 20), filter?: "all"|"emergency"|"success"|"flagged" }
-   * → { scans: [...], anomalies: [...], hasMore: boolean, nextCursor: string | null }
+   * FIX: studentId is now REQUIRED — the server scopes results to that student.
+   * query: { student_id (required), cursor?, limit?, filter? }
    */
-  getScanHistory: async ({ cursor, limit = 20, filter = "all" } = {}) => {
-    const params = { limit, filter };
+  getScanHistory: async ({
+    studentId,
+    cursor,
+    limit = 20,
+    filter = "all",
+  } = {}) => {
+    if (!studentId) throw new Error("getScanHistory: studentId is required");
+    const params = { student_id: studentId, limit, filter };
     if (cursor) params.cursor = cursor;
     const res = await apiClient.get("/parents/me/scans", { params });
     return res?.data?.data ?? res?.data;
@@ -188,8 +151,6 @@ export const profileApi = {
 
   /**
    * GET /api/parents/me/children
-   * Lightweight list of all children for the switcher UI
-   * → { children: [{ id, first_name, last_name, class, section, token_status, is_primary }] }
    */
   getChildrenList: async () => {
     if (USE_MOCK) return mockApi.getChildrenList();
@@ -199,22 +160,14 @@ export const profileApi = {
 
   /**
    * POST /api/parents/me/link-card
-   * Add a new child (second/third/etc.) by scanning a new card
-   * body: { card_number }
-   * → { success, student_id, student_name, is_first_child }
    */
   linkCard: async ({ card_number }) => {
-    const res = await apiClient.post("/parents/me/link-card", {
-      card_number,
-    });
+    const res = await apiClient.post("/parents/me/link-card", { card_number });
     return res?.data?.data ?? res?.data;
   },
 
   /**
    * PATCH /api/parents/me/active-student
-   * Switch the active student for this parent
-   * body: { student_id }
-   * → { success, active_student_id }
    */
   setActiveStudent: async (studentId) => {
     if (USE_MOCK) return mockApi.setActiveStudent(studentId);
@@ -226,9 +179,6 @@ export const profileApi = {
 
   /**
    * POST /api/parents/me/unlink-child/init
-   * Send OTP to parent's phone for unlinking child
-   * body: { student_id }
-   * → { nonce, expiresIn, masked_phone }
    */
   unlinkChildInit: async (studentId) => {
     const res = await apiClient.post("/parents/me/unlink-child/init", {
@@ -239,9 +189,6 @@ export const profileApi = {
 
   /**
    * POST /api/parents/me/unlink-child/verify
-   * Verify OTP and remove child from parent account
-   * body: { student_id, otp, nonce }
-   * → { success, message, remaining_children, active_student_id }
    */
   unlinkChildVerify: async (studentId, otp, nonce) => {
     const res = await apiClient.post("/parents/me/unlink-child/verify", {
@@ -252,16 +199,8 @@ export const profileApi = {
     return res?.data?.data ?? res?.data;
   },
 
-  // =============================================================================
-  // 🟢 NEW: Photo Upload API Methods
-  // =============================================================================
+  // ── Photo Upload ────────────────────────────────────────────────────────────
 
-  /**
-   * POST /api/parents/me/students/:studentId/photo/upload-url
-   * Generate presigned URL for direct-to-R2 upload
-   * body: { contentType, fileSize }
-   * → { uploadUrl, publicUrl, key, nonce, expiresIn, maxSize, allowedTypes }
-   */
   generateStudentPhotoUploadUrl: async (studentId, contentType, fileSize) => {
     const res = await apiClient.post(
       `/parents/me/students/${studentId}/photo/upload-url`,
@@ -270,12 +209,6 @@ export const profileApi = {
     return res?.data?.data ?? res?.data;
   },
 
-  /**
-   * POST /api/parents/me/students/:studentId/photo/confirm
-   * Confirm upload and get final photo URL
-   * body: { key, nonce }
-   * → { photoUrl, verified: true }
-   */
   confirmStudentPhotoUpload: async (studentId, key, nonce) => {
     const res = await apiClient.post(
       `/parents/me/students/${studentId}/photo/confirm`,
@@ -284,12 +217,6 @@ export const profileApi = {
     return res?.data?.data ?? res?.data;
   },
 
-  /**
-   * POST /api/parents/me/avatar/upload-url
-   * Generate presigned URL for parent avatar upload
-   * body: { contentType, fileSize }
-   * → { uploadUrl, publicUrl, key, nonce, expiresIn, maxSize, allowedTypes }
-   */
   generateAvatarUploadUrl: async (contentType, fileSize) => {
     const res = await apiClient.post(`/parents/me/avatar/upload-url`, {
       contentType,
@@ -298,16 +225,40 @@ export const profileApi = {
     return res?.data?.data ?? res?.data;
   },
 
-  /**
-   * POST /api/parents/me/avatar/confirm
-   * Confirm parent avatar upload
-   * body: { key, nonce }
-   * → { avatarUrl, verified: true }
-   */
   confirmAvatarUpload: async (key, nonce) => {
     const res = await apiClient.post(`/parents/me/avatar/confirm`, {
       key,
       nonce,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // change phone number
+  // Add to profileApi object in profile.api.js:
+
+  /**
+   * POST /api/parents/me/send-phone-otp
+   * Send OTP to new phone number before changing
+   * body: { new_phone }
+   * → { success, message, expiresIn }
+   */
+  sendPhoneChangeOtp: async (new_phone) => {
+    const res = await apiClient.post("/parents/me/send-phone-otp", {
+      new_phone,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/change-phone
+   * Verify OTP and update phone number
+   * body: { new_phone, otp }
+   * → { success, message }
+   */
+  changePhone: async ({ new_phone, otp }) => {
+    const res = await apiClient.post("/parents/me/change-phone", {
+      new_phone,
+      otp,
     });
     return res?.data?.data ?? res?.data;
   },

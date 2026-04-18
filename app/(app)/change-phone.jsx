@@ -6,6 +6,7 @@
 
 import Screen from '@/components/common/Screen';
 import { useAuthStore } from '@/features/auth/auth.store';
+import { profileApi } from '@/features/profile/profile.api';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/theme';
 import { Feather } from '@expo/vector-icons';
@@ -442,14 +443,13 @@ export default function ChangePhoneScreen() {
         setLoading(true);
 
         try {
-            // TODO: Call actual API
-            await new Promise((r) => setTimeout(r, 1000));
+            await profileApi.sendPhoneChangeOtp(`+91${phone}`);
             setStep(2);
             startCooldown(30);
             setOtpValue('');
             setOtpError('');
         } catch (err) {
-            setPhoneError(err?.message || 'Failed to send OTP. Please try again.');
+            setPhoneError(err?.response?.data?.message || 'Failed to send OTP. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -465,15 +465,19 @@ export default function ChangePhoneScreen() {
         setLoading(true);
 
         try {
-            // TODO: Call actual API
-            await new Promise((r) => setTimeout(r, 1000));
+            await profileApi.changePhone({ new_phone: `+91${phone}`, otp: otpValue });
             Alert.alert(
                 'Phone Number Updated',
                 'Your phone number has been successfully changed. Please login again.',
-                [{ text: 'OK', onPress: () => router.back() }],
+                [{
+                    text: 'OK', onPress: () => {
+                        useAuthStore.getState().logout();
+                        router.replace('/(auth)/login');
+                    }
+                }],
             );
         } catch (err) {
-            setOtpError(err?.message || 'Invalid OTP. Please try again.');
+            setOtpError(err?.response?.data?.message || 'Invalid OTP. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -484,13 +488,12 @@ export default function ChangePhoneScreen() {
 
         setResendLoading(true);
         try {
-            // TODO: Call actual API
-            await new Promise((r) => setTimeout(r, 800));
+            await profileApi.sendPhoneChangeOtp(`+91${phone}`);
             startCooldown(30);
             setOtpValue('');
             setOtpError('');
-        } catch {
-            Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+        } catch (err) {
+            Alert.alert('Error', err?.response?.data?.message || 'Failed to resend OTP. Please try again.');
         } finally {
             setResendLoading(false);
         }

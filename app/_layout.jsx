@@ -7,6 +7,7 @@
  */
 
 import BiometricGate from "@/components/auth/BiometricGate";
+import { toastConfig } from '@/config/toast.config';
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useProfileStore } from "@/features/profile/profile.store";
 import { useInactivityLock } from "@/hooks/useInactivityLock";
@@ -36,6 +37,7 @@ import {
     Text,
     View,
 } from "react-native";
+import Toast from "react-native-toast-message";
 
 // ── Suppress known non-actionable warnings ────────────────────────────────────
 LogBox.ignoreLogs([
@@ -119,6 +121,7 @@ function RootLayoutContent({ handleRootLayout }) {
                     </Stack>
 
                     <StatusBar style="auto" />
+                    <Toast config={toastConfig} />
                     <BiometricGate />
                 </View>
             </RootErrorBoundary>

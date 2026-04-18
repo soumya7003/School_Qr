@@ -1,30 +1,18 @@
 /**
  * app/(auth)/otp.jsx
- * 
- * ENHANCEMENTS ADDED:
- *   [ENH-1] Added haptic feedback on error and resend
- *   [ENH-2] Added paste support for OTP input
- *   [ENH-3] Added timer countdown animation
- *   [ENH-4] Added loading state for resend button
- *   [ENH-5] Added visual feedback for OTP completion
- *   [ENH-6] Added fallback for Clipboard API
+ * OPTIMIZED: Removed animations, reused colors/haptics/toast
  */
 
+import { C } from "@/constants/constants";
 import { authApi } from "@/features/auth/auth.api";
 import { registrationApi } from "@/features/profile/profile.api";
-import {
-  useLoginSuccess,
-  useRegistrationSuccess,
-} from "@/providers/AuthProvider";
+import { useLoginSuccess, useRegistrationSuccess } from "@/providers/AuthProvider";
+import { haptics } from "@/utils/haptics";
+import { showToast } from "@/utils/toast";
+import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Clipboard,
   Keyboard,
@@ -37,161 +25,53 @@ import {
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  Vibration,
   View,
 } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSequence,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Path, Svg } from "react-native-svg";
-
-// ── Haptic Feedback (cross-platform) ─────────────────────────────────────────
-const hapticLight = () => {
-  if (Platform.OS === 'ios') {
-    try { Vibration.vibrate(10); } catch { }
-  } else if (Platform.OS === 'android') {
-    try { Vibration.vibrate(15); } catch { }
-  }
-};
-
-const hapticError = () => {
-  if (Platform.OS === 'ios') {
-    try { Vibration.vibrate(50); } catch { }
-  } else if (Platform.OS === 'android') {
-    try { Vibration.vibrate(100); } catch { }
-  }
-};
-
-// ── Constants ─────────────────────────────────────────────────────────────────
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 120;
 const PHONE_REGEX = /^[+\d\s-]{10,}$/;
 
-const C = {
-  bg: "#0D0D0F", bgMid: "#120909", surface: "#161820", card: "#1A1B22",
-  cardBorder: "rgba(255,255,255,0.08)", red: "#FF3B30", redDark: "#C8211A",
-  boxBg: "#1C1D24", boxBgFilled: "#211215", boxBorder: "rgba(255,255,255,0.10)",
-  boxBorderActive: "#FF3B30", boxBorderFilled: "rgba(255,59,48,0.55)",
-  white: "#FFFFFF", textMuted: "rgba(255,255,255,0.45)",
-  timerBg: "rgba(255,255,255,0.07)", timerBorder: "rgba(255,255,255,0.10)",
-  timerDot: "#FF9500", green: "#2ECC71", greenSoft: "rgba(46,204,113,0.12)",
-};
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
-const PhoneIcon = ({ size = 36 }) => (
-  <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-    <Path
-      d="M6 5.5C6 5.5 8.5 3 10.5 3C12.5 3 14 6.5 14.5 8.5C15 10.5 13 12 13 13C13 14 16 19 18 21C20 23 24 25.5 25.5 25.5C27 25.5 28.5 23.5 30 23C31.5 22.5 34 24 34 26C34 28 31 31 29 31C27 31 18 28 12 22C6 16 3 7 5.5 5.5H6Z"
-      stroke={C.red} strokeWidth={1.8} strokeLinejoin="round" fill="none"
-    />
-  </Svg>
-);
-
-const ArrowRight = () => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Path d="M5 12h14M13 6l6 6-6 6" stroke={C.white} strokeWidth="2.2"
-      strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-const BackArrow = () => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Path d="M19 12H5M11 6l-6 6 6 6" stroke={C.white} strokeWidth="2.2"
-      strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
-// ── OTP Box with Enhanced Visual Feedback ─────────────────────────────────────
-
-const OtpBox = ({ value, isFocused, hasError, index, boxSize, isComplete }) => {
-  const scale = useSharedValue(0.8);
-  const opacity = useSharedValue(0);
-  const pop = useSharedValue(1);
-  const completeScale = useSharedValue(1);
-
-  useEffect(() => {
-    opacity.value = withDelay(300 + index * 70, withTiming(1, { duration: 300 }));
-    scale.value = withDelay(300 + index * 70, withSpring(1, { damping: 14, stiffness: 160 }));
-  }, []);
-
-  useEffect(() => {
-    if (value) {
-      pop.value = withSequence(
-        withSpring(1.18, { damping: 8, stiffness: 260 }),
-        withSpring(1, { damping: 12, stiffness: 260 }),
-      );
-    }
-  }, [value]);
-
-  // Celebration animation when OTP is complete
-  useEffect(() => {
-    if (isComplete && value) {
-      completeScale.value = withSequence(
-        withTiming(1.08, { duration: 150 }),
-        withTiming(1, { duration: 150 }),
-      );
-    }
-  }, [isComplete, value]);
-
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-  const digitStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pop.value }],
-  }));
-  const completeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: completeScale.value }],
-  }));
-
-  const borderColor = hasError ? C.red
-    : isFocused ? C.boxBorderActive
-      : value ? C.boxBorderFilled
-        : C.boxBorder;
-
+// Simple OTP Box - no animations
+const OtpBox = ({ value, isFocused, hasError, boxSize }) => {
+  const borderColor = hasError ? C.red : isFocused ? C.red : value ? "rgba(255,59,48,0.55)" : "rgba(255,255,255,0.10)";
   return (
-    <Animated.View style={[containerStyle, isComplete && completeStyle]}>
-      <View style={[s.otpBox, {
-        width: boxSize, height: boxSize, borderColor,
-        backgroundColor: value ? C.boxBgFilled : C.boxBg
-      }, isFocused && s.otpBoxFocused]}>
-        {isFocused && !value && <View style={s.cursor} />}
-        <Animated.Text style={[s.otpDigit, digitStyle]}>{value}</Animated.Text>
-      </View>
-      {(isFocused || value) && (
-        <View style={[s.glowLine, { backgroundColor: hasError ? C.red : C.red }]} />
-      )}
-    </Animated.View>
+    <View style={[s.otpBox, { width: boxSize, height: boxSize, borderColor, backgroundColor: value ? "#211215" : "#1C1D24" }, isFocused && s.otpBoxFocused]}>
+      {isFocused && !value && <View style={s.cursor} />}
+      <Text style={s.otpDigit}>{value}</Text>
+    </View>
   );
 };
-
-// ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams();
-
   const onLoginSuccess = useLoginSuccess();
   const onRegistrationSuccess = useRegistrationSuccess();
 
-  // ── Params ────────────────────────────────────────────────────────────────
   const rawPhone = (params.phone ?? "").replace(/[^\d+\s-]/g, "").trim();
   const mode = params.mode === "login" ? "login" : "register";
   const nonce = typeof params.nonce === "string" ? params.nonce.trim() : null;
   const cardNumber = typeof params.cardNumber === "string" ? params.cardNumber.trim() : null;
 
-  // ── Param guard ───────────────────────────────────────────────────────────
+  const boxSize = useMemo(() => Math.min(Math.floor((width - 48 - 5 * 8) / 6), 52), [width]);
+
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
+  const [activeIndex, setActive] = useState(0);
+  const [hasError, setError] = useState(false);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [activeNonce, setActiveNonce] = useState(nonce);
+  const [canResend, setCanResend] = useState(false);
+  const [secsLeft, setSecsLeft] = useState(RESEND_SECONDS);
+  const [resendDeadline] = useState(() => Date.now() + RESEND_SECONDS * 1000);
+  const inputRefs = useRef([]);
+
+  const isFilled = otp.every((d) => d.length === 1);
+
+  // Param guard
   useEffect(() => {
     if (!rawPhone || !PHONE_REGEX.test(rawPhone)) {
       router.replace("/(auth)/login");
@@ -200,95 +80,41 @@ export default function OtpScreen() {
     if (mode === "register" && !nonce) {
       router.replace({ pathname: "/(auth)/login", params: { mode: "register" } });
     }
-  }, [rawPhone, mode, nonce]);
+  }, []);
 
-  const boxSize = useMemo(
-    () => Math.min(Math.floor((width - 48 - 5 * 8) / 6), 52),
-    [width],
-  );
-
-  // ── State ─────────────────────────────────────────────────────────────────
-  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
-  const [activeIndex, setActive] = useState(0);
-  const [hasError, setError] = useState(false);
-  const [verified, setVerified] = useState(false);
-  const [isSubmitting, setSubmitting] = useState(false);
-  const [isResending, setIsResending] = useState(false);
-  const [activeNonce, setActiveNonce] = useState(nonce);
-  const [canResend, setCanResend] = useState(false);
-  const [secsLeft, setSecsLeft] = useState(RESEND_SECONDS);
-  const [resendDeadline, setResendDeadline] = useState(() => Date.now() + RESEND_SECONDS * 1000);
-  const inputRefs = useRef([]);
-
-  // ── Resend timer with animation ──────────────────────────────────────────
-  const timerScale = useSharedValue(1);
-
+  // Timer
   useEffect(() => {
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((resendDeadline - Date.now()) / 1000));
       setSecsLeft(remaining);
-      if (remaining <= 0) {
-        setCanResend(true);
-        return;
-      }
-      timerId = setTimeout(tick, 500);
+      if (remaining <= 0) setCanResend(true);
     };
-    let timerId = setTimeout(tick, 500);
-    return () => clearTimeout(timerId);
-  }, [resendDeadline]);
-
-  // Animate timer when it hits 30 seconds
-  useEffect(() => {
-    if (secsLeft <= 30 && secsLeft > 0 && !canResend) {
-      timerScale.value = withSequence(
-        withTiming(1.15, { duration: 200 }),
-        withTiming(1, { duration: 200 })
-      );
-    }
-  }, [secsLeft, canResend]);
-
-  const mm = String(Math.floor(secsLeft / 60)).padStart(2, "0");
-  const ss = String(secsLeft % 60).padStart(2, "0");
-
-  // ── Animations ────────────────────────────────────────────────────────────
-  const shakeX = useSharedValue(0);
-  const btnScale = useSharedValue(1);
-  const timerStyle = useAnimatedStyle(() => ({ transform: [{ scale: timerScale.value }] }));
-  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
-  const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
-
-  const isFilled = otp.every((d) => d.length === 1);
-
-  // Auto-focus on first input after mount
-  useEffect(() => {
-    const timer = setTimeout(() => inputRefs.current[0]?.focus(), 400);
-    return () => clearTimeout(timer);
+    const timer = setInterval(tick, 500);
+    return () => clearInterval(timer);
   }, []);
 
-  // Auto-submit when OTP is fully entered
+  // Auto-focus
   useEffect(() => {
-    if (isFilled && !isSubmitting && !verified) {
-      handleSubmit();
-    }
+    setTimeout(() => inputRefs.current[0]?.focus(), 300);
+  }, []);
+
+  // Auto-submit
+  useEffect(() => {
+    if (isFilled && !isSubmitting) handleSubmit();
   }, [otp, isFilled]);
 
-  // ── Paste support ─────────────────────────────────────────────────────────
+  // Paste support
   const handlePaste = useCallback(async () => {
     try {
       const pasted = await Clipboard.getString();
-      const digits = pasted.replace(/\D/g, '').slice(0, OTP_LENGTH);
+      const digits = pasted.replace(/\D/g, "").slice(0, OTP_LENGTH);
       if (digits.length === OTP_LENGTH) {
-        const newOtp = digits.split('');
-        setOtp(newOtp);
-        // Auto-submit after paste
-        setTimeout(() => handleSubmit(), 100);
+        setOtp(digits.split(""));
+        haptics.light();
       }
-    } catch {
-      // Clipboard API may fail on some devices, silently ignore
-    }
-  }, [handleSubmit]);
+    } catch { }
+  }, []);
 
-  // ── Input handlers ────────────────────────────────────────────────────────
   const handleChange = useCallback((text, index) => {
     const digit = text.replace(/\D/g, "").slice(-1);
     setOtp((prev) => { const next = [...prev]; next[index] = digit; return next; });
@@ -300,174 +126,101 @@ export default function OtpScreen() {
   }, []);
 
   const handleKeyPress = useCallback((e, index) => {
-    if (e.nativeEvent.key === "Backspace") {
-      setOtp((prev) => {
-        if (!prev[index] && index > 0) {
-          const next = [...prev];
-          next[index - 1] = "";
-          setTimeout(() => { inputRefs.current[index - 1]?.focus(); setActive(index - 1); }, 0);
-          return next;
-        }
-        return prev;
-      });
+    if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
+      setOtp((prev) => { const next = [...prev]; next[index - 1] = ""; return next; });
+      inputRefs.current[index - 1]?.focus();
+      setActive(index - 1);
     }
-  }, []);
+  }, [otp]);
 
-  const triggerShake = useCallback(() => {
-    hapticError();
-    shakeX.value = withSequence(
-      withTiming(9, { duration: 55 }), withTiming(-9, { duration: 55 }),
-      withTiming(6, { duration: 55 }), withTiming(-6, { duration: 55 }),
-      withTiming(3, { duration: 55 }), withTiming(0, { duration: 55 }),
-    );
-  }, [shakeX]);
-
-  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
-    if (!isFilled || verified || isSubmitting) return;
+    if (!isFilled || isSubmitting) return;
     setSubmitting(true);
     Keyboard.dismiss();
     setError(false);
 
     try {
       const code = otp.join("");
-
       if (mode === "register") {
-        const response = await registrationApi.verifyRegistration({
-          nonce: activeNonce,
-          otp: code,
-          phone: rawPhone,
-        });
-
-        await onRegistrationSuccess({
-          parent_id: response.parent_id,
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-          expiresAt: response.expiresAt,
-        });
-
-        setVerified(true);
-        hapticLight();
-
+        const res = await registrationApi.verifyRegistration({ nonce: activeNonce, otp: code, phone: rawPhone });
+        await onRegistrationSuccess({ parent_id: res.parent_id, accessToken: res.accessToken, refreshToken: res.refreshToken, expiresAt: res.expiresAt });
       } else {
-        const response = await authApi.verifyOtp(rawPhone, code);
-
-        await onLoginSuccess({
-          parent: response.parent,
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-          expiresAt: response.expiresAt,
-          isNewUser: response.isNewUser,
-        });
-
-        setVerified(true);
-        hapticLight();
+        const res = await authApi.verifyOtp(rawPhone, code);
+        await onLoginSuccess({ parent: res.parent, accessToken: res.accessToken, refreshToken: res.refreshToken, expiresAt: res.expiresAt, isNewUser: res.isNewUser });
       }
-
-    } catch (error) {
+      haptics.success();
+      showToast.success("Verified", "Redirecting...");
+    } catch {
       setError(true);
-      triggerShake();
+      haptics.error();
+      showToast.error("Invalid Code", "Please try again");
     } finally {
       setSubmitting(false);
     }
-  }, [otp, isFilled, verified, isSubmitting, rawPhone, mode, activeNonce,
-    onLoginSuccess, onRegistrationSuccess, triggerShake]);
+  }, [otp, isFilled, isSubmitting, rawPhone, mode, activeNonce, onLoginSuccess, onRegistrationSuccess]);
 
-  // ── Resend ────────────────────────────────────────────────────────────────
   const handleResend = useCallback(async () => {
     if (!canResend || isResending) return;
-
     setIsResending(true);
-    hapticLight();
-
+    haptics.light();
     setCanResend(false);
     setResendDeadline(Date.now() + RESEND_SECONDS * 1000);
     setOtp(Array(OTP_LENGTH).fill(""));
     setError(false);
     setActive(0);
-    setVerified(false);
-
     try {
       if (mode === "register" && cardNumber) {
-        const response = await registrationApi.initRegistration({
-          card_number: cardNumber,
-          phone: rawPhone,
-        });
-        setActiveNonce(response.nonce);
+        const res = await registrationApi.initRegistration({ card_number: cardNumber, phone: rawPhone });
+        setActiveNonce(res.nonce);
       } else {
         await authApi.sendOtp(rawPhone);
       }
+      showToast.info("Code Sent", "Check your messages");
     } catch {
-      // Silent failure — timer will allow retry
+      showToast.error("Failed", "Please try again");
     } finally {
       setIsResending(false);
-      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      inputRefs.current[0]?.focus();
     }
   }, [canResend, isResending, rawPhone, mode, cardNumber]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const mm = String(Math.floor(secsLeft / 60)).padStart(2, "0");
+  const ss = String(secsLeft % 60).padStart(2, "0");
+
   return (
-    <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}>
+    <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <View style={s.root}>
         <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
-
-        <LinearGradient colors={[C.bg, C.bgMid, C.bg]} locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFillObject} pointerEvents="none" />
-
+        <LinearGradient colors={[C.bg, C.bgDeep, C.bg]} style={StyleSheet.absoluteFillObject} pointerEvents="none" />
         <ScrollView
-          contentContainerStyle={[s.scroll, {
-            paddingTop: insets.top + 16,
-            paddingBottom: Math.max(insets.bottom, 32),
-          }]}
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16, paddingBottom: Math.max(insets.bottom, 32) }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Back */}
-          <Animated.View entering={FadeIn.duration(400)} style={s.backRow}>
-            <TouchableOpacity style={s.backBtn} onPress={() => router.back()}
-              accessibilityRole="button" accessibilityLabel="Go back"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <BackArrow />
-              <Text style={s.backText}>Back</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Feather name="arrow-left" size={20} color={C.white} />
+            <Text style={s.backText}>Back</Text>
+          </TouchableOpacity>
 
-          {/* Icon */}
-          <Animated.View entering={FadeInDown.duration(500).delay(150)} style={s.iconWrap}>
-            <View style={s.iconGlow} pointerEvents="none" />
+          <View style={s.iconWrap}>
             <View style={s.iconCard}>
-              <LinearGradient colors={["#1E2030", "#141520"]} style={s.iconGradient}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <PhoneIcon size={38} />
+              <LinearGradient colors={["#1E2030", "#141520"]} style={s.iconGradient}>
+                <Feather name="smartphone" size={38} color={C.red} />
               </LinearGradient>
             </View>
-          </Animated.View>
+          </View>
 
-          {/* Title */}
-          <Animated.View entering={FadeInDown.duration(500).delay(280)} style={s.titleBlock}>
-            <Text style={s.title} allowFontScaling={false}>
-              {mode === "register" ? "Verify Phone" : "Welcome Back"}
-            </Text>
-            <Text style={s.subtitle} allowFontScaling={false}>
-              {mode === "register" ? "We sent a 6-digit code to" : "Enter the code sent to"}
-            </Text>
-            <Text style={s.phoneNumber} allowFontScaling={false}>{rawPhone}</Text>
-          </Animated.View>
+          <View style={s.titleBlock}>
+            <Text style={s.title}>{mode === "register" ? "Verify Phone" : "Welcome Back"}</Text>
+            <Text style={s.subtitle}>{mode === "register" ? "We sent a 6-digit code to" : "Enter the code sent to"}</Text>
+            <Text style={s.phoneNumber}>{rawPhone}</Text>
+          </View>
 
-          {/* OTP Boxes */}
-          <Animated.View entering={FadeInDown.duration(500).delay(400)} style={s.otpSection}>
-            <Animated.View style={[s.otpRow, shakeStyle]}>
+          <View style={s.otpSection}>
+            <View style={s.otpRow}>
               {otp.map((digit, i) => (
-                <View key={i} style={{ position: "relative" }}>
-                  <OtpBox
-                    value={digit}
-                    isFocused={activeIndex === i}
-                    hasError={hasError}
-                    index={i}
-                    boxSize={boxSize}
-                    isComplete={isFilled}
-                  />
+                <View key={i}>
+                  <OtpBox value={digit} isFocused={activeIndex === i} hasError={hasError} boxSize={boxSize} />
                   <TextInput
                     ref={(r) => { inputRefs.current[i] = r; }}
                     style={[s.hiddenInput, { width: boxSize, height: boxSize }]}
@@ -475,195 +228,97 @@ export default function OtpScreen() {
                     onChangeText={(t) => handleChange(t, i)}
                     onKeyPress={(e) => handleKeyPress(e, i)}
                     onFocus={() => { setActive(i); setError(false); }}
-                    onPaste={handlePaste}
                     keyboardType="number-pad"
                     maxLength={1}
                     caretHidden
                     selectTextOnFocus
-                    accessibilityLabel={`OTP digit ${i + 1}`}
                   />
                 </View>
               ))}
-            </Animated.View>
+            </View>
+            {hasError && <Text style={s.errorText}>Incorrect code · Please try again</Text>}
+          </View>
 
-            {hasError && (
-              <Animated.Text entering={FadeInDown.duration(250)} style={s.errorText}
-                allowFontScaling={false}>
-                Incorrect code · Please try again
-              </Animated.Text>
-            )}
-
-            {verified && (
-              <Animated.View entering={FadeInDown.duration(350)} style={s.successBadge}>
-                <View style={s.successDot} />
-                <Text style={s.successText}>Verified! Redirecting…</Text>
-              </Animated.View>
-            )}
-          </Animated.View>
-
-          {/* Timer with Animation */}
-          <Animated.View entering={FadeInDown.duration(500).delay(700)} style={s.timerRow}>
-            <Animated.View style={[s.timerPill, timerStyle]}>
-              <View style={[s.timerDot, { backgroundColor: canResend ? C.green : C.timerDot }]} />
+          <View style={s.timerRow}>
+            <View style={s.timerPill}>
+              <View style={[s.timerDot, { backgroundColor: canResend ? C.green : C.red }]} />
               <Text style={s.timerText}>
                 {canResend ? "Code expired — " : "Resend code in "}
                 {!canResend && <Text style={s.timerCount}>{mm}:{ss}</Text>}
               </Text>
               {canResend && (
-                <TouchableOpacity
-                  onPress={handleResend}
-                  disabled={isResending}
-                  accessibilityRole="button"
-                >
-                  <Text style={[s.resendActive, isResending && { opacity: 0.5 }]}>
-                    {isResending ? "Sending..." : "Resend OTP"}
-                  </Text>
+                <TouchableOpacity onPress={handleResend} disabled={isResending}>
+                  <Text style={[s.resendActive, isResending && { opacity: 0.5 }]}>{isResending ? "Sending..." : "Resend OTP"}</Text>
                 </TouchableOpacity>
               )}
-            </Animated.View>
-          </Animated.View>
+            </View>
+          </View>
 
-          {/* CTA */}
-          <Animated.View entering={FadeInDown.duration(500).delay(600)} style={s.btnWrapper}>
-            <Animated.View style={btnStyle}>
-              <TouchableOpacity
-                activeOpacity={1}
-                disabled={!isFilled || verified || isSubmitting}
-                onPress={handleSubmit}
-                onPressIn={() => { if (isFilled) btnScale.value = withSpring(0.96, { damping: 14 }); }}
-                onPressOut={() => { btnScale.value = withSpring(1, { damping: 14 }); }}
-                style={s.btnTouchable}
-                accessibilityRole="button"
-                accessibilityLabel="Verify and continue"
-                accessibilityState={{ disabled: !isFilled || verified || isSubmitting }}
-              >
-                {isFilled && !verified && !isSubmitting ? (
-                  <LinearGradient colors={[C.red, C.redDark]} style={s.btnGradient}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                    <Text style={s.btnLabel}>Verify &amp; Continue</Text>
-                    <View style={s.arrowCircle}><ArrowRight /></View>
-                  </LinearGradient>
-                ) : isSubmitting ? (
-                  <LinearGradient colors={[C.red, C.redDark]}
-                    style={[s.btnGradient, { opacity: 0.7 }]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                    <Text style={s.btnLabel}>Verifying…</Text>
-                  </LinearGradient>
-                ) : verified ? (
-                  <View style={[s.btnGradient, { backgroundColor: C.green }]}>
-                    <Text style={s.btnLabel}>Verified ✓</Text>
-                  </View>
-                ) : (
-                  <View style={[s.btnGradient, s.btnDisabled]}>
-                    <Text style={s.btnLabelDim}>Verify &amp; Continue</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-          </Animated.View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={!isFilled || isSubmitting}
+            onPress={handleSubmit}
+            style={[s.btnTouchable, (!isFilled || isSubmitting) && s.btnDisabled]}
+          >
+            <LinearGradient colors={[C.red, C.redDark]} style={s.btnGradient}>
+              <Text style={s.btnLabel}>{isSubmitting ? "Verifying..." : "Verify & Continue"}</Text>
+              <Feather name="arrow-right" size={18} color={C.white} style={s.arrowIcon} />
+            </LinearGradient>
+          </TouchableOpacity>
 
-          {/* Didn't receive */}
-          <Animated.View entering={FadeInDown.duration(500).delay(750)} style={s.didntRow}>
-            <Text style={s.didntText} allowFontScaling={false}>Didn't receive? </Text>
-            <TouchableOpacity
-              onPress={handleResend}
-              disabled={!canResend || isResending}
-              accessibilityRole="button"
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            >
-              <Text style={[s.resendLink, (!canResend || isResending) && { opacity: 0.3 }]}>
-                {isResending ? "Sending..." : "Resend OTP"}
-              </Text>
+          <View style={s.didntRow}>
+            <Text style={s.didntText}>Didn't receive? </Text>
+            <TouchableOpacity onPress={handleResend} disabled={!canResend || isResending} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+              <Text style={[s.resendLink, (!canResend || isResending) && { opacity: 0.3 }]}>{isResending ? "Sending..." : "Resend OTP"}</Text>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
 
-          {/* Paste Hint - only show when needed */}
           {!isFilled && !hasError && (
-            <Animated.View entering={FadeInDown.duration(400).delay(800)} style={s.pasteHint}>
+            <TouchableOpacity onPress={handlePaste} style={s.pasteHint}>
               <Text style={s.pasteHintText}>📋 Tap to paste from clipboard</Text>
-            </Animated.View>
+            </TouchableOpacity>
           )}
-
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   flex: { flex: 1 },
   root: { flex: 1, backgroundColor: C.bg },
   scroll: { flexGrow: 1, paddingHorizontal: 24 },
-  backRow: { marginBottom: 28 },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start" },
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", marginBottom: 28 },
   backText: { color: C.white, fontSize: 16, fontWeight: "500" },
   iconWrap: { alignItems: "center", marginBottom: 32 },
-  iconGlow: { position: "absolute", width: 140, height: 140, borderRadius: 70, backgroundColor: C.red, opacity: 0.07 },
   iconCard: { width: 90, height: 90, borderRadius: 24, overflow: "hidden" },
-  iconGradient: {
-    flex: 1, alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", borderRadius: 24
-  },
+  iconGradient: { flex: 1, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", borderRadius: 24 },
   titleBlock: { marginBottom: 36 },
-  title: {
-    fontSize: 34, fontWeight: Platform.select({ ios: "800", android: "700" }),
-    color: C.white, letterSpacing: -0.6, marginBottom: 8
-  },
+  title: { fontSize: 34, fontWeight: Platform.select({ ios: "800", android: "700" }), color: C.white, letterSpacing: -0.6, marginBottom: 8 },
   subtitle: { fontSize: 15, color: C.textMuted, lineHeight: 22 },
   phoneNumber: { fontSize: 15, color: C.white, fontWeight: "700", letterSpacing: 0.5, marginTop: 2 },
   otpSection: { marginBottom: 20 },
   otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   otpBox: { borderRadius: 14, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  otpBoxFocused: {
-    shadowColor: C.red, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4, shadowRadius: 8, elevation: 6
-  },
-  glowLine: { position: "absolute", bottom: 0, left: "20%", right: "20%", height: 2.5, borderRadius: 2 },
+  otpBoxFocused: { shadowColor: C.red, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
   cursor: { position: "absolute", bottom: 10, width: 1.5, height: 18, backgroundColor: C.red, borderRadius: 1 },
-  otpDigit: { color: C.white, fontSize: 22, fontWeight: "700", letterSpacing: 1 },
+  otpDigit: { color: C.white, fontSize: 22, fontWeight: "700" },
   hiddenInput: { position: "absolute", top: 0, left: 0, opacity: 0 },
   errorText: { color: C.red, fontSize: 13, marginTop: 14, textAlign: "center" },
-  successBadge: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: C.greenSoft, borderRadius: 50,
-    paddingHorizontal: 16, paddingVertical: 9, alignSelf: "center", marginTop: 14
-  },
-  successDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.green },
-  successText: { color: C.green, fontSize: 13, fontWeight: "600" },
   timerRow: { alignItems: "center", marginBottom: 32 },
-  timerPill: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: C.timerBg, borderWidth: 1, borderColor: C.timerBorder,
-    borderRadius: 50, paddingHorizontal: 16, paddingVertical: 9
-  },
+  timerPill: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: C.secondaryBg, borderWidth: 1, borderColor: C.secondaryBorder, borderRadius: 50, paddingHorizontal: 16, paddingVertical: 9 },
   timerDot: { width: 7, height: 7, borderRadius: 4 },
   timerText: { color: C.textMuted, fontSize: 13 },
-  timerCount: { color: C.white, fontWeight: "700", letterSpacing: 1 },
+  timerCount: { color: C.white, fontWeight: "700" },
   resendActive: { color: C.red, fontSize: 13, fontWeight: "700" },
-  btnWrapper: { marginBottom: 18 },
-  btnTouchable: {
-    borderRadius: 16, overflow: "hidden", shadowColor: C.red,
-    shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.45,
-    shadowRadius: 16, elevation: 12
-  },
-  btnGradient: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    paddingVertical: 18, paddingHorizontal: 24, borderRadius: 16, gap: 12
-  },
-  btnDisabled: {
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-    shadowOpacity: 0, elevation: 0
-  },
-  btnLabel: { color: C.white, fontSize: 17, fontWeight: "700", letterSpacing: 0.3 },
-  btnLabelDim: { color: "rgba(255,255,255,0.25)", fontSize: 17, fontWeight: "600" },
-  arrowCircle: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center"
-  },
-  didntRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  btnTouchable: { borderRadius: 16, overflow: "hidden", shadowColor: C.red, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.45, shadowRadius: 16, elevation: 12 },
+  btnDisabled: { shadowOpacity: 0, elevation: 0, opacity: 0.6 },
+  btnGradient: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 18, paddingHorizontal: 24, borderRadius: 16, gap: 8 },
+  btnLabel: { color: C.white, fontSize: 17, fontWeight: "700" },
+  arrowIcon: { marginLeft: 4 },
+  didntRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 16 },
   didntText: { color: C.textMuted, fontSize: 14 },
   resendLink: { color: C.red, fontSize: 14, fontWeight: "700" },
-  pasteHint: { alignItems: "center", marginTop: 12 },
-  pasteHintText: { color: "rgba(255,255,255,0.25)", fontSize: 11, letterSpacing: 0.3 },
+  pasteHint: { alignItems: "center", marginTop: 16 },
+  pasteHintText: { color: C.textDim, fontSize: 11 },
 });

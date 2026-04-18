@@ -384,6 +384,8 @@ function FilterChip({ filter, isActive, onPress, C }) {
 function ScanDetailModal({ scan, visible, onClose, C }) {
     if (!scan) return null;
 
+    if (!visible) return null;
+
     const config = getScanConfig(scan.result, scan.scan_purpose, C);
     const ipLocation = getLocationString(scan);
     const hasGpsLocation = hasCoordinates(scan);
@@ -653,6 +655,7 @@ export default function ScanHistoryScreen() {
     const { colors: C } = useTheme();
 
     const anomaly = useProfileStore((s) => s.anomaly);
+    const activeStudentId = useProfileStore((s) => s.activeStudentId);
     const anomalies = useMemo(() => anomaly ? [anomaly] : [], [anomaly]);
     const unresolvedCount = anomalies.filter(a => !a.resolved).length;
 
@@ -681,6 +684,7 @@ export default function ScanHistoryScreen() {
 
         try {
             const result = await profileApi.getScanHistory({
+                studentId: activeStudentId,
                 cursor: reset ? undefined : cursor,
                 limit: 15,
                 filter,
@@ -695,14 +699,15 @@ export default function ScanHistoryScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [activeFilter, cursor, loading]);
+    }, [activeFilter, cursor, loading, activeStudentId]);
 
     useEffect(() => {
+        if (!activeStudentId) return;
         setScans([]);
         setCursor(null);
         setHasMore(false);
         loadScans(true, activeFilter);
-    }, [activeFilter]);
+    }, [activeFilter, activeStudentId]);
 
     const handleRefresh = () => loadScans(true);
     const handleLoadMore = () => { if (hasMore && !loading) loadScans(false); };
@@ -822,7 +827,10 @@ export default function ScanHistoryScreen() {
                 ListHeaderComponent={ListHeader}
                 ListEmptyComponent={!loading && !refreshing ? <EmptyState C={C} /> : null}
                 ListFooterComponent={ListFooter}
-                contentContainerStyle={[styles.listContent, scans.length === 0 && { flex: 1, justifyContent: 'center' }]}
+                contentContainerStyle={[
+                    styles.listContent,
+                    scans.length === 0 && !loading && !refreshing && { flex: 1, justifyContent: 'center' }
+                ]}
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.3}
                 refreshControl={
@@ -871,7 +879,7 @@ const styles = StyleSheet.create({
     statIconWrapper: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
     statNumber: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
     statLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-    listContent: { paddingHorizontal: spacing.screenH, paddingBottom: 40 },
+    listContent: { paddingHorizontal: spacing.screenH, paddingTop: 16, paddingBottom: 40 },
     listHeaderContainer: { gap: 20, marginBottom: 8, paddingTop: 16 },
     anomalyAlert: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: 1, padding: 14 },
     anomalyAlertText: { flex: 1, fontSize: 14, fontWeight: '600' },

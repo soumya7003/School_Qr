@@ -1,11 +1,12 @@
 /**
  * features/profile/profile.store.js
  *
- * STRATEGY: Cache-first with silent background refresh
- * - Shows cached data immediately
- * - Waits for auth to be ready
- * - Refreshes in background when stale
- * - Never blocks UI on network
+ * STRATEGY: Cache-first with silent background refresh.
+ *
+ * FIX: lastScan, scanCount, and anomaly are now read from the active student's
+ * embedded data (student.last_scan, student.scan_count, student.anomaly) rather
+ * than from global top-level fields. This makes all scan-related UI automatically
+ * reflect the currently selected child.
  */
 
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -18,6 +19,8 @@ export const useProfileStore = create((set, get) => ({
   parent: null,
   students: [],
   activeStudentId: null,
+  // NOTE: lastScan / scanCount / anomaly are now derived from the active student
+  // in the selectors below. These top-level fields are kept for storage compat.
   lastScan: null,
   scanCount: 0,
   anomaly: null,
@@ -35,9 +38,7 @@ export const useProfileStore = create((set, get) => ({
 
     console.log("[ProfileStore] hydrate START");
 
-    // Step 1: Wait for auth to be ready
     const authState = useAuthStore.getState();
-
     if (!authState.isHydrated) {
       console.log("[ProfileStore] Waiting for auth hydration...");
       await new Promise((resolve) => {
@@ -48,13 +49,10 @@ export const useProfileStore = create((set, get) => ({
           }
         });
       });
-      console.log("[ProfileStore] Auth hydration complete");
     }
 
-    // Step 2: Check if authenticated
     const isAuthenticated = useAuthStore.getState().isAuthenticated;
     if (!isAuthenticated) {
-      console.log("[ProfileStore] Not authenticated, setting empty state");
       set({
         isHydrated: true,
         isInitialized: true,
@@ -65,7 +63,6 @@ export const useProfileStore = create((set, get) => ({
       return;
     }
 
-    // Step 3: Load cached data IMMEDIATELY (skeleton UI)
     try {
       const snap = await storage.readProfile();
 
@@ -73,22 +70,25 @@ export const useProfileStore = create((set, get) => ({
         console.log("[ProfileStore] Cache found, showing immediately");
 
         let students = snap.data.students;
-        // Handle old single-student structure
         if (!Array.isArray(students) && snap.data.student) {
           students = [snap.data.student];
         }
 
-        // 🟢 FIX: Use parent.active_student_id from cache, fallback to first student
         const activeId =
           snap.data.parent?.active_student_id ?? students[0]?.id ?? null;
 
+        // FIX: derive lastScan/anomaly/scanCount from the active student's data
+        const activeStudent =
+          students.find((s) => s.id === activeId) ?? students[0] ?? null;
+
         set({
           parent: snap.data.parent ?? null,
-          students: students,
+          students,
           activeStudentId: activeId,
-          lastScan: snap.data.last_scan ?? null,
-          scanCount: snap.data.scan_count ?? 0,
-          anomaly: snap.data.anomaly ?? null,
+          // Keep global fields populated for backwards-compat
+          lastScan: activeStudent?.last_scan ?? snap.data.last_scan ?? null,
+          scanCount: activeStudent?.scan_count ?? snap.data.scan_count ?? 0,
+          anomaly: activeStudent?.anomaly ?? snap.data.anomaly ?? null,
           isHydrated: true,
           isInitialized: true,
           lastRefreshTime: snap.savedAt
@@ -96,7 +96,6 @@ export const useProfileStore = create((set, get) => ({
             : null,
         });
       } else {
-        console.log("[ProfileStore] No cache found");
         set({
           isHydrated: true,
           isInitialized: true,
@@ -107,27 +106,17 @@ export const useProfileStore = create((set, get) => ({
       }
     } catch (err) {
       console.error("[ProfileStore] hydrate cache read error:", err);
-      set({
-        isHydrated: true,
-        isInitialized: true,
-        activeStudentId: null,
-      });
+      set({ isHydrated: true, isInitialized: true, activeStudentId: null });
     }
 
-    // Step 4: Silently refresh in background
     await get()._silentRefresh();
   },
 
   // ── Silent background refresh ───────────────────────────────────────────────
   _silentRefresh: async () => {
     const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) return null;
 
-    if (!isAuthenticated) {
-      console.log("[ProfileStore] Not authenticated, skipping silent refresh");
-      return null;
-    }
-
-    // Check if refresh is needed (stale or never refreshed)
     const stale = await storage.isProfileStale();
     const neverRefreshed = get().lastRefreshTime === null;
 
@@ -136,60 +125,62 @@ export const useProfileStore = create((set, get) => ({
       return null;
     }
 
-    console.log("[ProfileStore] Starting silent background refresh");
     return get().fetchAndPersist({ silent: true });
   },
 
-  // ── Fetch from API (with optional silent mode) ──────────────────────────────
+  // ── Fetch from API ──────────────────────────────────────────────────────────
   fetchAndPersist: async ({ silent = false } = {}) => {
-    // Prevent concurrent fetches
     if (get().isFetching) {
       console.log("[ProfileStore] Already fetching, skipping");
       return null;
     }
 
-    // Check auth
     const { isAuthenticated } = useAuthStore.getState();
-    if (!isAuthenticated) {
-      console.log("[ProfileStore] Not authenticated, skipping fetch");
-      return null;
-    }
+    if (!isAuthenticated) return null;
 
-    if (!silent) {
-      set({ isFetching: true });
-    }
+    if (!silent) set({ isFetching: true });
 
     try {
-      console.log("[ProfileStore] Fetching from API...");
       const data = await profileApi.getFullProfile();
 
       if (data && data.students) {
-        // Save to storage
         await storage.saveProfile(data);
 
-        // Update store
         const currentState = get();
+
+        // FIX: resolve active student id from response
+        const activeStudentId =
+          data.parent?.active_student_id ??
+          currentState.activeStudentId ??
+          data.students?.[0]?.id ??
+          null;
+
+        // FIX: pull lastScan / anomaly / scanCount from the active student's
+        // embedded data returned by the updated /me endpoint
+        const activeStudent =
+          data.students?.find((s) => s.id === activeStudentId) ??
+          data.students?.[0] ??
+          null;
 
         set({
           parent: data.parent ?? currentState.parent,
           students: data.students ?? currentState.students,
-          activeStudentId:
-            data.parent?.active_student_id ??
-            currentState.activeStudentId ??
-            data.students?.[0]?.id ??
-            null,
-          lastScan: data.last_scan ?? currentState.lastScan,
-          scanCount: data.scan_count ?? currentState.scanCount,
-          anomaly: data.anomaly ?? currentState.anomaly,
+          activeStudentId,
+          lastScan:
+            activeStudent?.last_scan ?? data.last_scan ?? currentState.lastScan,
+          scanCount:
+            activeStudent?.scan_count ??
+            data.scan_count ??
+            currentState.scanCount,
+          anomaly:
+            activeStudent?.anomaly ?? data.anomaly ?? currentState.anomaly,
           lastRefreshTime: Date.now(),
         });
 
-        // Update auth store if needed
         if (data.parent) {
           await useAuthStore.getState().setParentUser(data.parent);
         }
 
-        // Handle new user flag
         const hasCompletedStudent = (data.students ?? []).some(
           (s) => s.setup_stage === "COMPLETE",
         );
@@ -198,25 +189,19 @@ export const useProfileStore = create((set, get) => ({
           await authState.setIsNewUser(false);
         }
 
-        console.log("[ProfileStore] Fetch complete");
         return data;
       }
     } catch (err) {
       console.error("[ProfileStore] fetchAndPersist error:", err);
-      if (!silent) {
-        throw err;
-      }
+      if (!silent) throw err;
       return null;
     } finally {
-      if (!silent) {
-        set({ isFetching: false });
-      }
+      if (!silent) set({ isFetching: false });
     }
   },
 
-  // ── Force refresh (user pull-to-refresh) ────────────────────────────────────
+  // ── Force refresh ───────────────────────────────────────────────────────────
   refresh: async () => {
-    console.log("[ProfileStore] Force refresh");
     set({ isFetching: true });
     try {
       return await get().fetchAndPersist({ silent: false });
@@ -225,9 +210,8 @@ export const useProfileStore = create((set, get) => ({
     }
   },
 
-  // ── Called after login ──────────────────────────────────────────────────────
+  // ── Login / logout lifecycle ────────────────────────────────────────────────
   onLogin: async () => {
-    console.log("[ProfileStore] onLogin - clearing cache and fetching fresh");
     await storage.clearProfile();
     set({
       students: [],
@@ -238,9 +222,7 @@ export const useProfileStore = create((set, get) => ({
     return get().fetchAndPersist({ silent: false });
   },
 
-  // ── Called after logout ─────────────────────────────────────────────────────
   onLogout: async () => {
-    console.log("[ProfileStore] onLogout - clearing all data");
     await storage.clearProfile();
     set({
       parent: null,
@@ -259,15 +241,8 @@ export const useProfileStore = create((set, get) => ({
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
-    console.log("[ProfileStore] patchStudent called with:", {
-      studentId,
-      payload,
-    });
-
     const result = await profileApi.updateProfile(studentId, payload);
-    console.log("[ProfileStore] API result:", result);
 
-    // Update local store optimistically
     const currentStudent = get().students.find((s) => s.id === studentId);
     if (currentStudent) {
       let updatedStudent = { ...currentStudent };
@@ -278,34 +253,26 @@ export const useProfileStore = create((set, get) => ({
           ...payload.emergency,
         };
       }
-
       set((state) => ({
         students: state.students.map((s) =>
           s.id === studentId ? updatedStudent : s,
         ),
       }));
-
       await storage.patchProfileStudent(studentId, payload);
     }
 
-    // 🟢 FIX: Force immediate refresh, not silent
     await get().refresh();
-
     return result;
   },
 
-  fetchIfStale: async () => {
-    return get()._silentRefresh();
-  },
+  fetchIfStale: async () => get()._silentRefresh(),
 
   updateVisibility: async (studentId, { visibility, hidden_fields }) => {
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
-    // 🟢 FIX: Single API call - backend handles both CardVisibility and EmergencyProfile
     await profileApi.updateVisibility(studentId, { visibility, hidden_fields });
 
-    // Update local state optimistically
     set((state) => ({
       students: state.students.map((s) =>
         s.id !== studentId
@@ -318,21 +285,16 @@ export const useProfileStore = create((set, get) => ({
                 hidden_fields,
                 updated_by_parent: true,
               },
-              emergency: {
-                ...(s.emergency ?? {}),
-                visibility,
-              },
+              emergency: { ...(s.emergency ?? {}), visibility },
             },
       ),
     }));
 
-    // Update storage cache
     await storage.patchProfileStudent(studentId, {
       card_visibility: { visibility, hidden_fields, updated_by_parent: true },
       emergency: { visibility },
     });
 
-    // Silent refresh to sync with server
     get()._silentRefresh();
   },
 
@@ -354,7 +316,6 @@ export const useProfileStore = create((set, get) => ({
         : state.parent,
     }));
 
-    // Update storage
     const snap = await storage.readProfile();
     if (snap?.data) {
       snap.data.parent = {
@@ -440,45 +401,17 @@ export const useProfileStore = create((set, get) => ({
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
 
-    console.log("[ProfileStore] linkCard - Starting with card:", card_number);
-
     try {
       const result = await profileApi.linkCard({ card_number });
-      console.log("[ProfileStore] linkCard - Raw API result:", result);
 
-      // 🟢 Extract student info from response (handle different response shapes)
       const studentId = result?.student_id || result?.student?.id;
       const studentName =
         result?.student_name ||
         `${result?.student?.first_name || ""} ${result?.student?.last_name || ""}`.trim();
 
-      console.log("[ProfileStore] linkCard - Extracted:", {
-        studentId,
-        studentName,
-      });
-
-      // 🟢 Clear cache to force fresh fetch
       await storage.clearProfile();
-
-      // 🟢 Force fetch with cache-busting
       await get().fetchAndPersist({ silent: false });
 
-      // 🟢 Verify the student was added
-      const currentState = get();
-      const studentExists = currentState.students.some(
-        (s) => s.id === studentId,
-      );
-
-      console.log("[ProfileStore] linkCard - After refresh:", {
-        studentsCount: currentState.students.length,
-        studentExists,
-        students: currentState.students.map((s) => ({
-          id: s.id,
-          name: s.first_name,
-        })),
-      });
-
-      // Return normalized result
       return {
         success: true,
         student_id: studentId,
@@ -486,23 +419,13 @@ export const useProfileStore = create((set, get) => ({
         is_first_child: result?.is_first_child || false,
       };
     } catch (error) {
-      console.error("[ProfileStore] linkCard error:", error);
-
-      // Check if it's a successful response that axios threw
       const responseData = error?.response?.data?.data || error?.response?.data;
       if (
         responseData &&
         (responseData.student_id || responseData.student?.id)
       ) {
-        console.log(
-          "[ProfileStore] linkCard - Success in error object:",
-          responseData,
-        );
-
-        // Clear cache and refresh
         await storage.clearProfile();
         await get().fetchAndPersist({ silent: false });
-
         return {
           success: true,
           student_id: responseData.student_id || responseData.student?.id,
@@ -512,7 +435,6 @@ export const useProfileStore = create((set, get) => ({
           is_first_child: responseData?.is_first_child || false,
         };
       }
-
       throw error;
     }
   },
@@ -525,19 +447,21 @@ export const useProfileStore = create((set, get) => ({
     if (!student) throw new Error("Student not found");
 
     await profileApi.setActiveStudent(studentId);
-
     set({ activeStudentId: studentId });
 
-    // 🟢 Persist to storage
+    // FIX: update the global lastScan/anomaly/scanCount to match the newly
+    // selected student so all consumers immediately reflect the switch
+    set({
+      lastScan: student.last_scan ?? null,
+      scanCount: student.scan_count ?? 0,
+      anomaly: student.anomaly ?? null,
+    });
+
     await storage.setLastActiveChild(studentId);
 
-    // Update parent in storage
     const snap = await storage.readProfile();
     if (snap?.data) {
-      snap.data.parent = {
-        ...snap.data.parent,
-        active_student_id: studentId,
-      };
+      snap.data.parent = { ...snap.data.parent, active_student_id: studentId };
       await storage.saveProfile(snap.data);
     }
 
@@ -550,36 +474,32 @@ export const useProfileStore = create((set, get) => ({
 
     const result = await profileApi.unlinkChildVerify(studentId, otp, nonce);
 
-    // 🟢 FIX: Optimistically update local state with server response
     set((state) => {
       const newStudents = state.students.filter((s) => s.id !== studentId);
       const newActiveId =
         result.active_student_id ?? newStudents[0]?.id ?? null;
+      const newActive = newStudents.find((s) => s.id === newActiveId) ?? null;
 
       return {
         students: newStudents,
         activeStudentId: newActiveId,
         parent: state.parent
-          ? {
-              ...state.parent,
-              active_student_id: newActiveId,
-            }
+          ? { ...state.parent, active_student_id: newActiveId }
           : null,
+        lastScan: newActive?.last_scan ?? null,
+        scanCount: newActive?.scan_count ?? 0,
+        anomaly: newActive?.anomaly ?? null,
       };
     });
 
-    // Force full refresh to sync all screens
     await get().refresh();
-
     return result;
   },
 
   unlinkChildInit: async (studentId) => {
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
-
-    const result = await profileApi.unlinkChildInit(studentId);
-    return result;
+    return profileApi.unlinkChildInit(studentId);
   },
 
   clear: async () => {
@@ -600,6 +520,7 @@ export const useProfileStore = create((set, get) => ({
 }));
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
+
 export const useActiveStudent = () =>
   useProfileStore(
     (s) => s.students.find((st) => st.id === s.activeStudentId) ?? null,
@@ -637,7 +558,26 @@ export const useLocationConsent = () =>
 
 export const useNotificationPrefs = () =>
   useProfileStore((s) => s.parent?.notification_prefs ?? null);
-export const useLastScan = () => useProfileStore((s) => s.lastScan);
-export const useScanCount = () => useProfileStore((s) => s.scanCount);
-export const useUnresolvedAnomaly = () => useProfileStore((s) => s.anomaly);
+
+// FIX: lastScan, scanCount, anomaly are now derived from the active student's
+// embedded data, NOT from global top-level store fields.
+
+export const useLastScan = () =>
+  useProfileStore(
+    (s) =>
+      s.students.find((st) => st.id === s.activeStudentId)?.last_scan ?? null,
+  );
+
+export const useScanCount = () =>
+  useProfileStore(
+    (s) =>
+      s.students.find((st) => st.id === s.activeStudentId)?.scan_count ?? 0,
+  );
+
+export const useUnresolvedAnomaly = () =>
+  useProfileStore(
+    (s) =>
+      s.students.find((st) => st.id === s.activeStudentId)?.anomaly ?? null,
+  );
+
 export const useIsFetchingProfile = () => useProfileStore((s) => s.isFetching);

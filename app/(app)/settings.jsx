@@ -611,7 +611,13 @@ export default function SettingsScreen() {
         <Screen bg={C.bg} edges={['top', 'left', 'right']}>
             <LanguageModal visible={langModalOpen} onClose={() => setLangModal(false)} />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                scrollIndicatorInsets={{ top: 0 }}
+                contentInsetAdjustmentBehavior="never"
+                automaticallyAdjustsScrollIndicatorInsets={false}
+            >
                 <Animated.View entering={FadeInDown.delay(40).duration(350)} style={styles.pageHeader}>
                     <View>
                         <Text style={[styles.pageTitle, { color: C.tx }]}>Settings</Text>
@@ -837,7 +843,12 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-    scrollContent: { paddingHorizontal: spacing.screenH, paddingTop: spacing[5], paddingBottom: spacing[12], gap: 20 },
+    scrollContent: {
+        paddingHorizontal: spacing.screenH,
+        paddingTop: 0,
+        paddingBottom: spacing[12],
+        gap: 20
+    },
     pageHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 },
     pageTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: 3 },
     pageSubtitle: { fontSize: 13 },
