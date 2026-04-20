@@ -1,116 +1,106 @@
-import { useBiometricStore } from "@/store/biometricStore";
+// src/services/biometricService.js
 import * as LocalAuthentication from "expo-local-authentication";
-import { Platform } from "react-native";
-
-const isWeb = Platform.OS === "web";
 
 /**
- * ─────────────────────────────────────────────
- * Check device biometric capability
- * ─────────────────────────────────────────────
+ * Check if the device has biometric hardware AND has enrolled biometrics.
+ * Logs each step so you can see exactly why it returns false.
+ * @returns {Promise<boolean>}
  */
-export async function checkDeviceBiometrics() {
-  if (isWeb) return false;
-
+export async function isBiometricAvailable() {
   try {
-    const { setDeviceSupported, setBiometricType } =
-      useBiometricStore.getState();
-
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    const isSupported = hasHardware && isEnrolled;
+    console.log("[Biometric] hasHardware:", hasHardware);
 
-    setDeviceSupported(isSupported);
-
-    if (isSupported) {
-      const types =
-        await LocalAuthentication.supportedAuthenticationTypesAsync();
-
-      const { AuthenticationType } = LocalAuthentication;
-
-      const typeMap = {
-        [AuthenticationType.FINGERPRINT]: "fingerprint",
-        [AuthenticationType.FACIAL_RECOGNITION]: "face",
-        [AuthenticationType.IRIS]: "iris",
-      };
-
-      const best = types.includes(AuthenticationType.FINGERPRINT)
-        ? AuthenticationType.FINGERPRINT
-        : types.includes(AuthenticationType.FACIAL_RECOGNITION)
-          ? AuthenticationType.FACIAL_RECOGNITION
-          : types[0];
-
-      setBiometricType(typeMap[best] || "fingerprint");
+    if (!hasHardware) {
+      console.warn("[Biometric] No biometric hardware detected.");
+      return false;
     }
 
-    return isSupported;
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    console.log("[Biometric] isEnrolled:", isEnrolled);
+
+    if (!isEnrolled) {
+      console.warn("[Biometric] Hardware found but no biometrics enrolled.");
+      return false;
+    }
+
+    const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+    console.log("[Biometric] supportedTypes:", types);
+
+    return true;
   } catch (error) {
-    console.warn("Biometric capability check failed:", error);
+    console.error("[Biometric] isBiometricAvailable error:", error);
     return false;
   }
 }
 
 /**
- * ─────────────────────────────────────────────
- * Prompt biometric authentication
- * ─────────────────────────────────────────────
+ * Get supported biometric type label for UI display.
+ * ✅ FIX: Added IRIS_SCAN support
+ * @returns {Promise<'fingerprint' | 'face' | 'iris' | 'biometric'>}
  */
-export async function promptBiometric({
-  reason = "Verify your identity to continue",
-  fallbackLabel = "Use Device PIN",
-} = {}) {
-  if (isWeb) {
-    return { success: false, error: "not_available_on_web" };
-  }
-
+export async function getBiometricLabel() {
   try {
-    return await LocalAuthentication.authenticateAsync({
-      promptMessage: reason,
-      fallbackLabel,
-      disableDeviceFallback: false,
-      cancelLabel: "Cancel",
+    const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+
+    // Order of preference: face > fingerprint > iris > generic
+    if (
+      types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
+    ) {
+      return "face";
+    }
+    if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+      return "fingerprint";
+    }
+    // ✅ FIX: Add IRIS_SCAN support for Android devices with iris scanner
+    if (types.includes(LocalAuthentication.AuthenticationType.IRIS_SCAN)) {
+      return "iris";
+    }
+    return "biometric";
+  } catch {
+    return "biometric";
+  }
+}
+
+/**
+ * Trigger biometric authentication.
+ * @param {object} options
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+export async function authenticate({
+  promptMessage = "Scan to unlock the app",
+  cancelLabel = "Cancel",
+  disableDeviceFallback = false,
+} = {}) {
+  try {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage,
+      cancelLabel,
+      disableDeviceFallback,
+      fallbackLabel: "Use Passcode",
     });
+
+    console.log("[Biometric] authenticate result:", result);
+
+    if (result.success) {
+      return { success: true };
+    }
+    return { success: false, error: result.error || "cancelled" };
   } catch (error) {
-    console.warn("Biometric prompt failed:", error);
-    return { success: false, error: "auth_error" };
+    console.error("[Biometric] authenticate error:", error);
+    return { success: false, error: error.message };
   }
 }
 
 /**
- * ─────────────────────────────────────────────
- * Enable biometric lock
- * ─────────────────────────────────────────────
+ * Used specifically for app-resume unlock.
+ * @returns {Promise<boolean>}
  */
-export async function enableBiometric() {
-  const supported = await checkDeviceBiometrics();
-  if (!supported) return { ok: false, reason: "not_supported" };
-
-  const result = await promptBiometric({
-    reason: "Confirm to enable biometric lock",
+export async function authenticateForAppResume() {
+  const result = await authenticate({
+    promptMessage: "Scan to unlock the app",
+    cancelLabel: "Cancel",
+    disableDeviceFallback: false,
   });
-
-  if (!result.success) {
-    return { ok: false, reason: result.error || "auth_failed" };
-  }
-
-  useBiometricStore.getState().setEnabled(true);
-  return { ok: true };
-}
-
-/**
- * ─────────────────────────────────────────────
- * Disable biometric lock
- * ─────────────────────────────────────────────
- */
-export async function disableBiometric() {
-  const result = await promptBiometric({
-    reason: "Confirm to disable biometric lock",
-  });
-
-  if (!result.success) {
-    return { ok: false, reason: result.error || "auth_failed" };
-  }
-
-  useBiometricStore.getState().setEnabled(false);
-  return { ok: true };
+  return result.success;
 }

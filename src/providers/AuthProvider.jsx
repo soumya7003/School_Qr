@@ -1,158 +1,159 @@
-// AuthProvider.jsx — Production Grade
-// Fixes applied:
-//   [F3]  useNavigationContainerRef replaced with useRootNavigationState.
-//         navigationRef.isReady() never worked in Expo Router (no NavigationContainer
-//         to attach to) — routerReady never became true, splash never hid.
-//   [F5]  Segment dependency uses segments[0] (stable string) not segments (new
-//         array ref every render) — redirect now fires reliably on cold boot.
-//   [F6]  Route guard works correctly after logout because isHydrated stays true.
-//   [F13] useNavigationContainerRef removed — wrong import source for Expo Router.
+import { authApi } from '@/features/auth/auth.api';
+import { useAuthStore } from '@/features/auth/auth.store';
+import { useProfileStore } from '@/features/profile/profile.store';
+import { storage } from '@/lib/storage/storage';
+import { router, useRootNavigationState, useSegments } from 'expo-router';
+import { createContext, useCallback, useEffect } from 'react';
 
-import { useAuthStore } from "@/features/auth/auth.store";
-import { setLogoutHandler } from "@/lib/api/apiClient";
-import {
-    useRootNavigationState, // [F3] correct API for Expo Router
-    useRouter,
-    useSegments,
-} from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import {
-    createContext,
-    useContext,
-    useEffect,
-    useRef,
-    useState
-} from "react";
+export const AuthContext = createContext(null);
 
-// ── Splash Screen ─────────────────────────────────────────────────────────────
-SplashScreen.preventAutoHideAsync();
+export function AuthProvider({ children }) {
+    // ✅ FIX: Only bypass in development, never in production
+    const __DEV_BYPASS__ = false;
 
-// ── Route config ──────────────────────────────────────────────────────────────
-const PUBLIC_GROUPS = new Set(["(auth)"]);
-const DEFAULT_AUTH_ROUTE = "/(auth)/login";
-const DEFAULT_APP_ROUTE = "/(app)/home";
-const HYDRATION_TIMEOUT_MS = 8_000;
-
-// ── Auth Gate Context ─────────────────────────────────────────────────────────
-const AuthGateContext = createContext({
-    isReady: false,
-    isHydrated: false,
-    isRouterReady: false,
-});
-
-export const useAuthGate = () => useContext(AuthGateContext);
-
-// ── Provider ──────────────────────────────────────────────────────────────────
-
-export default function AuthProvider({ children }) {
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const isHydrated = useAuthStore((s) => s.isHydrated);
-    const hydrate = useAuthStore((s) => s.hydrate);
-    const logout = useAuthStore((s) => s.logout);
 
-    const router = useRouter();
+    const profileHydrated = useProfileStore((s) => s.isHydrated);
+    const students = useProfileStore((s) => s.students);
+
     const segments = useSegments();
+    const navigationState = useRootNavigationState();
 
-    // [F3] useRootNavigationState gives us a stable key when the navigator
-    //      is mounted and ready — no NavigationContainer ref needed in Expo Router
-    const rootNavState = useRootNavigationState();
-    const [routerReady, setRouterReady] = useState(false);
+    // ✅ FIX: Profile complete check includes basic student info
+    const isProfileComplete = __DEV_BYPASS__ ? true : (
+        students.length > 0 &&
+        students.some((s) =>
+            s.first_name?.trim() &&
+            s.class?.trim() &&
+            s.setup_stage === 'COMPLETE'
+        )
+    );
 
-    const lastRedirectRef = useRef({ target: null, wasAuthenticated: null });
-    const pendingDeepLinkRef = useRef(null);
-
-    // ── 1. Register logout handler with apiClient (decoupled) ─────────────────
     useEffect(() => {
-        setLogoutHandler(() => logout());
-    }, [logout]);
+        if (!navigationState?.key) return;
+        if (!isHydrated || !profileHydrated) return;
 
-    // ── 2. Hydrate on mount with timeout fallback ─────────────────────────────
-    useEffect(() => {
-        hydrate();
+        const inAuthGroup = segments[0] === '(auth)';
+        const inAppGroup = segments[0] === '(app)';
+        const onIndexScreen = segments[0] === undefined || segments[0] === '';
 
-        const timer = setTimeout(() => {
-            if (!useAuthStore.getState().isHydrated) {
-                useAuthStore.setState({
-                    isAuthenticated: false,
-                    parentUser: null,
-                    isHydrated: true,
-                });
+        // ─── NOT AUTHENTICATED ─────────────────────────────
+        if (!isAuthenticated) {
+            if (!inAuthGroup && !onIndexScreen) {
+                router.replace('/(auth)/login');
             }
-        }, HYDRATION_TIMEOUT_MS);
-
-        return () => clearTimeout(timer);
-    }, [hydrate]);
-
-    // ── 3. [F3] Track router readiness via navigation state key ───────────────
-    // rootNavState.key is set when the root navigator has mounted and is ready.
-    // This is the correct Expo Router idiom — no navigationRef needed.
-    useEffect(() => {
-        if (rootNavState?.key) setRouterReady(true);
-    }, [rootNavState?.key]);
-
-    // ── 4. Dismiss splash when hydrated + router ready ────────────────────────
-    useEffect(() => {
-        if (isHydrated && routerReady) {
-            SplashScreen.hideAsync().catch(() => { });
-        }
-    }, [isHydrated, routerReady]);
-
-    // ── 5. Auth-based redirect ────────────────────────────────────────────────
-    // [F5] segments[0] is a stable string — using segments (array) as dependency
-    //      causes the effect to miss re-runs because the array is a new ref even
-    //      when contents are identical.
-    // [F6] Works correctly after logout because isHydrated is now kept true in
-    //      auth.store.js logout() — the guard no longer early-returns.
-
-    const currentGroup = segments[0];
-
-    useEffect(() => {
-        if (!isHydrated || !routerReady) return;
-        if (!currentGroup) return;
-
-        const inPublicGroup = PUBLIC_GROUPS.has(currentGroup);
-        let target = null;
-
-        if (!isAuthenticated && !inPublicGroup) {
-            const intendedPath = "/" + segments.join("/");
-            if (intendedPath !== DEFAULT_AUTH_ROUTE) {
-                pendingDeepLinkRef.current = intendedPath;
-            }
-            target = DEFAULT_AUTH_ROUTE;
-        } else if (isAuthenticated && inPublicGroup) {
-            target = pendingDeepLinkRef.current ?? DEFAULT_APP_ROUTE;
-            pendingDeepLinkRef.current = null;
-        }
-
-        if (!target) {
-            lastRedirectRef.current = { target: null, wasAuthenticated: null };
             return;
         }
 
-        const last = lastRedirectRef.current;
+        // 🟢 FIX: Handle empty children state
+        const hasChildren = students.length > 0;
+        const hasCompleteProfile = students.some((s) =>
+            s.first_name?.trim() &&
+            s.class?.trim() &&
+            s.setup_stage === 'COMPLETE'
+        );
 
-        // Only skip if BOTH target AND auth state are identical — prevents flicker
-        if (target === last.target && isAuthenticated === last.wasAuthenticated) {
+        // Case 1: Has children but profile incomplete → Updates page
+        if (hasChildren && !hasCompleteProfile) {
+            if (segments[1] !== 'updates') {
+                router.replace('/(app)/updates');
+            }
             return;
         }
 
-        lastRedirectRef.current = { target, wasAuthenticated: isAuthenticated };
-        router.replace(target);
+        // Case 2: No children at all → Settings/Add-child page
+        if (!hasChildren) {
+            // Don't redirect if already on settings or add-child
+            if (segments[1] !== 'settings' && segments[1] !== 'add-child') {
+                router.replace('/(app)/settings');
+            }
+            return;
+        }
 
-        // router intentionally omitted from deps — not referentially stable
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthenticated, isHydrated, routerReady, currentGroup]);
+        // Case 3: Profile complete → Normal app flow
+        if (hasCompleteProfile) {
+            if (!inAppGroup) {
+                router.replace('/(app)/home');
+            }
+        }
 
-    // ── 6. Context value ──────────────────────────────────────────────────────
+    }, [
+        navigationState?.key,
+        isAuthenticated,
+        isHydrated,
+        profileHydrated,
+        segments,
+        students.length, // 🟢 Add students.length as dependency
+    ]);
+
     return (
-        <AuthGateContext.Provider
-            value={{
-                isReady: isHydrated && routerReady,
-                isHydrated,
-                isRouterReady: routerReady,
-            }}
-        >
+        <AuthContext.Provider value={null}>
             {children}
-        </AuthGateContext.Provider>
+        </AuthContext.Provider>
     );
 }
+
+export function useLoginSuccess() {
+    const loginSuccess = useAuthStore((s) => s.loginSuccess);
+    const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
+
+    return useCallback(
+        async ({ parent, accessToken, refreshToken, expiresAt, isNewUser }) => {
+            await loginSuccess(
+                { id: parent.id },
+                accessToken,
+                refreshToken,
+                expiresAt,
+                isNewUser ?? false
+            );
+
+            try {
+                await fetchAndPersist();
+            } catch (err) {
+                console.warn('[useLoginSuccess] Profile fetch failed:', err?.message);
+            }
+        },
+        [loginSuccess, fetchAndPersist]
+    );
+}
+
+export function useRegistrationSuccess() {
+    const loginSuccess = useAuthStore((s) => s.loginSuccess);
+    const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
+
+    return useCallback(
+        async ({ parent_id, accessToken, refreshToken, expiresAt }) => {
+            await loginSuccess(
+                { id: parent_id },
+                accessToken,
+                refreshToken,
+                expiresAt,
+                true
+            );
+
+            try {
+                await fetchAndPersist();
+            } catch (err) {
+                console.warn('[useRegistrationSuccess] Profile fetch failed:', err?.message);
+            }
+        },
+        [loginSuccess, fetchAndPersist]
+    );
+}
+
+export function useLogout() {
+    const logout = useAuthStore((s) => s.logout);
+    const clearProfile = useProfileStore((s) => s.clear);
+
+    return useCallback(async () => {
+        try {
+            const refreshToken = await storage.getRefreshToken();
+            if (refreshToken) await authApi.logout(refreshToken);
+        } catch { }
+
+        await Promise.allSettled([logout(), clearProfile()]);
+    }, [logout, clearProfile]);
+}
+
+export default AuthProvider;

@@ -1,55 +1,96 @@
-// storage.js — Production Grade
-// Fixes applied:
-//   [F1] Added setItem / getItem / deleteItem for non-token secure KV
-//   [F7] Changed AFTER_FIRST_UNLOCK → WHEN_UNLOCKED_THIS_DEVICE_ONLY
-//   [F14] Documented clearAll concurrency assumption explicitly
+/**
+ * lib/storage/storage.js
+ *
+ * DUAL-MODE STORAGE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Development (Expo Go):  AsyncStorage  — no native module, works in Expo Go
+ * Production (dev build): MMKV          — encrypted, synchronous, no size limit
+ *
+ * IMPORTANT:
+ *   AsyncStorage is async (returns Promises).
+ *   MMKV is sync (returns values directly).
+ *   Both are wrapped here so the rest of the codebase never knows the difference.
+ *
+ * SECURITY:
+ *   Tokens stored in SecureStore (always encrypted).
+ *   Profile blob stored in MMKV without encryption key (data is not sensitive).
+ *   DO NOT hardcode encryption keys in source code.
+ */
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Mode detection ────────────────────────────────────────────────────────────
+// ✅ FIXED: Properly detect if MMKV is available
+let USE_MMKV = false;
+try {
+  // Only try to use MMKV in production/dev build, not in Expo Go
+  const { MMKV } = require("react-native-mmkv");
+  if (MMKV && !__DEV__) {
+    USE_MMKV = true;
+  }
+} catch {
+  USE_MMKV = false;
+}
 
-const KEYS = Object.freeze({
-  ACCESS_TOKEN: "auth_token_v1",
-  REFRESH_TOKEN: "refresh_token_v1",
-  TOKEN_META: "auth_token_meta_v1", // stores expiry + issued-at as JSON
-});
+const LAST_ACTIVE_CHILD_KEY = "last_active_child_v1";
 
-const TOKEN_LENGTH = Object.freeze({ MIN: 36, MAX: 2048 });
+// ── MMKV — lazy loaded only when available ────────────────────────────────────
+let _mmkv = null;
+const getMmkv = () => {
+  if (!USE_MMKV) return null;
+  if (_mmkv) return _mmkv;
+  try {
+    const { MMKV } = require("react-native-mmkv");
+    _mmkv = new MMKV({
+      id: "resqid_profile_store",
+    });
+    return _mmkv;
+  } catch {
+    USE_MMKV = false;
+    return null;
+  }
+};
 
-// [F7] WHEN_UNLOCKED_THIS_DEVICE_ONLY: tokens only readable while screen is
-//      unlocked — AFTER_FIRST_UNLOCK was too permissive for auth tokens.
-const SECURE_OPTIONS = Object.freeze({
+// ── SecureStore options ───────────────────────────────────────────────────────
+const OPT = Object.freeze({
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 });
 
-// ── Typed errors ──────────────────────────────────────────────────────────────
-
-export const StorageError = Object.freeze({
-  INVALID_TOKEN: "STORAGE_ERR_INVALID_TOKEN",
-  WRITE_FAILED: "STORAGE_ERR_WRITE_FAILED",
-  CLEAR_FAILED: "STORAGE_ERR_CLEAR_FAILED",
-  READ_FAILED: "STORAGE_ERR_READ_FAILED",
+// ── Key constants ─────────────────────────────────────────────────────────────
+const SK = Object.freeze({
+  AUTH: "auth_v1",
+  USER: "user_v1",
 });
 
-export class SecureStoreError extends Error {
-  constructor(code, message) {
-    super(message ?? code);
-    this.name = "SecureStoreError";
-    this.code = code;
+const PK = Object.freeze({
+  PROFILE: "profile_v1",
+});
+
+// ── SecureStore helpers — never throw ─────────────────────────────────────────
+const _secGet = async (key) => {
+  try {
+    return await SecureStore.getItemAsync(key, OPT);
+  } catch {
+    return null;
   }
-}
+};
+const _secSet = async (key, value) => {
+  try {
+    await SecureStore.setItemAsync(key, value, OPT);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const _secDel = async (key) => {
+  try {
+    await SecureStore.deleteItemAsync(key, OPT);
+  } catch {}
+};
 
-// ── Concurrency lock ──────────────────────────────────────────────────────────
-// Serialises all locked operations — no parallel read/write races.
-//
-// [F14] CONCURRENCY CONTRACT: clearAll() is an internal helper called only
-//       from within already-locked operations (setTokens, clearTokens).
-//       It MUST NOT be called directly from outside a lock — doing so would
-//       bypass the serialisation guarantee. All public write methods are
-//       wrapped with withLock to enforce this.
-
-let _mutex = Promise.resolve();
-
+// ── Write lock for SecureStore ────────────────────────────────────────────────
+let _lock = Promise.resolve();
 const withLock =
   (fn) =>
   async (...args) => {
@@ -57,9 +98,9 @@ const withLock =
     const next = new Promise((r) => {
       release = r;
     });
-    const current = _mutex;
-    _mutex = next;
-    await current;
+    const prev = _lock;
+    _lock = next;
+    await prev;
     try {
       return await fn(...args);
     } finally {
@@ -67,210 +108,258 @@ const withLock =
     }
   };
 
-// ── Validation ────────────────────────────────────────────────────────────────
-
-const isValidToken = (token) => {
-  if (typeof token !== "string") return false;
-  if (token.length < TOKEN_LENGTH.MIN) return false;
-  if (token.length > TOKEN_LENGTH.MAX) return false;
-  // Control chars incl. \t (0x09), \n (0x0A) — header injection risk
-  if (/[\x00-\x1F\x7F]/.test(token)) return false;
-  // Printable ASCII only — rejects unicode, emoji, RTL markers
-  if (/[^\x20-\x7E]/.test(token)) return false;
-  return true;
-};
-
-const isValidExpiry = (expiresAt) =>
-  typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt > 0;
-
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-const safeGet = async (key) => {
+// ── AsyncStorage profile helpers ──────────────────────────────────────────────
+const _asyncGet = async (key) => {
   try {
-    return await SecureStore.getItemAsync(key, SECURE_OPTIONS);
+    return await AsyncStorage.getItem(key);
   } catch {
     return null;
   }
 };
-
-const safeSet = async (key, value) => {
+const _asyncSet = async (key, value) => {
   try {
-    await SecureStore.setItemAsync(key, value, SECURE_OPTIONS);
-    return true;
+    await AsyncStorage.setItem(key, value);
+  } catch {}
+};
+const _asyncDel = async (key) => {
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {}
+};
+
+// ── MMKV profile helpers ──────────────────────────────────────────────────────
+const _mmkvGet = (key) => {
+  try {
+    return getMmkv()?.getString(key) ?? null;
   } catch {
-    return false;
+    return null;
   }
 };
-
-const safeDelete = async (key) => {
+const _mmkvSet = (key, value) => {
   try {
-    await SecureStore.deleteItemAsync(key, SECURE_OPTIONS);
-  } catch {
-    // best-effort — if unreachable, stale key will fail auth on next use
-  }
+    getMmkv()?.set(key, value);
+  } catch {}
+};
+const _mmkvDel = (key) => {
+  try {
+    getMmkv()?.delete(key);
+  } catch {}
 };
 
-// [F14] Internal only — always call from within a withLock context.
-const clearAll = async () => {
-  await Promise.all([
-    safeDelete(KEYS.ACCESS_TOKEN),
-    safeDelete(KEYS.REFRESH_TOKEN),
-    safeDelete(KEYS.TOKEN_META),
-  ]);
+// ── Profile read/write — unified async API ────────────────────────────────────
+const _profileGet = async (key) => {
+  if (USE_MMKV) return _mmkvGet(key);
+  return _asyncGet(key);
 };
+const _profileSet = async (key, value) => {
+  if (USE_MMKV) {
+    _mmkvSet(key, value);
+    return;
+  }
+  return _asyncSet(key, value);
+};
+const _profileDel = async (key) => {
+  if (USE_MMKV) {
+    _mmkvDel(key);
+    return;
+  }
+  return _asyncDel(key);
+};
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+const isValidExp = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 
 // ── Public API ────────────────────────────────────────────────────────────────
-
 export const storage = Object.freeze({
-  // ── Token operations (auth-specific) ───────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTH TOKENS — SecureStore in BOTH modes
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Atomically writes access token, refresh token, and metadata.
-   * Pattern: clear → write all → verify → rollback on any failure.
-   */
-  setTokens: withLock(async (accessToken, refreshToken, expiresAt) => {
-    if (!isValidToken(accessToken) || !isValidToken(refreshToken)) {
-      throw new SecureStoreError(StorageError.INVALID_TOKEN);
-    }
-    if (!isValidExpiry(expiresAt)) {
-      throw new SecureStoreError(
-        StorageError.INVALID_TOKEN,
-        "Invalid expiresAt",
-      );
-    }
-
-    await clearAll(); // crash here → user logged out — safe state
-
-    const meta = JSON.stringify({
-      expiresAt, // Unix seconds from JWT exp
-      issuedAt: Math.floor(Date.now() / 1000),
-    });
-
-    const [accessOk, refreshOk, metaOk] = await Promise.all([
-      safeSet(KEYS.ACCESS_TOKEN, accessToken),
-      safeSet(KEYS.REFRESH_TOKEN, refreshToken),
-      safeSet(KEYS.TOKEN_META, meta),
-    ]);
-
-    if (!accessOk || !refreshOk || !metaOk) {
-      await clearAll(); // rollback — no partial auth state
-      throw new SecureStoreError(StorageError.WRITE_FAILED);
-    }
-  }),
-
-  /**
-   * Atomically reads both tokens in one locked operation.
-   * Use in refresh interceptors — never call getAccessToken/getRefreshToken
-   * separately when you need both.
-   */
-  getTokens: withLock(async () => {
-    const [accessToken, refreshToken] = await Promise.all([
-      safeGet(KEYS.ACCESS_TOKEN),
-      safeGet(KEYS.REFRESH_TOKEN),
-    ]);
-    return { accessToken, refreshToken };
-  }),
-
-  /** Single token reads — fine for non-refresh use cases */
-  getAccessToken: () => safeGet(KEYS.ACCESS_TOKEN),
-  getRefreshToken: () => safeGet(KEYS.REFRESH_TOKEN),
-
-  /** Token metadata — use to decide whether proactive refresh is needed. */
-  getTokenMeta: async () => {
+  readAuth: async () => {
     try {
-      const raw = await safeGet(KEYS.TOKEN_META);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!isValidExpiry(parsed?.expiresAt)) return null;
-      return parsed;
+      const raw = await _secGet(SK.AUTH);
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   },
 
-  /**
-   * True only when both tokens exist AND access token is not expiring soon.
-   * 60-second buffer gives time to refresh before the first request fails.
-   */
+  writeAuth: withLock(async (patch) => {
+    try {
+      const raw = await _secGet(SK.AUTH);
+      const current = raw ? JSON.parse(raw) : {};
+      const merged = { ...current, ...patch };
+
+      if (!merged.accessToken && current?.accessToken) {
+        return;
+      }
+
+      await _secSet(SK.AUTH, JSON.stringify(merged));
+    } catch {}
+  }),
+
+  clearAuth: withLock(async () => {
+    await _secDel(SK.AUTH);
+  }),
+
   hasValidSession: async () => {
-    const [access, refresh, metaRaw] = await Promise.all([
-      safeGet(KEYS.ACCESS_TOKEN),
-      safeGet(KEYS.REFRESH_TOKEN),
-      safeGet(KEYS.TOKEN_META),
-    ]);
-
-    if (!access || !refresh) return false;
-
     try {
-      const meta = JSON.parse(metaRaw ?? "{}");
-      const nowSecs = Math.floor(Date.now() / 1000);
-      const BUFFER = 60;
-      if (!isValidExpiry(meta?.expiresAt)) return false;
-      return meta.expiresAt - nowSecs > BUFFER;
-    } catch {
-      return false; // corrupted meta → force refresh
-    }
-  },
-
-  /**
-   * True when refresh token exists and access token is within 5 min of expiry.
-   * Used by apiClient request interceptor for proactive refresh.
-   */
-  shouldRefresh: async () => {
-    const [refresh, metaRaw] = await Promise.all([
-      safeGet(KEYS.REFRESH_TOKEN),
-      safeGet(KEYS.TOKEN_META),
-    ]);
-
-    if (!refresh) return false;
-
-    try {
-      const meta = JSON.parse(metaRaw ?? "{}");
-      const nowSecs = Math.floor(Date.now() / 1000);
-      if (!isValidExpiry(meta?.expiresAt)) return false;
-      return meta.expiresAt - nowSecs < 300; // refresh if <5 min remaining
+      const raw = await _secGet(SK.AUTH);
+      if (!raw) return false;
+      const { accessToken, refreshToken, expiresAt } = JSON.parse(raw);
+      if (!accessToken || !refreshToken || !isValidExp(expiresAt)) return false;
+      return expiresAt - Math.floor(Date.now() / 1000) > 60;
     } catch {
       return false;
     }
   },
 
-  /** Clears all three token keys. Safe to call when already logged out. */
-  clearTokens: withLock(clearAll),
-
-  // ── [F1] General-purpose secure KV — for non-token sensitive data ──────────
-  // Uses the same SECURE_OPTIONS (WHEN_UNLOCKED_THIS_DEVICE_ONLY).
-  // Keys must not collide with KEYS.* above — callers are responsible.
-  // Writes are NOT locked — these are independent of the token lock chain.
-  // If you need atomic multi-key writes, use a single JSON-serialised key.
-
-  /**
-   * Write any string value under an arbitrary secure key.
-   * @param {string} key    e.g. "parent_user_cache_v1"
-   * @param {string} value  Must be a string — JSON.stringify objects first
-   */
-  setItem: async (key, value) => {
-    if (typeof key !== "string" || key.trim() === "") {
-      throw new SecureStoreError(StorageError.WRITE_FAILED, "Invalid key");
+  shouldProactivelyRefresh: async () => {
+    try {
+      const raw = await _secGet(SK.AUTH);
+      if (!raw) return false;
+      const { refreshToken, expiresAt } = JSON.parse(raw);
+      if (!refreshToken || !isValidExp(expiresAt)) return false;
+      return expiresAt - Math.floor(Date.now() / 1000) < 300;
+    } catch {
+      return false;
     }
-    const ok = await safeSet(key, String(value));
-    if (!ok) throw new SecureStoreError(StorageError.WRITE_FAILED);
   },
 
-  /**
-   * Read a value written by setItem.
-   * @returns {string|null}
-   */
-  getItem: async (key) => {
-    if (typeof key !== "string" || key.trim() === "") return null;
-    return safeGet(key);
+  getAccessToken: async () => {
+    try {
+      const raw = await _secGet(SK.AUTH);
+      return raw ? (JSON.parse(raw).accessToken ?? null) : null;
+    } catch {
+      return null;
+    }
   },
 
-  /**
-   * Delete a value written by setItem.
-   * Safe to call when key doesn't exist.
-   */
-  deleteItem: async (key) => {
-    if (typeof key !== "string" || key.trim() === "") return;
-    await safeDelete(key);
+  getRefreshToken: async () => {
+    try {
+      const raw = await _secGet(SK.AUTH);
+      return raw ? (JSON.parse(raw).refreshToken ?? null) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // USER IDENTITY — SecureStore in BOTH modes
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  readUser: async () => {
+    try {
+      const raw = await _secGet(SK.USER);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  writeUser: withLock(async (user) => {
+    try {
+      if (!user?.id) return;
+      await _secSet(SK.USER, JSON.stringify(user));
+    } catch {}
+  }),
+
+  clearUser: withLock(async () => {
+    await _secDel(SK.USER);
+  }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROFILE SNAPSHOT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  saveProfile: async (profileData) => {
+    try {
+      await _profileSet(
+        PK.PROFILE,
+        JSON.stringify({
+          data: profileData,
+          savedAt: new Date().toISOString(),
+        }),
+      );
+    } catch {}
+  },
+
+  readProfile: async () => {
+    try {
+      const raw = await _profileGet(PK.PROFILE);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  patchProfileStudent: async (studentId, partial) => {
+    try {
+      const raw = await _profileGet(PK.PROFILE);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      if (!snap.data.students) {
+        snap.data.students = [];
+      }
+      snap.data.students = snap.data.students.map((s) =>
+        s.id === studentId ? { ...s, ...partial } : s,
+      );
+      await _profileSet(PK.PROFILE, JSON.stringify(snap));
+    } catch {}
+  },
+
+  isProfileStale: async (maxAgeMs = 30 * 24 * 60 * 60 * 1000) => {
+    try {
+      const raw = await _profileGet(PK.PROFILE);
+      if (!raw) return true;
+      const { savedAt } = JSON.parse(raw);
+      if (!savedAt) return true;
+      return Date.now() - new Date(savedAt).getTime() > maxAgeMs;
+    } catch {
+      return true;
+    }
+  },
+
+  clearProfile: async () => {
+    try {
+      await _profileDel(PK.PROFILE);
+    } catch {}
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LAST ACTIVE CHILD — AsyncStorage (works in both dev and prod)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  setLastActiveChild: async (studentId) => {
+    try {
+      await AsyncStorage.setItem(LAST_ACTIVE_CHILD_KEY, studentId);
+    } catch {}
+  },
+
+  getLastActiveChild: async () => {
+    try {
+      return await AsyncStorage.getItem(LAST_ACTIVE_CHILD_KEY);
+    } catch {
+      return null;
+    }
+  },
+
+  clearLastActiveChild: async () => {
+    try {
+      await AsyncStorage.removeItem(LAST_ACTIVE_CHILD_KEY);
+    } catch {}
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FULL WIPE — logout
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  clearAll: async () => {
+    await Promise.allSettled([
+      _secDel(SK.AUTH),
+      _secDel(SK.USER),
+      _profileDel(PK.PROFILE),
+      storage.clearLastActiveChild(),
+    ]);
   },
 });

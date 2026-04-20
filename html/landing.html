@@ -1,0 +1,5044 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SchoolQR Guardian — Emergency Profile System</title>
+    <meta
+      name="description"
+      content="QR-based emergency profile system for schools. Every child carries their lifeline."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;700;800;900&family=Geist+Mono:wght@400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.carousel.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.theme.default.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ══════════════════ VARIABLES ══════════════════ */
+      :root {
+        --red: #e8342a;
+        --red-dk: #b5241c;
+        --red-lt: rgba(232, 52, 42, 0.1);
+        --red-bd: rgba(232, 52, 42, 0.22);
+        --bg: #08080a;
+        --s1: #0f0f13;
+        --s2: #141418;
+        --s3: #1c1c22;
+        --bd: rgba(255, 255, 255, 0.06);
+        --bd2: rgba(255, 255, 255, 0.1);
+        --tx: #f2f2f5;
+        --tx2: rgba(242, 242, 245, 0.6);
+        --tx3: rgba(242, 242, 245, 0.32);
+        --ok: #12a150;
+        --ok-lt: rgba(18, 161, 80, 0.1);
+        --r: 14px;
+        --rl: 20px;
+        --rxl: 28px;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        --fast: 0.2s;
+        --med: 0.35s;
+        --slow: 0.6s;
+      }
+
+      /* ══════════════════ RESET ══════════════════ */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: "Instrument Sans", sans-serif;
+        background: var(--bg);
+        color: var(--tx);
+        overflow-x: hidden;
+        -webkit-font-smoothing: antialiased;
+        cursor: none;
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-family: "Cabinet Grotesk", sans-serif;
+      }
+      ::selection {
+        background: var(--red-lt);
+        color: var(--red);
+      }
+      ::-webkit-scrollbar {
+        width: 3px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--red-bd);
+        border-radius: 99px;
+      }
+
+      /* ══════════════════ CURSOR (lightweight) ══════════════════ */
+      /* Single element cursor — no laggy ring tracking */
+      .c-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--red);
+        position: fixed;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        z-index: 9999;
+        transform: translate(-50%, -50%);
+        transition:
+          transform var(--fast) var(--ease),
+          width var(--fast),
+          height var(--fast);
+        will-change: left, top;
+        mix-blend-mode: screen;
+      }
+      .c-ring {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(232, 52, 42, 0.45);
+        position: fixed;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        z-index: 9998;
+        transform: translate(-50%, -50%);
+        will-change: left, top;
+        /* CSS transition instead of JS lerp — no rAF cost */
+        transition:
+          left 0.12s var(--ease),
+          top 0.12s var(--ease),
+          width var(--fast),
+          height var(--fast),
+          border-color var(--fast);
+      }
+      .c-dot.hov {
+        width: 14px;
+        height: 14px;
+      }
+      .c-ring.hov {
+        width: 50px;
+        height: 50px;
+        border-color: rgba(232, 52, 42, 0.7);
+      }
+      @media (hover: none) {
+        .c-dot,
+        .c-ring {
+          display: none;
+        }
+        body {
+          cursor: auto;
+        }
+      }
+
+      /* ══════════════════ UTILITIES ══════════════════ */
+      .mono {
+        font-family: "Geist Mono", monospace;
+      }
+      .red {
+        color: var(--red) !important;
+      }
+      .dim {
+        color: var(--tx3);
+      }
+      .mid {
+        color: var(--tx2);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 11px;
+        border-radius: 99px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      .pill-r {
+        background: var(--red-lt);
+        color: var(--red);
+        border: 1px solid var(--red-bd);
+      }
+      .pill-g {
+        background: var(--ok-lt);
+        color: var(--ok);
+        border: 1px solid rgba(18, 161, 80, 0.22);
+      }
+
+      .dot-live {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--ok);
+        box-shadow: 0 0 5px var(--ok);
+        animation: pulse-dot 2.2s ease-in-out infinite;
+      }
+      @keyframes pulse-dot {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.4);
+        }
+      }
+
+      /* ══════════════════ BUTTONS ══════════════════ */
+      .btn-r {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        background: var(--red);
+        color: #fff;
+        padding: 13px 26px;
+        border-radius: 12px;
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 14.5px;
+        border: none;
+        cursor: none;
+        text-decoration: none;
+        transition:
+          transform var(--fast) var(--ease),
+          box-shadow var(--fast);
+        box-shadow: 0 6px 24px rgba(232, 52, 42, 0.3);
+        position: relative;
+        overflow: hidden;
+      }
+      .btn-r::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.13),
+          transparent
+        );
+        opacity: 0;
+        transition: opacity var(--fast);
+      }
+      .btn-r:hover::after {
+        opacity: 1;
+      }
+      .btn-r:hover {
+        color: #fff;
+        transform: translateY(-2px) scale(1.015);
+        box-shadow: 0 14px 40px rgba(232, 52, 42, 0.45);
+      }
+
+      .btn-o {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        background: transparent;
+        color: var(--tx);
+        padding: 12px 26px;
+        border-radius: 12px;
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-weight: 600;
+        font-size: 14.5px;
+        border: 1px solid var(--bd2);
+        cursor: none;
+        text-decoration: none;
+        transition:
+          transform var(--fast) var(--ease),
+          border-color var(--fast),
+          background var(--fast);
+      }
+      .btn-o:hover {
+        color: var(--tx);
+        border-color: var(--red-bd);
+        background: var(--red-lt);
+        transform: translateY(-2px);
+      }
+
+      /* ══════════════════ SCROLL PROGRESS ══════════════════ */
+      #sp {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 2px;
+        background: var(--red);
+        z-index: 1100;
+        width: 0;
+        box-shadow: 0 0 6px rgba(232, 52, 42, 0.5);
+        transition: width 0.1s linear;
+      }
+
+      /* ══════════════════ BACK TO TOP ══════════════════ */
+      #btt {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 42px;
+        height: 42px;
+        background: var(--red);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: none;
+        z-index: 900;
+        opacity: 0;
+        transform: translateY(14px);
+        transition:
+          opacity var(--med),
+          transform var(--med),
+          box-shadow var(--fast);
+        box-shadow: 0 6px 20px rgba(232, 52, 42, 0.3);
+        font-size: 16px;
+      }
+      #btt.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      #btt:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(232, 52, 42, 0.45);
+      }
+
+      /* ══════════════════ NAVBAR ══════════════════ */
+      #nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        transition:
+          background var(--med),
+          backdrop-filter var(--med),
+          border-color var(--med);
+      }
+      #nav.sc {
+        background: rgba(8, 8, 10, 0.85);
+        backdrop-filter: blur(18px);
+        border-bottom: 1px solid var(--bd);
+      }
+      .nav-in {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 24px;
+      }
+      .nav-logo {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        text-decoration: none;
+      }
+      .nav-logo-icon {
+        width: 36px;
+        height: 36px;
+        background: var(--red-lt);
+        border: 1px solid var(--red-bd);
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          transform var(--fast) var(--ease),
+          box-shadow var(--fast);
+      }
+      .nav-logo:hover .nav-logo-icon {
+        transform: rotate(-8deg) scale(1.08);
+        box-shadow: 0 0 16px rgba(232, 52, 42, 0.25);
+      }
+      .nav-logo-txt {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 17px;
+        font-weight: 800;
+        color: var(--tx);
+      }
+      .nav-logo-txt span {
+        color: var(--red);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        list-style: none;
+      }
+      .nav-links a {
+        color: var(--tx2);
+        text-decoration: none;
+        font-size: 13.5px;
+        font-weight: 500;
+        padding: 6px 13px;
+        border-radius: 9px;
+        transition:
+          color var(--fast),
+          background var(--fast);
+      }
+      .nav-links a:hover,
+      .nav-links a.act {
+        color: var(--tx);
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .nav-cta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .hamburger {
+        display: none;
+        flex-direction: column;
+        gap: 5px;
+        cursor: none;
+        padding: 6px;
+        background: none;
+        border: none;
+      }
+      .hamburger span {
+        width: 22px;
+        height: 2px;
+        background: var(--tx);
+        border-radius: 2px;
+        transition: 0.3s;
+      }
+      .hamburger.open span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+      }
+      .hamburger.open span:nth-child(2) {
+        opacity: 0;
+        transform: scaleX(0);
+      }
+      .hamburger.open span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+      }
+      .mobile-nav {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: rgba(8, 8, 10, 0.96);
+        backdrop-filter: blur(20px);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+      }
+      .mobile-nav.open {
+        display: flex;
+      }
+      .mobile-nav a {
+        color: var(--tx);
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 26px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+      .mobile-nav a:hover {
+        color: var(--red);
+      }
+      .mob-close {
+        position: absolute;
+        top: 22px;
+        right: 22px;
+        background: none;
+        border: none;
+        color: var(--tx);
+        font-size: 26px;
+        cursor: none;
+      }
+
+      /* ══════════════════ HERO ══════════════════ */
+      .hero {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+        padding: 120px 0 80px;
+      }
+      /* OPTIMIZED: static CSS gradients replace heavy JS orbs */
+      .hero-bg {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            ellipse 70% 60% at 15% 55%,
+            rgba(232, 52, 42, 0.09) 0%,
+            transparent 60%
+          ),
+          radial-gradient(
+            ellipse 50% 70% at 85% 20%,
+            rgba(59, 130, 246, 0.05) 0%,
+            transparent 55%
+          ),
+          radial-gradient(
+            ellipse 40% 40% at 55% 85%,
+            rgba(232, 52, 42, 0.05) 0%,
+            transparent 50%
+          );
+        animation: hero-bg-shift 18s ease-in-out infinite alternate;
+      }
+      @keyframes hero-bg-shift {
+        from {
+          opacity: 0.85;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Subtle grid — CSS only, no JS */
+      .hero-grid {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(232, 52, 42, 0.032) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(232, 52, 42, 0.032) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: radial-gradient(
+          ellipse 80% 80% at 50% 50%,
+          black 35%,
+          transparent 100%
+        );
+      }
+
+      #hero-canvas {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.5;
+      }
+
+      .hero-content {
+        position: relative;
+        z-index: 2;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 12px 5px 7px;
+        border-radius: 99px;
+        background: var(--s2);
+        border: 1px solid var(--bd2);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--tx2);
+        margin-bottom: 26px;
+        animation: fade-down 0.7s var(--ease) forwards;
+        opacity: 0;
+      }
+      .badge-dot {
+        background: var(--red);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 99px;
+        letter-spacing: 0.05em;
+      }
+
+      .hero-h1 {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: clamp(44px, 6.5vw, 84px);
+        font-weight: 900;
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+        margin-bottom: 22px;
+        animation: fade-up 0.8s var(--ease) 0.12s forwards;
+        opacity: 0;
+      }
+      .hero-h1 .accent {
+        color: var(--red);
+        display: block;
+      }
+
+      .hero-sub {
+        font-size: clamp(15px, 1.9vw, 18px);
+        color: var(--tx2);
+        line-height: 1.72;
+        max-width: 500px;
+        margin-bottom: 36px;
+        animation: fade-up 0.8s var(--ease) 0.22s forwards;
+        opacity: 0;
+      }
+      .hero-cta {
+        animation: fade-up 0.8s var(--ease) 0.32s forwards;
+        opacity: 0;
+      }
+
+      .hero-stats {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        margin-top: 36px;
+        flex-wrap: wrap;
+        animation: fade-up 0.8s var(--ease) 0.42s forwards;
+        opacity: 0;
+      }
+      .stat-n {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 26px;
+        font-weight: 900;
+        color: var(--tx);
+      }
+      .stat-l {
+        font-size: 11px;
+        color: var(--tx3);
+        margin-top: 2px;
+      }
+      .stat-div {
+        width: 1px;
+        height: 32px;
+        background: var(--bd2);
+      }
+
+      @keyframes fade-down {
+        from {
+          opacity: 0;
+          transform: translateY(-18px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes fade-up {
+        from {
+          opacity: 0;
+          transform: translateY(28px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes scale-in {
+        from {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      /* PHONE */
+      .hero-phone {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2;
+        animation: scale-in 0.9s var(--ease) 0.38s forwards;
+        opacity: 0;
+      }
+      .phone {
+        width: 252px;
+        background: var(--s2);
+        border: 1px solid var(--bd2);
+        border-radius: 36px;
+        padding: 13px 13px 20px;
+        box-shadow:
+          0 36px 100px rgba(0, 0, 0, 0.55),
+          0 0 60px rgba(232, 52, 42, 0.1);
+        transition: transform var(--slow) var(--ease);
+      }
+      .phone:hover {
+        transform: translateY(-6px);
+      }
+      .notch {
+        width: 82px;
+        height: 24px;
+        background: var(--s3);
+        border-radius: 99px;
+        margin: 0 auto 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .notch-dot {
+        width: 7px;
+        height: 7px;
+        background: #111;
+        border-radius: 50%;
+      }
+      .p-screen {
+        background: var(--bg);
+        border-radius: 24px;
+        overflow: hidden;
+        padding: 13px;
+      }
+      .p-card {
+        background: linear-gradient(135deg, #1a0808, #1e1010, #160808);
+        border: 1px solid var(--red-bd);
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 11px;
+        position: relative;
+        overflow: hidden;
+      }
+      .p-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--red-bd);
+      }
+      .p-lbl {
+        font-size: 7.5px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--tx3);
+        margin-bottom: 3px;
+      }
+      .p-num {
+        font-family: "Geist Mono", monospace;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: #fff;
+        letter-spacing: 0.1em;
+      }
+      .p-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--ok-lt);
+        padding: 3px 7px;
+        border-radius: 99px;
+        font-size: 8.5px;
+        font-weight: 700;
+        color: var(--ok);
+        margin-top: 7px;
+      }
+      .p-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 9px;
+        background: var(--s2);
+        border-radius: 10px;
+        margin-bottom: 7px;
+      }
+      .p-ico {
+        font-size: 15px;
+      }
+      .p-rl {
+        font-size: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        color: var(--tx3);
+      }
+      .p-rv {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--tx);
+      }
+      .p-badge {
+        position: absolute;
+        background: var(--s2);
+        border: 1px solid var(--bd2);
+        border-radius: 12px;
+        padding: 9px 12px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .pb1 {
+        left: -68px;
+        top: 28%;
+        animation: fl1 4s ease-in-out infinite;
+      }
+      .pb2 {
+        right: -58px;
+        top: 58%;
+        animation: fl2 5s ease-in-out infinite;
+      }
+      .pb3 {
+        right: -36px;
+        top: 6%;
+        background: var(--red-lt);
+        border-color: var(--red-bd);
+        animation: fl1 6.5s ease-in-out infinite 1s;
+      }
+      .pb-n {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 11.5px;
+        font-weight: 800;
+        color: var(--tx);
+      }
+      .pb-t {
+        font-size: 9px;
+        color: var(--tx3);
+      }
+      @keyframes fl1 {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+      @keyframes fl2 {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(9px);
+        }
+      }
+
+      /* ══════════════════ RESQID — PERFORMANCE OPTIMIZED ══════════════════ */
+      /*
+      PERFORMANCE FIXES:
+      1. Removed setInterval that was conflicting with rAF
+      2. CSS animation handles gradient flow (GPU-accelerated)
+      3. JS only does 3D tilt — single rAF loop, no duplicate timers
+      4. will-change:transform on the text element only
+      5. Idle float is CSS animation, not JS
+    */
+      .resqid-sec {
+        padding: 70px 0 50px;
+        position: relative;
+        overflow: hidden;
+        border-bottom: 1px solid var(--bd);
+      }
+      .resqid-sec::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse 60% 80% at 50% 50%,
+          rgba(232, 52, 42, 0.04) 0%,
+          transparent 70%
+        );
+      }
+      .resqid-lbl {
+        text-align: center;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--tx3);
+        margin-bottom: 14px;
+      }
+      .resqid-sub {
+        text-align: center;
+        font-size: 13px;
+        color: var(--tx3);
+        margin-top: 14px;
+        letter-spacing: 0.08em;
+      }
+
+      .resqid-wrap {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        perspective: 700px;
+        padding: 16px 0;
+        user-select: none;
+        cursor: crosshair;
+      }
+      .resqid-txt {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: clamp(60px, 11vw, 150px);
+        font-weight: 900;
+        letter-spacing: -0.025em;
+        display: inline-block;
+        will-change: transform; /* GPU layer */
+        transform-style: preserve-3d;
+        background: linear-gradient(
+          135deg,
+          #e8342a 0%,
+          #ff6b35 28%,
+          #ff9a3c 48%,
+          #e8342a 68%,
+          #c0271e 100%
+        );
+        background-size: 280% 280%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 0 28px rgba(232, 52, 42, 0.35));
+        /* CSS handles the idle float & gradient — zero JS cost */
+        animation:
+          rq-gradient 4s ease infinite,
+          rq-idle 7s ease-in-out infinite;
+      }
+      @keyframes rq-gradient {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+      @keyframes rq-idle {
+        0%,
+        100% {
+          transform: perspective(700px) rotateY(0deg) rotateX(0deg);
+        }
+        33% {
+          transform: perspective(700px) rotateY(6deg) rotateX(-3deg);
+        }
+        66% {
+          transform: perspective(700px) rotateY(-5deg) rotateX(2deg);
+        }
+      }
+      /* When JS tilt is active, class .js-tilt pauses CSS animation */
+      .resqid-txt.js-tilt {
+        animation: rq-gradient 4s ease infinite;
+      }
+
+      /* ══════════════════ TICKER ══════════════════ */
+      .ticker-wrap {
+        overflow: hidden;
+        background: var(--s1);
+        border-top: 1px solid var(--bd);
+        border-bottom: 1px solid var(--bd);
+        padding: 13px 0;
+      }
+      .ticker-track {
+        display: flex;
+        white-space: nowrap;
+        animation: ticker 32s linear infinite;
+      }
+      .ticker-wrap:hover .ticker-track {
+        animation-play-state: paused;
+      }
+      .ticker-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 36px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--tx2);
+        border-right: 1px solid var(--bd);
+      }
+      .ticker-item i {
+        color: var(--red);
+      }
+      @keyframes ticker {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      /* ══════════════════ SECTION COMMON ══════════════════ */
+      .sec-lbl {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--red);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .sec-lbl::before {
+        content: "";
+        display: inline-block;
+        width: 18px;
+        height: 2px;
+        background: var(--red);
+      }
+      .sec-h {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: clamp(30px, 3.8vw, 50px);
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+      }
+      .sec-h span {
+        color: var(--red);
+      }
+      .sec-p {
+        font-size: 16.5px;
+        color: var(--tx2);
+        line-height: 1.72;
+        max-width: 580px;
+        margin: 14px auto 0;
+      }
+
+      /* ══════════════════ HOW IT WORKS ══════════════════ */
+      .how-sec {
+        padding: 120px 0;
+        position: relative;
+      }
+
+      .how-card {
+        background: var(--s2);
+        border: 1px solid var(--bd);
+        border-radius: var(--rxl);
+        padding: 34px 30px;
+        position: relative;
+        overflow: hidden;
+        height: 100%;
+        transition:
+          border-color var(--med) var(--ease),
+          transform var(--med) var(--ease),
+          box-shadow var(--med);
+      }
+      .how-card:hover {
+        border-color: var(--red-bd);
+        transform: translateY(-7px);
+        box-shadow: 0 28px 72px rgba(232, 52, 42, 0.1);
+      }
+      .how-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--red), transparent);
+        opacity: 0;
+        transition: opacity var(--med);
+      }
+      .how-card:hover::before {
+        opacity: 1;
+      }
+      .step-n {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 58px;
+        font-weight: 900;
+        color: rgba(232, 52, 42, 0.07);
+        position: absolute;
+        top: 14px;
+        right: 22px;
+        line-height: 1;
+      }
+      .how-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: var(--red-lt);
+        border: 1px solid var(--red-bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        margin-bottom: 18px;
+        transition: transform var(--fast) var(--ease);
+      }
+      .how-card:hover .how-icon {
+        transform: rotate(-10deg) scale(1.08);
+      }
+      .how-t {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 9px;
+      }
+      .how-d {
+        font-size: 13.5px;
+        color: var(--tx2);
+        line-height: 1.7;
+      }
+
+      /* Scan flow */
+      .scan-box {
+        background: var(--s2);
+        border: 1px solid var(--bd);
+        border-radius: var(--rxl);
+        overflow: hidden;
+      }
+      .scan-hdr {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--bd);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .scan-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+      .scan-url {
+        font-size: 11.5px;
+        color: var(--tx3);
+        margin-left: 8px;
+        font-family: "Geist Mono", monospace;
+      }
+      .scan-flow {
+        display: flex;
+        align-items: center;
+        text-align: center;
+      }
+      .scan-step {
+        flex: 1;
+        padding: 14px 7px;
+      }
+      .scan-icon {
+        font-size: 28px;
+      }
+      .scan-lbl {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--tx2);
+        margin-top: 5px;
+      }
+      .scan-lbl.ok {
+        color: var(--ok);
+      }
+      .scan-arr {
+        color: var(--red);
+        font-size: 18px;
+        flex-shrink: 0;
+      }
+
+      /* ══════════════════ TIMELINE ══════════════════ */
+      .tl-sec {
+        padding: 100px 0;
+        background: var(--s1);
+      }
+      .tl-item {
+        display: flex;
+        gap: 28px;
+        margin-bottom: 52px;
+        position: relative;
+      }
+      .tl-item:last-child {
+        margin-bottom: 0;
+      }
+      .tl-left {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      .tl-circle {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--red-lt);
+        border: 2px solid var(--red-bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        position: relative;
+        z-index: 1;
+        transition:
+          transform var(--fast),
+          box-shadow var(--fast);
+      }
+      .tl-item:hover .tl-circle {
+        transform: scale(1.12);
+        box-shadow: 0 0 18px rgba(232, 52, 42, 0.25);
+      }
+      .tl-line {
+        width: 2px;
+        flex: 1;
+        background: linear-gradient(to bottom, var(--red-bd), transparent);
+        margin-top: 7px;
+        min-height: 36px;
+      }
+      .tl-content {
+        padding-top: 6px;
+      }
+      .tl-tag {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--red);
+        margin-bottom: 7px;
+      }
+      .tl-h {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        margin-bottom: 7px;
+      }
+      .tl-b {
+        font-size: 14.5px;
+        color: var(--tx2);
+        line-height: 1.7;
+      }
+
+      /* ══════════════════ PHYSICAL CARD ══════════════════ */
+      .card-sec {
+        padding: 120px 0;
+        position: relative;
+        overflow: hidden;
+      }
+      .phys-card {
+        width: 100%;
+        max-width: 420px;
+        background: linear-gradient(135deg, #1a0808, #1e1010, #160808);
+        border: 1px solid var(--red-bd);
+        border-radius: 22px;
+        padding: 28px 26px;
+        position: relative;
+        overflow: hidden;
+        box-shadow:
+          0 36px 100px rgba(232, 52, 42, 0.13),
+          0 2px 0 rgba(255, 255, 255, 0.07) inset;
+        transform: perspective(900px) rotateY(-5deg) rotateX(2deg);
+        transition: transform var(--slow) var(--ease);
+        will-change: transform;
+      }
+      .phys-card:hover {
+        transform: perspective(900px) rotateY(0deg) rotateX(0deg);
+      }
+      .phys-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--red-bd);
+      }
+      .pc-glow {
+        position: absolute;
+        top: -35%;
+        right: -15%;
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(232, 52, 42, 0.1) 0%,
+          transparent 65%
+        );
+        pointer-events: none;
+      }
+      .pc-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 28px;
+      }
+      .pc-brand {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--tx3);
+      }
+      .pc-live {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 9.5px;
+        font-weight: 700;
+        color: var(--ok);
+      }
+      .pc-avatar {
+        width: 58px;
+        height: 58px;
+        border-radius: 14px;
+        background: var(--red-lt);
+        border: 1px solid var(--red-bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+        margin-bottom: 10px;
+      }
+      .pc-name {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 21px;
+        font-weight: 900;
+        color: #fff;
+      }
+      .pc-class {
+        font-size: 12px;
+        color: var(--tx3);
+        margin-top: 2px;
+      }
+      .pc-div {
+        height: 1px;
+        background: var(--bd);
+        margin: 18px 0;
+      }
+      .pc-fields {
+        display: flex;
+        gap: 18px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+      .pc-f label {
+        font-size: 8.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--tx3);
+        display: block;
+        margin-bottom: 3px;
+      }
+      .pc-f span {
+        font-size: 13px;
+        font-weight: 700;
+        color: #fff;
+      }
+      .pc-f.blood span {
+        font-size: 19px;
+        font-weight: 900;
+        color: var(--red);
+      }
+      .pc-bot {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-top: 18px;
+      }
+      .pc-num {
+        font-family: "Geist Mono", monospace;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--tx3);
+        letter-spacing: 0.13em;
+      }
+      .pc-qr {
+        width: 50px;
+        height: 50px;
+        background: var(--red-lt);
+        border: 1px solid var(--red-bd);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+      }
+
+      .cf-list {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .cf-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .cf-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        background: var(--red-lt);
+        border: 1px solid var(--red-bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 17px;
+        transition:
+          transform var(--fast),
+          box-shadow var(--fast);
+      }
+      .cf-item:hover .cf-icon {
+        transform: scale(1.1) rotate(-5deg);
+        box-shadow: 0 0 14px rgba(232, 52, 42, 0.2);
+      }
+      .cf-icon.g {
+        background: var(--ok-lt);
+        border-color: rgba(18, 161, 80, 0.2);
+      }
+      .cf-t {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-weight: 800;
+        font-size: 14.5px;
+      }
+      .cf-d {
+        font-size: 12.5px;
+        color: var(--tx3);
+        margin-top: 2px;
+      }
+
+      /* ══════════════════ BENTO FEATURES ══════════════════ */
+      .feat-sec {
+        padding: 120px 0;
+      }
+      /* Bento grid layout */
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+      }
+      .fc {
+        background: var(--s2);
+        border: 1px solid var(--bd);
+        border-radius: var(--rxl);
+        padding: 28px 26px;
+        position: relative;
+        overflow: hidden;
+        transition:
+          border-color var(--med) var(--ease),
+          transform var(--med) var(--ease),
+          box-shadow var(--med);
+      }
+      .fc:hover {
+        border-color: var(--red-bd);
+        transform: translateY(-5px);
+        box-shadow: 0 20px 56px rgba(232, 52, 42, 0.09);
+      }
+      .fc-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin-bottom: 16px;
+        transition: transform var(--fast) var(--ease);
+      }
+      .fc:hover .fc-icon {
+        transform: scale(1.08) rotate(-7deg);
+      }
+      .fc h5 {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 16.5px;
+        font-weight: 800;
+        margin-bottom: 9px;
+      }
+      .fc p {
+        font-size: 13.5px;
+        color: var(--tx2);
+        line-height: 1.68;
+        margin: 0;
+      }
+
+      /* Bento col spans */
+      .fc-7 {
+        grid-column: span 7;
+      }
+      .fc-5 {
+        grid-column: span 5;
+      }
+      .fc-4 {
+        grid-column: span 4;
+      }
+      .fc-8 {
+        grid-column: span 8;
+      }
+      .fc-3 {
+        grid-column: span 3;
+      }
+      .fc-6 {
+        grid-column: span 6;
+      }
+
+      .fc-hero {
+        background: linear-gradient(135deg, var(--s2), var(--s3));
+        padding: 36px 32px;
+      }
+      .fc-hero::after {
+        content: "";
+        position: absolute;
+        bottom: -40px;
+        right: -40px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(232, 52, 42, 0.07) 0%,
+          transparent 60%
+        );
+        pointer-events: none;
+      }
+
+      /* mini dashboard preview */
+      .dash-mini {
+        background: var(--s3);
+        border-radius: 10px;
+        padding: 14px;
+      }
+      .dash-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .dash-s {
+        flex: 1;
+        background: var(--s2);
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .dash-sl {
+        font-size: 9px;
+        color: var(--tx3);
+      }
+      .dash-sn {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 18px;
+        font-weight: 900;
+      }
+      .bars {
+        display: flex;
+        gap: 3px;
+        align-items: flex-end;
+        height: 44px;
+      }
+      .bar {
+        flex: 1;
+        background: var(--red);
+        border-radius: 3px 3px 0 0;
+      }
+
+      @media (max-width: 991px) {
+        .fc-7,
+        .fc-5,
+        .fc-4,
+        .fc-8,
+        .fc-3,
+        .fc-6 {
+          grid-column: span 12;
+        }
+        .fc-6 {
+          grid-column: span 6;
+        }
+      }
+      @media (max-width: 576px) {
+        .fc-6 {
+          grid-column: span 12;
+        }
+        .bento {
+          gap: 10px;
+        }
+      }
+
+      /* ══════════════════ TEAM — REFINED ══════════════════ */
+      .team-sec {
+        padding: 130px 0;
+        position: relative;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .team-sec::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(
+            ellipse 65% 55% at 12% 50%,
+            rgba(232, 52, 42, 0.04) 0%,
+            transparent 60%
+          ),
+          radial-gradient(
+            ellipse 45% 65% at 88% 28%,
+            rgba(59, 130, 246, 0.03) 0%,
+            transparent 60%
+          );
+      }
+
+      .team-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 20px;
+        max-width: 1000px;
+        margin: 0 auto;
+        position: relative;
+        z-index: 1;
+      }
+      .tc-ceo-wrap {
+        grid-column: 1/2;
+        grid-row: 1/3;
+        display: flex;
+      }
+      .tc-rest {
+        grid-column: 2/4;
+        grid-row: 1/3;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .tc {
+        background: var(--s2);
+        border: 1px solid var(--bd);
+        border-radius: 24px;
+        padding: 28px 26px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        cursor: none;
+        transition:
+          border-color var(--med) var(--ease),
+          transform var(--med) var(--ease),
+          box-shadow var(--med);
+      }
+      .tc::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          ellipse 80% 55% at 50% 0%,
+          rgba(232, 52, 42, 0.055),
+          transparent
+        );
+        opacity: 0;
+        transition: opacity var(--med);
+      }
+      .tc:hover::before {
+        opacity: 1;
+      }
+      .tc:hover {
+        border-color: var(--red-bd);
+        transform: translateY(-5px);
+        box-shadow: 0 24px 64px rgba(232, 52, 42, 0.1);
+      }
+
+      .tc-ceo {
+        flex: 1;
+        background: linear-gradient(155deg, #160606, #1a0808, #0c0c0e);
+        border-color: var(--red-bd);
+        padding: 36px 32px;
+        box-shadow: 0 14px 50px rgba(232, 52, 42, 0.09);
+      }
+      .tc-ceo::after {
+        content: "";
+        position: absolute;
+        bottom: -55px;
+        right: -55px;
+        width: 230px;
+        height: 230px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(232, 52, 42, 0.09) 0%,
+          transparent 65%
+        );
+        pointer-events: none;
+      }
+      .tc-ceo:hover {
+        transform: translateY(-9px);
+        box-shadow: 0 36px 90px rgba(232, 52, 42, 0.18);
+      }
+
+      .tc-av {
+        width: 76px;
+        height: 76px;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 2px solid var(--bd2);
+        background: var(--s3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 26px;
+        font-weight: 900;
+        color: var(--red);
+        transition:
+          border-color var(--fast),
+          transform var(--med);
+        position: relative;
+      }
+      .tc:hover .tc-av {
+        border-color: var(--red-bd);
+        transform: scale(1.04);
+      }
+      .tc-av img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top;
+        display: block;
+      }
+      .tc-ceo .tc-av {
+        width: 96px;
+        height: 96px;
+        border-radius: 26px;
+        border-color: var(--red-bd);
+        font-size: 34px;
+      }
+      .tc-badge {
+        position: absolute;
+        bottom: -5px;
+        right: -5px;
+        background: var(--red);
+        border: 2px solid var(--bg);
+        border-radius: 9px;
+        padding: 2px 7px;
+        font-size: 8.5px;
+        font-weight: 900;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #fff;
+      }
+      .tc-av-wrap {
+        position: relative;
+        margin-bottom: 20px;
+      }
+
+      .tc-name {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-weight: 900;
+        color: var(--tx);
+        line-height: 1.15;
+        margin-bottom: 3px;
+      }
+      .tc-ceo .tc-name {
+        font-size: 24px;
+      }
+      .tc:not(.tc-ceo) .tc-name {
+        font-size: 17px;
+      }
+      .tc-role {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      .tc-ceo .tc-role {
+        color: var(--red);
+        font-size: 11px;
+      }
+      .tc:not(.tc-ceo) .tc-role {
+        color: var(--tx3);
+      }
+      .tc-bio {
+        font-size: 13.5px;
+        color: var(--tx2);
+        line-height: 1.7;
+        flex: 1;
+      }
+      .tc-ceo .tc-bio {
+        font-size: 14.5px;
+      }
+
+      .ceo-line {
+        height: 2px;
+        background: linear-gradient(
+          90deg,
+          var(--red),
+          rgba(232, 52, 42, 0.1),
+          transparent
+        );
+        margin: 18px 0;
+        border-radius: 2px;
+      }
+      .ceo-stats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+      }
+      .ceo-stat {
+        background: var(--s3);
+        border: 1px solid var(--bd);
+        border-radius: 9px;
+        padding: 7px 11px;
+        flex: 1;
+        min-width: 64px;
+        text-align: center;
+      }
+      .ceo-sn {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 17px;
+        font-weight: 900;
+        color: var(--red);
+      }
+      .ceo-sl {
+        font-size: 8.5px;
+        color: var(--tx3);
+        margin-top: 1px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+
+      .tc-socials {
+        display: flex;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .tc-sb {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: var(--s3);
+        border: 1px solid var(--bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--tx3);
+        text-decoration: none;
+        font-size: 12px;
+        transition:
+          background var(--fast),
+          border-color var(--fast),
+          color var(--fast),
+          transform var(--fast);
+      }
+      .tc-sb:hover {
+        background: var(--red-lt);
+        border-color: var(--red-bd);
+        color: var(--red);
+        transform: translateY(-2px);
+      }
+      .tc-corner {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        font-family: "Geist Mono", monospace;
+        font-size: 9.5px;
+        font-weight: 500;
+        color: var(--tx3);
+        letter-spacing: 0.09em;
+      }
+
+      @media (max-width: 991px) {
+        .team-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+        .tc-ceo-wrap {
+          grid-column: 1/3;
+          grid-row: 1;
+        }
+        .tc-rest {
+          grid-column: 1/3;
+          grid-row: 2;
+        }
+      }
+      @media (max-width: 576px) {
+        .team-grid,
+        .tc-rest {
+          grid-template-columns: 1fr;
+        }
+        .tc-ceo-wrap {
+          grid-column: 1;
+        }
+        .tc-rest {
+          grid-column: 1;
+        }
+      }
+
+      /* ══════════════════ TRUST ══════════════════ */
+      .trust-sec {
+        padding: 72px 0;
+      }
+      .trust-c {
+        background: var(--s2);
+        border: 1px solid var(--bd);
+        border-radius: var(--rl);
+        padding: 26px 22px;
+        text-align: center;
+        transition:
+          border-color var(--fast),
+          transform var(--fast);
+      }
+      .trust-c:hover {
+        border-color: var(--red-bd);
+        transform: translateY(-3px);
+      }
+      .trust-n {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 36px;
+        font-weight: 900;
+        color: var(--red);
+        line-height: 1;
+      }
+      .trust-l {
+        font-size: 12.5px;
+        color: var(--tx3);
+        margin-top: 5px;
+      }
+
+      /* ══════════════════ TESTIMONIALS ══════════════════ */
+      .testi-sec {
+        padding: 96px 0;
+        background: var(--s1);
+      }
+      .testi-c {
+        background: var(--s2);
+        border: 1px solid var(--bd);
+        border-radius: var(--rxl);
+        padding: 28px 26px;
+        margin: 8px;
+        transition:
+          border-color var(--fast),
+          transform var(--fast);
+      }
+      .testi-c:hover {
+        border-color: var(--red-bd);
+        transform: translateY(-3px);
+      }
+      .testi-stars {
+        color: #fbbf24;
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .testi-q {
+        font-size: 14.5px;
+        color: var(--tx2);
+        line-height: 1.7;
+        margin-bottom: 18px;
+        font-style: italic;
+      }
+      .testi-q::before {
+        content: '"';
+        color: var(--red);
+        font-size: 22px;
+        font-family: serif;
+        line-height: 0;
+        vertical-align: -0.28em;
+        margin-right: 3px;
+      }
+      .testi-auth {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .testi-av {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: var(--red-lt);
+        border: 1px solid var(--red-bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--red);
+      }
+      .testi-n {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 13.5px;
+        font-weight: 800;
+      }
+      .testi-r {
+        font-size: 11.5px;
+        color: var(--tx3);
+      }
+      .owl-theme .owl-dots .owl-dot span {
+        background: var(--bd2) !important;
+        width: 6px !important;
+        height: 6px !important;
+      }
+      .owl-theme .owl-dots .owl-dot.active span {
+        background: var(--red) !important;
+        width: 22px !important;
+        border-radius: 3px;
+      }
+
+      /* ══════════════════ PRICING ══════════════════ */
+      .price-sec {
+        padding: 120px 0;
+      }
+      .price-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: var(--rxl);
+        overflow: hidden;
+        border: 1px solid var(--bd);
+      }
+      .price-table thead tr {
+        background: var(--s2);
+      }
+      .price-table th {
+        padding: 26px 22px;
+        text-align: left;
+        border-bottom: 1px solid var(--bd);
+        font-family: "Cabinet Grotesk", sans-serif;
+      }
+      .price-table td {
+        padding: 15px 22px;
+        border-bottom: 1px solid var(--bd);
+        font-size: 13.5px;
+        color: var(--tx2);
+      }
+      .price-table tr:last-child td {
+        border-bottom: none;
+      }
+      .price-table tr:hover td {
+        background: rgba(255, 255, 255, 0.015);
+      }
+      .th-lbl {
+        color: var(--tx3);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .th-b {
+        color: var(--tx);
+        font-size: 19px;
+        font-weight: 900;
+      }
+      .th-p {
+        color: var(--red);
+        font-size: 19px;
+        font-weight: 900;
+      }
+      .price-str {
+        display: block;
+        margin-top: 3px;
+        font-family: "Geist Mono", monospace;
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .price-str.free {
+        color: var(--ok);
+      }
+      .price-str.paid {
+        color: var(--red);
+      }
+      .col-p {
+        background: rgba(232, 52, 42, 0.025) !important;
+      }
+      .col-p-h {
+        background: rgba(232, 52, 42, 0.05) !important;
+        border-left: 1px solid var(--red-bd);
+        border-right: 1px solid var(--red-bd);
+      }
+      .ck-y {
+        color: var(--ok);
+        font-size: 17px;
+      }
+      .ck-n {
+        color: var(--tx3);
+        font-size: 17px;
+      }
+      .ck-pt {
+        color: #f59e0b;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .pop-tag {
+        display: inline-block;
+        background: var(--red);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        padding: 3px 9px;
+        border-radius: 99px;
+        margin-left: 9px;
+        vertical-align: middle;
+      }
+
+      /* ══════════════════ FAQ ══════════════════ */
+      .faq-sec {
+        padding: 96px 0;
+        background: var(--s1);
+      }
+      .accordion-item {
+        background: var(--s2) !important;
+        border: 1px solid var(--bd) !important;
+        border-radius: var(--r) !important;
+        margin-bottom: 10px !important;
+        overflow: hidden;
+      }
+      .accordion-button {
+        background: var(--s2) !important;
+        color: var(--tx) !important;
+        font-family: "Cabinet Grotesk", sans-serif !important;
+        font-size: 15.5px !important;
+        font-weight: 700 !important;
+        box-shadow: none !important;
+        padding: 18px 22px !important;
+      }
+      .accordion-button::after {
+        filter: invert(1) sepia(1) saturate(5) hue-rotate(330deg) !important;
+      }
+      .accordion-button:not(.collapsed) {
+        color: var(--red) !important;
+        background: var(--red-lt) !important;
+      }
+      .accordion-body {
+        background: var(--s2) !important;
+        color: var(--tx2) !important;
+        font-size: 14.5px !important;
+        line-height: 1.7 !important;
+        padding: 0 22px 18px !important;
+      }
+
+      /* ══════════════════ CTA ══════════════════ */
+      .cta-sec {
+        padding: 120px 0;
+        position: relative;
+        overflow: hidden;
+      }
+      .cta-glow {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 560px;
+        height: 360px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(232, 52, 42, 0.13) 0%,
+          transparent 60%
+        );
+        pointer-events: none;
+      }
+      .cta-ring {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        border: 1px solid var(--red-bd);
+        border-radius: 50%;
+        pointer-events: none;
+        animation: ring-p 4.5s ease-in-out infinite;
+      }
+      .cr1 {
+        width: 280px;
+        height: 280px;
+      }
+      .cr2 {
+        width: 460px;
+        height: 460px;
+        animation-delay: 0.9s;
+      }
+      .cr3 {
+        width: 640px;
+        height: 640px;
+        animation-delay: 1.8s;
+      }
+      @keyframes ring-p {
+        0%,
+        100% {
+          opacity: 0.28;
+          transform: translate(-50%, -50%) scale(1);
+        }
+        50% {
+          opacity: 0.06;
+          transform: translate(-50%, -50%) scale(1.04);
+        }
+      }
+
+      /* Form */
+      .f-field {
+        background: var(--s2);
+        border: 1px solid var(--bd2);
+        border-radius: 12px;
+        padding: 13px 16px;
+        color: var(--tx);
+        font-size: 14.5px;
+        outline: none;
+        font-family: "Instrument Sans", sans-serif;
+        transition:
+          border-color var(--fast),
+          box-shadow var(--fast);
+        width: 100%;
+      }
+      .f-field:focus {
+        border-color: var(--red-bd);
+        box-shadow: 0 0 0 3px rgba(232, 52, 42, 0.1);
+      }
+      .f-field::placeholder {
+        color: var(--tx3);
+      }
+      .f-select {
+        -webkit-appearance: none;
+        cursor: none;
+      }
+      .f-ok {
+        display: none;
+        background: var(--ok-lt);
+        border: 1px solid rgba(18, 161, 80, 0.3);
+        border-radius: 12px;
+        padding: 14px 18px;
+        color: var(--ok);
+        font-weight: 600;
+        text-align: center;
+        margin-top: 10px;
+      }
+
+      /* ══════════════════ FOOTER ══════════════════ */
+      footer {
+        background: var(--s1);
+        border-top: 1px solid var(--bd);
+        padding: 56px 0 22px;
+      }
+      .f-logo {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 18px;
+        font-weight: 900;
+      }
+      .f-logo span {
+        color: var(--red);
+      }
+      .f-desc {
+        font-size: 13.5px;
+        color: var(--tx3);
+        line-height: 1.7;
+        max-width: 240px;
+        margin-top: 10px;
+      }
+      .f-h {
+        font-family: "Cabinet Grotesk", sans-serif;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--tx3);
+        margin-bottom: 14px;
+      }
+      .f-links {
+        list-style: none;
+      }
+      .f-links li {
+        margin-bottom: 9px;
+      }
+      .f-links a {
+        font-size: 13.5px;
+        color: var(--tx2);
+        text-decoration: none;
+        transition: color var(--fast);
+      }
+      .f-links a:hover {
+        color: var(--red);
+      }
+      .f-bot {
+        border-top: 1px solid var(--bd);
+        margin-top: 44px;
+        padding-top: 22px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .f-copy {
+        font-size: 12.5px;
+        color: var(--tx3);
+      }
+      .f-soc {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: var(--s3);
+        border: 1px solid var(--bd);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--tx2);
+        text-decoration: none;
+        transition:
+          border-color var(--fast),
+          color var(--fast),
+          background var(--fast),
+          transform var(--fast);
+      }
+      .f-soc:hover {
+        border-color: var(--red-bd) !important;
+        color: var(--red) !important;
+        background: var(--red-lt) !important;
+        transform: translateY(-2px);
+      }
+
+      /* ══════════════════ SCROLL REVEAL ══════════════════ */
+      .rv {
+        opacity: 0;
+        transform: translateY(32px);
+        transition:
+          opacity 0.7s var(--ease),
+          transform 0.7s var(--ease);
+      }
+      .rv.vis {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .rv-l {
+        opacity: 0;
+        transform: translateX(-36px);
+        transition:
+          opacity 0.7s var(--ease),
+          transform 0.7s var(--ease);
+      }
+      .rv-l.vis {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .rv-r {
+        opacity: 0;
+        transform: translateX(36px);
+        transition:
+          opacity 0.7s var(--ease),
+          transform 0.7s var(--ease);
+      }
+      .rv-r.vis {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .rv-s {
+        opacity: 0;
+        transform: scale(0.93);
+        transition:
+          opacity 0.7s var(--ease),
+          transform 0.7s var(--ease);
+      }
+      .rv-s.vis {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .d1 {
+        transition-delay: 0.1s;
+      }
+      .d2 {
+        transition-delay: 0.18s;
+      }
+      .d3 {
+        transition-delay: 0.26s;
+      }
+      .d4 {
+        transition-delay: 0.34s;
+      }
+      .d5 {
+        transition-delay: 0.42s;
+      }
+
+      /* ══════════════════ RESPONSIVE ══════════════════ */
+      @media (max-width: 991px) {
+        .phys-card {
+          transform: none;
+          max-width: 340px;
+          margin: 0 auto;
+        }
+        .pb1,
+        .pb2,
+        .pb3 {
+          display: none;
+        }
+        .nav-links,
+        .nav-cta {
+          display: none !important;
+        }
+        .hamburger {
+          display: flex;
+        }
+        .hero {
+          padding: 96px 0 56px;
+        }
+        .hero-phone {
+          margin-top: 52px;
+        }
+        .tl-item {
+          flex-direction: column;
+          gap: 13px;
+        }
+        .tl-left {
+          flex-direction: row;
+        }
+        .tl-line {
+          width: 36px;
+          height: 2px;
+          min-height: unset;
+          margin-top: 0;
+          margin-left: 7px;
+          background: linear-gradient(to right, var(--red-bd), transparent);
+        }
+      }
+      @media (max-width: 575px) {
+        .hero-h1 {
+          font-size: 36px;
+        }
+        .how-sec,
+        .feat-sec,
+        .card-sec,
+        .cta-sec,
+        .team-sec {
+          padding: 64px 0;
+        }
+        .tl-sec,
+        .testi-sec,
+        .price-sec,
+        .faq-sec,
+        .trust-sec {
+          padding: 56px 0;
+        }
+        .sec-h {
+          font-size: 27px;
+        }
+        .phone {
+          width: 215px;
+        }
+        .phys-card {
+          max-width: 100%;
+        }
+        .resqid-txt {
+          font-size: clamp(38px, 12vw, 72px);
+        }
+        .scan-flow {
+          flex-direction: column;
+          gap: 3px;
+        }
+        .scan-arr {
+          transform: rotate(90deg);
+        }
+        .btn-r,
+        .btn-o {
+          padding: 11px 18px;
+          font-size: 13.5px;
+        }
+      }
+      @media (max-width: 400px) {
+        .hero-h1 {
+          font-size: 30px;
+        }
+        .d-flex.gap-3.flex-wrap {
+          flex-direction: column;
+        }
+        .btn-r,
+        .btn-o {
+          width: 100%;
+          justify-content: center;
+        }
+      }
+
+      /* ══════════════════ PULSE BUTTON ══════════════════ */
+      @keyframes btn-pulse {
+        0%,
+        100% {
+          box-shadow: 0 6px 24px rgba(232, 52, 42, 0.3);
+        }
+        50% {
+          box-shadow: 0 6px 44px rgba(232, 52, 42, 0.55);
+        }
+      }
+      .btn-r.pulse {
+        animation: btn-pulse 2.8s ease-in-out infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="c-dot" id="cDot"></div>
+    <div class="c-ring" id="cRing"></div>
+    <div id="sp"></div>
+    <button id="btt" aria-label="Back to top">
+      <i class="bi bi-arrow-up"></i>
+    </button>
+
+    <!-- NAVBAR -->
+    <nav id="nav">
+      <div class="nav-in">
+        <a href="#" class="nav-logo">
+          <div class="nav-logo-icon">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 2L4 6v7c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V6L12 2z"
+                stroke="#E8342A"
+                stroke-width="1.8"
+                stroke-linejoin="round"
+                fill="rgba(232,52,42,.1)"
+              />
+              <path
+                d="M8 12l3 3 5-5"
+                stroke="#E8342A"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <span class="nav-logo-txt">School<span>QR</span></span>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#home">Home</a></li>
+          <li><a href="#how">How It Works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#team">Team</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+        <div class="nav-cta d-flex">
+          <a href="#pricing" class="btn-o">View Plans</a>
+          <a href="#contact" class="btn-r ms-2">Get Started</a>
+        </div>
+        <button class="hamburger" id="hambBtn" aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Mobile Nav -->
+    <div class="mobile-nav" id="mobNav">
+      <button class="mob-close" id="mobClose"><i class="bi bi-x"></i></button>
+      <a href="#home" class="mob-lnk">Home</a>
+      <a href="#how" class="mob-lnk">How It Works</a>
+      <a href="#features" class="mob-lnk">Features</a>
+      <a href="#pricing" class="mob-lnk">Pricing</a>
+      <a href="#team" class="mob-lnk">Team</a>
+      <a href="#contact" class="mob-lnk">Contact</a>
+      <a href="#contact" class="btn-r mt-3">Get Started →</a>
+    </div>
+
+    <!-- HERO -->
+    <section class="hero" id="home">
+      <canvas id="hero-canvas"></canvas>
+      <div class="hero-bg"></div>
+      <div class="hero-grid"></div>
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-lg-6 hero-content">
+            <div class="hero-badge">
+              <span class="badge-dot">NEW</span>
+              QR Emergency Cards for Schools
+            </div>
+            <h1 class="hero-h1">
+              Every child carries
+              <span class="accent">their lifeline.</span>
+            </h1>
+            <p class="hero-sub">
+              SchoolQR Guardian turns a simple plastic card into a complete
+              emergency profile. First responders scan — parents stay informed.
+              Schools stay protected.
+            </p>
+            <div class="d-flex gap-3 flex-wrap hero-cta">
+              <a href="#how" class="btn-r pulse"
+                >See How It Works <i class="bi bi-arrow-right"></i
+              ></a>
+              <a href="#pricing" class="btn-o"
+                >View Pricing <i class="bi bi-chevron-right"></i
+              ></a>
+            </div>
+            <div class="hero-stats">
+              <div>
+                <div class="stat-n">2,400+</div>
+                <div class="stat-l">Active Parents</div>
+              </div>
+              <div class="stat-div"></div>
+              <div>
+                <div class="stat-n">120+</div>
+                <div class="stat-l">Partner Schools</div>
+              </div>
+              <div class="stat-div"></div>
+              <div>
+                <div class="stat-n">99.9%</div>
+                <div class="stat-l">Uptime SLA</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6 hero-phone">
+            <div class="phone">
+              <div class="notch"><div class="notch-dot"></div></div>
+              <div class="p-screen">
+                <div class="p-card">
+                  <div class="p-lbl">Guardian Emergency Card</div>
+                  <div class="p-num">RESQID-A4F9B2</div>
+                  <div class="p-status">
+                    <span class="dot-live"></span> Active
+                  </div>
+                </div>
+                <div class="p-row">
+                  <div class="p-ico">🩸</div>
+                  <div>
+                    <div class="p-rl">Blood Group</div>
+                    <div
+                      class="p-rv"
+                      style="color: var(--red); font-weight: 900"
+                    >
+                      O+
+                    </div>
+                  </div>
+                </div>
+                <div class="p-row">
+                  <div class="p-ico">⚠️</div>
+                  <div>
+                    <div class="p-rl">Allergy</div>
+                    <div class="p-rv">Peanuts, Penicillin</div>
+                  </div>
+                </div>
+                <div class="p-row">
+                  <div class="p-ico">📞</div>
+                  <div>
+                    <div class="p-rl">Emergency Contact</div>
+                    <div class="p-rv">Priya Sharma (Mother)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="p-badge pb1">
+              <div style="font-size: 18px">🔔</div>
+              <div>
+                <div class="pb-n" style="font-size: 11px; color: var(--ok)">
+                  Scan Alert
+                </div>
+                <div class="pb-t">Card scanned · 2m ago</div>
+              </div>
+            </div>
+            <div class="p-badge pb2">
+              <div style="font-size: 18px">🛡️</div>
+              <div>
+                <div class="pb-n" style="font-size: 11px">Profile</div>
+                <div class="pb-t">100% complete</div>
+              </div>
+            </div>
+            <div class="p-badge pb3">
+              <div
+                style="font-size: 10.5px; font-weight: 800; color: var(--red)"
+              >
+                LIVE
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESQID 3D — OPTIMIZED -->
+    <section class="resqid-sec">
+      <div class="resqid-lbl">Unique Student Identity</div>
+      <div class="resqid-wrap" id="rqWrap">
+        <div class="resqid-txt" id="rqTxt">RESQID</div>
+      </div>
+      <p class="resqid-sub">
+        Every card carries a unique cryptographic token — hover to feel it
+      </p>
+    </section>
+
+    <!-- TICKER -->
+    <div class="ticker-wrap">
+      <div class="ticker-track" id="tickerTrack">
+        <span class="ticker-item"
+          ><i class="bi bi-shield-check"></i> Instant QR Scan</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-phone"></i> Parent Mobile App</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-hospital"></i> Emergency Medical Profile</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-building"></i> School Dashboard</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-bell"></i> Real-time Scan Alerts</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-lock"></i> End-to-end Secure</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-credit-card"></i> Physical QR Cards</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-people"></i> Multi-child Support</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-geo-alt"></i> Scan Location Tracking</span
+        >
+        <span class="ticker-item"
+          ><i class="bi bi-clock-history"></i> Full Scan History</span
+        >
+      </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <section class="how-sec" id="how">
+      <div class="container">
+        <div class="text-center mb-5 rv">
+          <div class="sec-lbl justify-content-center">The Process</div>
+          <h2 class="sec-h">Four steps.<br /><span>Zero confusion.</span></h2>
+          <p class="sec-p mx-auto">
+            From physical card in hand to a fully active emergency profile —
+            takes less than 3 minutes.
+          </p>
+        </div>
+        <div class="row g-4">
+          <div class="col-lg-3 col-md-6 rv d1">
+            <div class="how-card">
+              <div class="step-n">01</div>
+              <div class="how-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect
+                    x="3"
+                    y="3"
+                    width="7"
+                    height="7"
+                    rx="1"
+                    stroke="#E8342A"
+                    stroke-width="1.8"
+                  />
+                  <rect
+                    x="14"
+                    y="3"
+                    width="7"
+                    height="7"
+                    rx="1"
+                    stroke="#E8342A"
+                    stroke-width="1.8"
+                  />
+                  <rect
+                    x="3"
+                    y="14"
+                    width="7"
+                    height="7"
+                    rx="1"
+                    stroke="#E8342A"
+                    stroke-width="1.8"
+                  />
+                  <rect x="5" y="5" width="3" height="3" fill="#E8342A" />
+                  <rect x="16" y="5" width="3" height="3" fill="#E8342A" />
+                  <rect x="5" y="16" width="3" height="3" fill="#E8342A" />
+                </svg>
+              </div>
+              <div class="how-t">Scan the QR Code</div>
+              <p class="how-d">
+                Anyone — parents, teachers, paramedics — can scan the QR with
+                any smartphone camera.
+              </p>
+              <div class="mt-3">
+                <span class="pill pill-r"
+                  ><i class="bi bi-camera"></i> No app needed to scan</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 rv d2">
+            <div class="how-card">
+              <div class="step-n">02</div>
+              <div class="how-icon">
+                <i
+                  class="bi bi-phone"
+                  style="color: var(--red); font-size: 20px"
+                ></i>
+              </div>
+              <div class="how-t">Register with Mobile No.</div>
+              <p class="how-d">
+                Parent downloads the Guardian app, enters their phone number and
+                card ID to claim ownership via OTP.
+              </p>
+              <div class="mt-3">
+                <span class="pill pill-g"
+                  ><i class="bi bi-shield-check"></i> OTP verified</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 rv d3">
+            <div class="how-card">
+              <div class="step-n">03</div>
+              <div class="how-icon">
+                <i
+                  class="bi bi-person-plus"
+                  style="color: var(--red); font-size: 20px"
+                ></i>
+              </div>
+              <div class="how-t">Add Student Profile</div>
+              <p class="how-d">
+                Fill in name, class, blood group, allergies, medications,
+                emergency contacts — all encrypted and stored securely.
+              </p>
+              <div class="mt-3">
+                <span class="pill pill-r"
+                  ><i class="bi bi-lock"></i> Encrypted at rest</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 rv d4">
+            <div
+              class="how-card"
+              style="
+                border-color: var(--red-bd);
+                background: linear-gradient(
+                  135deg,
+                  rgba(232, 52, 42, 0.05),
+                  var(--s2)
+                );
+              "
+            >
+              <div class="step-n" style="color: rgba(232, 52, 42, 0.16)">
+                04
+              </div>
+              <div
+                class="how-icon"
+                style="background: var(--red); border-color: var(--red)"
+              >
+                <i
+                  class="bi bi-lightning-charge"
+                  style="color: #fff; font-size: 20px"
+                ></i>
+              </div>
+              <div class="how-t">Activate Card — Done!</div>
+              <p class="how-d">
+                Tap "Activate" in the app. The card is now live. Any scan
+                instantly surfaces the emergency profile.
+              </p>
+              <div class="mt-3">
+                <span class="pill pill-g"
+                  ><span class="dot-live"></span> Card goes live instantly</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-5 rv">
+          <div class="scan-box">
+            <div class="scan-hdr">
+              <div class="scan-dot" style="background: #e8342a"></div>
+              <div
+                class="scan-dot"
+                style="background: #f59e0b; margin-left: 4px"
+              ></div>
+              <div
+                class="scan-dot"
+                style="background: #12a150; margin-left: 4px"
+              ></div>
+              <span class="scan-url"
+                >guardian.schoolqr.app/scan/RESQID-A4F9B2</span
+              >
+            </div>
+            <div class="p-4">
+              <div class="scan-flow row g-0 align-items-center text-center">
+                <div class="col scan-step">
+                  <div class="scan-icon">📱</div>
+                  <div class="scan-lbl">Scan QR</div>
+                </div>
+                <div class="col-auto scan-arr">→</div>
+                <div class="col scan-step">
+                  <div class="scan-icon">🌐</div>
+                  <div class="scan-lbl">Opens Profile</div>
+                </div>
+                <div class="col-auto scan-arr">→</div>
+                <div class="col scan-step">
+                  <div class="scan-icon">🩸</div>
+                  <div class="scan-lbl">Blood Group</div>
+                </div>
+                <div class="col-auto scan-arr">→</div>
+                <div class="col scan-step">
+                  <div class="scan-icon">📞</div>
+                  <div class="scan-lbl">Call Parent</div>
+                </div>
+                <div class="col-auto scan-arr">→</div>
+                <div class="col scan-step">
+                  <div class="scan-icon">🔔</div>
+                  <div class="scan-lbl ok">Parent Alerted</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section class="tl-sec" id="about">
+      <div class="container">
+        <div class="row g-5">
+          <div class="col-lg-5 rv-l">
+            <div class="sec-lbl">The Full Journey</div>
+            <h2 class="sec-h mb-4">
+              Built for the moment<br /><span>seconds matter.</span>
+            </h2>
+            <p style="color: var(--tx2); font-size: 15.5px; line-height: 1.8">
+              When a child is in distress, nobody has time to make phone calls
+              or search for medical records. SchoolQR Guardian puts everything a
+              responder needs in one scan.
+            </p>
+            <div class="mt-4 d-flex gap-3 flex-wrap">
+              <div
+                class="trust-c flex-fill"
+                style="text-align: left; padding: 14px 18px"
+              >
+                <div style="font-size: 20px; margin-bottom: 3px">🏥</div>
+                <div
+                  style="
+                    font-family: &quot;Cabinet Grotesk&quot;, sans-serif;
+                    font-size: 13px;
+                    font-weight: 800;
+                  "
+                >
+                  Used in real emergencies
+                </div>
+                <div
+                  style="font-size: 11.5px; color: var(--tx3); margin-top: 3px"
+                >
+                  School medical staff rely on it daily
+                </div>
+              </div>
+              <div
+                class="trust-c flex-fill"
+                style="text-align: left; padding: 14px 18px"
+              >
+                <div style="font-size: 20px; margin-bottom: 3px">🔐</div>
+                <div
+                  style="
+                    font-family: &quot;Cabinet Grotesk&quot;, sans-serif;
+                    font-size: 13px;
+                    font-weight: 800;
+                  "
+                >
+                  Parent-controlled privacy
+                </div>
+                <div
+                  style="font-size: 11.5px; color: var(--tx3); margin-top: 3px"
+                >
+                  You choose what shows on scan
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-7 rv-r">
+            <div class="tl-item">
+              <div class="tl-left">
+                <div class="tl-circle">📲</div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-content">
+                <div class="tl-tag">Step 1</div>
+                <div class="tl-h">Responder scans QR</div>
+                <p class="tl-b">
+                  Any smartphone camera can scan the code on the physical card —
+                  no app install, no login required for the scanner.
+                </p>
+              </div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-left">
+                <div class="tl-circle">📋</div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-content">
+                <div class="tl-tag">Step 2</div>
+                <div class="tl-h">Emergency profile surfaces instantly</div>
+                <p class="tl-b">
+                  Blood group, allergies, medications, doctor contact, and
+                  emergency family contacts — all in a single page, no clutter.
+                </p>
+              </div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-left">
+                <div class="tl-circle">🔔</div>
+                <div class="tl-line"></div>
+              </div>
+              <div class="tl-content">
+                <div class="tl-tag">Step 3</div>
+                <div class="tl-h">Parent gets a real-time alert</div>
+                <p class="tl-b">
+                  The moment the card is scanned, the parent receives a push
+                  notification with location, time, and scanner details.
+                </p>
+              </div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-left">
+                <div
+                  class="tl-circle"
+                  style="border-color: var(--ok); background: var(--ok-lt)"
+                >
+                  ✅
+                </div>
+              </div>
+              <div class="tl-content">
+                <div class="tl-tag" style="color: var(--ok)">Outcome</div>
+                <div class="tl-h">Child gets the right help, fast</div>
+                <p class="tl-b">
+                  No guesswork, no panic. Correct medication info prevents
+                  dangerous mistakes. Parents arrive informed. Every second
+                  saved matters.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PHYSICAL CARD -->
+    <section class="card-sec">
+      <div class="container">
+        <div class="row align-items-center g-5">
+          <div class="col-lg-6 rv-l">
+            <div class="sec-lbl">The Physical Card</div>
+            <h2 class="sec-h mb-4">
+              A credit-card sized<br /><span>emergency lifeline.</span>
+            </h2>
+            <p
+              style="
+                color: var(--tx2);
+                font-size: 15.5px;
+                line-height: 1.8;
+                margin-bottom: 26px;
+              "
+            >
+              Printed on durable PVC, laminated, sized to fit any wallet, bag,
+              or school ID holder. The QR code is tamper-resistant and unique to
+              each student.
+            </p>
+            <div class="cf-list">
+              <div class="cf-item">
+                <div class="cf-icon">🪪</div>
+                <div>
+                  <div class="cf-t">PVC Laminated, CR80 Size</div>
+                  <div class="cf-d">
+                    Standard credit card dimensions — fits everywhere
+                  </div>
+                </div>
+              </div>
+              <div class="cf-item">
+                <div class="cf-icon">🔒</div>
+                <div>
+                  <div class="cf-t">Unique Encrypted QR Token</div>
+                  <div class="cf-d">
+                    Each QR maps to a cryptographic token — cannot be forged
+                  </div>
+                </div>
+              </div>
+              <div class="cf-item">
+                <div class="cf-icon">🎨</div>
+                <div>
+                  <div class="cf-t">School-branded Design</div>
+                  <div class="cf-d">
+                    Custom logo, colours and tagline for each school
+                  </div>
+                </div>
+              </div>
+              <div class="cf-item">
+                <div class="cf-icon g">♻️</div>
+                <div>
+                  <div class="cf-t">Replaceable Without Profile Loss</div>
+                  <div class="cf-d">
+                    Lost card? Request replacement — profile stays intact
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6 rv-r d-flex justify-content-center">
+            <div>
+              <div class="phys-card" id="physCard">
+                <div class="pc-glow"></div>
+                <div class="pc-top">
+                  <div>
+                    <div class="pc-brand">Guardian · SchoolQR</div>
+                    <div
+                      style="
+                        font-size: 7.5px;
+                        color: var(--tx3);
+                        margin-top: 2px;
+                      "
+                    >
+                      Emergency Profile Card
+                    </div>
+                  </div>
+                  <div class="pc-live">
+                    <span class="dot-live"></span> Active
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-3 mb-2">
+                  <div class="pc-avatar">👦</div>
+                  <div>
+                    <div class="pc-name">Aryan Sharma</div>
+                    <div class="pc-class">Class 8-A · Delhi Public School</div>
+                  </div>
+                </div>
+                <div class="pc-div"></div>
+                <div class="pc-fields">
+                  <div class="pc-f blood">
+                    <label>Blood Group</label><span>O+</span>
+                  </div>
+                  <div class="pc-f">
+                    <label>Allergy</label><span>Peanuts</span>
+                  </div>
+                  <div class="pc-f">
+                    <label>DOB</label><span>12 Mar 2013</span>
+                  </div>
+                </div>
+                <div class="pc-f mb-3">
+                  <label>Emergency Contact</label
+                  ><span>Priya Sharma · +91 98765 43210</span>
+                </div>
+                <div class="pc-bot">
+                  <div>
+                    <div class="pc-num">RESQID-A4F9B2</div>
+                    <div
+                      style="
+                        font-size: 7.5px;
+                        color: var(--tx3);
+                        margin-top: 2px;
+                      "
+                    >
+                      Valid till Dec 2026
+                    </div>
+                  </div>
+                  <div class="pc-qr">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                      <rect
+                        x="3"
+                        y="3"
+                        width="7"
+                        height="7"
+                        rx="1"
+                        stroke="#E8342A"
+                        stroke-width="1.5"
+                      />
+                      <rect
+                        x="14"
+                        y="3"
+                        width="7"
+                        height="7"
+                        rx="1"
+                        stroke="#E8342A"
+                        stroke-width="1.5"
+                      />
+                      <rect
+                        x="3"
+                        y="14"
+                        width="7"
+                        height="7"
+                        rx="1"
+                        stroke="#E8342A"
+                        stroke-width="1.5"
+                      />
+                      <rect x="5" y="5" width="3" height="3" fill="#E8342A" />
+                      <rect x="16" y="5" width="3" height="3" fill="#E8342A" />
+                      <rect x="5" y="16" width="3" height="3" fill="#E8342A" />
+                      <path
+                        d="M14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"
+                        fill="#E8342A"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div class="text-center mt-4">
+                <span class="pill pill-g"
+                  ><i class="bi bi-shield-check"></i> Scan with any phone
+                  camera</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES — BENTO GRID -->
+    <section class="feat-sec" id="features">
+      <div class="container">
+        <div class="text-center mb-5 rv">
+          <div class="sec-lbl justify-content-center">What You Get</div>
+          <h2 class="sec-h">Everything in one<br /><span>system.</span></h2>
+        </div>
+        <div class="bento rv">
+          <!-- Hero feature — spans 7 cols -->
+          <div class="fc fc-7 fc-hero">
+            <div class="row align-items-center g-4">
+              <div class="col-md-6">
+                <div
+                  class="fc-icon"
+                  style="
+                    background: var(--red-lt);
+                    border: 1px solid var(--red-bd);
+                  "
+                >
+                  📱
+                </div>
+                <h4
+                  style="
+                    font-family: &quot;Cabinet Grotesk&quot;, sans-serif;
+                    font-size: 22px;
+                    font-weight: 900;
+                    margin-bottom: 10px;
+                  "
+                >
+                  Guardian Parent App
+                </h4>
+                <p
+                  style="font-size: 14.5px; color: var(--tx2); line-height: 1.7"
+                >
+                  Full mobile app — manage cards, update medical info, view scan
+                  history, control visibility, and get push alerts instantly.
+                </p>
+                <div class="mt-3 d-flex flex-wrap gap-2">
+                  <span class="pill pill-g">Android</span>
+                  <span class="pill pill-g">iOS</span>
+                  <span class="pill pill-g">Web PWA</span>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="dash-mini">
+                  <div class="dash-row">
+                    <div class="dash-s">
+                      <div class="dash-sl">Total Scans</div>
+                      <div class="dash-sn" style="color: var(--red)">1,240</div>
+                    </div>
+                    <div class="dash-s">
+                      <div class="dash-sl">Active Cards</div>
+                      <div class="dash-sn" style="color: var(--ok)">847</div>
+                    </div>
+                  </div>
+                  <div
+                    style="
+                      font-size: 10px;
+                      color: var(--tx3);
+                      margin-bottom: 7px;
+                    "
+                  >
+                    Weekly scan activity
+                  </div>
+                  <div class="bars">
+                    <div class="bar" style="height: 30%; opacity: 0.4"></div>
+                    <div class="bar" style="height: 52%; opacity: 0.5"></div>
+                    <div class="bar" style="height: 70%; opacity: 0.62"></div>
+                    <div class="bar" style="height: 56%; opacity: 0.78"></div>
+                    <div class="bar" style="height: 92%"></div>
+                    <div class="bar" style="height: 64%; opacity: 0.7"></div>
+                    <div class="bar" style="height: 42%; opacity: 0.5"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- School Dashboard — 5 cols -->
+          <div class="fc fc-5">
+            <div
+              class="fc-icon"
+              style="
+                background: var(--ok-lt);
+                border: 1px solid rgba(18, 161, 80, 0.2);
+              "
+            >
+              🏫
+            </div>
+            <h5>School Dashboard</h5>
+            <p>
+              Full admin panel — view all student cards, manage print batches,
+              monitor scan anomalies, download reports, and configure
+              school-wide settings.
+            </p>
+            <div class="mt-3">
+              <span class="pill pill-r" style="font-size: 9.5px"
+                >Premium Only</span
+              >
+            </div>
+          </div>
+
+          <!-- Real-time Alerts — 4 cols -->
+          <div class="fc fc-4">
+            <div
+              class="fc-icon"
+              style="
+                background: rgba(59, 130, 246, 0.1);
+                border: 1px solid rgba(59, 130, 246, 0.2);
+              "
+            >
+              🔔
+            </div>
+            <h5>Real-time Scan Alerts</h5>
+            <p>
+              Push notification the instant anyone scans your child's card —
+              with location, device info, and timestamp.
+            </p>
+          </div>
+
+          <!-- Anomaly Detection — 4 cols -->
+          <div class="fc fc-4">
+            <div
+              class="fc-icon"
+              style="
+                background: rgba(245, 158, 11, 0.1);
+                border: 1px solid rgba(245, 158, 11, 0.2);
+              "
+            >
+              ⚠️
+            </div>
+            <h5>Anomaly Detection</h5>
+            <p>
+              Flags suspicious scan patterns — multiple rapid scans from
+              different locations, off-hours scans, and more.
+            </p>
+          </div>
+
+          <!-- Privacy Controls — 4 cols -->
+          <div class="fc fc-4">
+            <div
+              class="fc-icon"
+              style="background: var(--red-lt); border: 1px solid var(--red-bd)"
+            >
+              🔒
+            </div>
+            <h5>Privacy Controls</h5>
+            <p>
+              Three visibility levels — Public, Minimal, Hidden. You control
+              exactly which fields appear when scanned.
+            </p>
+          </div>
+
+          <!-- Scan History — 6 cols -->
+          <div class="fc fc-6">
+            <div class="d-flex gap-4 align-items-start">
+              <div
+                class="fc-icon flex-shrink-0"
+                style="
+                  background: var(--ok-lt);
+                  border: 1px solid rgba(18, 161, 80, 0.2);
+                "
+              >
+                📋
+              </div>
+              <div>
+                <h5>Complete Scan History</h5>
+                <p>
+                  Every scan ever made — paginated, filterable by result type,
+                  expandable with full scan details including location and
+                  device.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Replacement — 6 cols -->
+          <div class="fc fc-6">
+            <div class="d-flex gap-4 align-items-start">
+              <div
+                class="fc-icon flex-shrink-0"
+                style="
+                  background: rgba(59, 130, 246, 0.1);
+                  border: 1px solid rgba(59, 130, 246, 0.2);
+                "
+              >
+                🔄
+              </div>
+              <div>
+                <h5>Card Replacement Flow</h5>
+                <p>
+                  Lost or damaged card? Request a replacement in-app. Profile
+                  transfers to the new card automatically — no re-registration
+                  needed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRUST -->
+    <section class="trust-sec">
+      <div class="container">
+        <div class="row g-3">
+          <div class="col-6 col-lg-3 rv">
+            <div class="trust-c">
+              <div class="trust-n" data-target="2400" data-suffix="+">
+                2,400+
+              </div>
+              <div class="trust-l">Active Parent Users</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3 rv d1">
+            <div class="trust-c">
+              <div class="trust-n" data-target="120" data-suffix="+">120+</div>
+              <div class="trust-l">Partner Schools</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3 rv d2">
+            <div class="trust-c">
+              <div class="trust-n" data-target="18000" data-suffix="+">
+                18K+
+              </div>
+              <div class="trust-l">Cards Activated</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3 rv d3">
+            <div class="trust-c">
+              <div class="trust-n" data-target="99.9" data-suffix="%">
+                99.9%
+              </div>
+              <div class="trust-l">Uptime Guarantee</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TESTIMONIALS -->
+    <section class="testi-sec">
+      <div class="container">
+        <div class="text-center mb-5 rv">
+          <div class="sec-lbl justify-content-center">Real Stories</div>
+          <h2 class="sec-h">
+            Parents trust it.<br /><span>Schools love it.</span>
+          </h2>
+        </div>
+        <div class="owl-carousel owl-theme" id="testiCarousel">
+          <div class="testi-c">
+            <div class="testi-stars">★★★★★</div>
+            <p class="testi-q">
+              My son had an allergic reaction at school. The nurse scanned his
+              card within seconds and knew exactly what to avoid. I got a call
+              and a push notification before I even knew what happened.
+            </p>
+            <div class="testi-auth">
+              <div class="testi-av">P</div>
+              <div>
+                <div class="testi-n">Priya Menon</div>
+                <div class="testi-r">Mother · Class 6 Parent, Bangalore</div>
+              </div>
+            </div>
+          </div>
+          <div class="testi-c">
+            <div class="testi-stars">★★★★★</div>
+            <p class="testi-q">
+              We onboarded 400 students in a single afternoon using the school
+              dashboard. The batch card printing and token management saved us
+              weeks of manual work.
+            </p>
+            <div class="testi-auth">
+              <div class="testi-av">R</div>
+              <div>
+                <div class="testi-n">Ramesh Iyer</div>
+                <div class="testi-r">Principal · DPS Hyderabad</div>
+              </div>
+            </div>
+          </div>
+          <div class="testi-c">
+            <div class="testi-stars">★★★★★</div>
+            <p class="testi-q">
+              The privacy controls are fantastic. I can show blood group and
+              emergency contact but keep medical conditions hidden — exactly
+              what I wanted.
+            </p>
+            <div class="testi-auth">
+              <div class="testi-av">A</div>
+              <div>
+                <div class="testi-n">Aarti Sharma</div>
+                <div class="testi-r">Mother · Mumbai</div>
+              </div>
+            </div>
+          </div>
+          <div class="testi-c">
+            <div class="testi-stars">★★★★★</div>
+            <p class="testi-q">
+              Our school medical team relied entirely on paper cards before. Now
+              everything is digital, up-to-date, and we get anomaly alerts if
+              something looks off. Night and day difference.
+            </p>
+            <div class="testi-auth">
+              <div class="testi-av">S</div>
+              <div>
+                <div class="testi-n">Sister Mary</div>
+                <div class="testi-r">School Nurse · Chennai</div>
+              </div>
+            </div>
+          </div>
+          <div class="testi-c">
+            <div class="testi-stars">★★★★★</div>
+            <p class="testi-q">
+              Setup took literally 4 minutes. Scanned the QR on my kid's card,
+              entered my number, filled in her profile, hit activate. That was
+              it.
+            </p>
+            <div class="testi-auth">
+              <div class="testi-av">V</div>
+              <div>
+                <div class="testi-n">Vijay Krishnamurthy</div>
+                <div class="testi-r">Father · Pune</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TEAM -->
+    <section class="team-sec" id="team">
+      <div class="container">
+        <div class="text-center mb-5 rv">
+          <div class="sec-lbl justify-content-center">The People</div>
+          <h2 class="sec-h">
+            Built by students who<br /><span>care about safety.</span>
+          </h2>
+          <p class="sec-p mx-auto">
+            We are four final-year B.Tech students from CEMK building our first
+            startup. SchoolQR Guardian started as an idea to create a simple
+            technology that can help students receive help quickly during
+            emergencies.
+          </p>
+        </div>
+
+        <div class="team-grid rv">
+          <!-- FOUNDER -->
+          <div class="tc-ceo-wrap">
+            <div class="tc tc-ceo">
+              <div class="tc-corner">01 / FOUNDER</div>
+
+              <div class="tc-av-wrap">
+                <div class="tc-av">
+                  <img
+                    src="https://api.dicebear.com/7.x/notionists/svg?seed=ceo&backgroundColor=1a0808"
+                    alt="Founder"
+                    onerror="
+                      this.style.display = 'none';
+                      this.parentNode.innerHTML = 'AK';
+                    "
+                  />
+                </div>
+                <div class="tc-badge">Founder</div>
+              </div>
+
+              <div class="tc-name">Animesh Karan</div>
+              <div class="tc-role">Backend Developer & Founder</div>
+
+              <div class="ceo-line"></div>
+
+              <p class="tc-bio">
+                Final-year B.Tech student at CEMK and backend developer of the
+                RESQID platform. Animesh is responsible for building the system
+                architecture, QR identity system, and backend services that
+                power the SchoolQR Guardian safety platform. He initiated this
+                startup idea with the goal of creating a simple but impactful
+                technology that can help children receive help quickly during
+                emergencies.
+              </p>
+
+              <div class="ceo-stats">
+                <div class="ceo-stat">
+                  <div class="ceo-sn">B.Tech</div>
+                  <div class="ceo-sl">CEMK</div>
+                </div>
+                <div class="ceo-stat">
+                  <div class="ceo-sn">4th</div>
+                  <div class="ceo-sl">Year Student</div>
+                </div>
+                <div class="ceo-stat">
+                  <div class="ceo-sn">1st</div>
+                  <div class="ceo-sl">Startup Idea</div>
+                </div>
+              </div>
+
+              <div class="tc-socials">
+                <a
+                  href="https://www.linkedin.com/in/animesh-karan-664247368/"
+                  class="tc-sb"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  ><i class="bi bi-linkedin"></i
+                ></a>
+                <a href="mailto:karananimesh144@gmail.com" class="tc-sb"
+                  ><i class="bi bi-envelope"></i
+                ></a>
+              </div>
+            </div>
+          </div>
+
+          <!-- REST TEAM -->
+          <div class="tc-rest">
+            <!-- Souvik -->
+            <div class="tc">
+              <div class="tc-corner">02</div>
+
+              <div class="tc-av-wrap">
+                <div class="tc-av">
+                  <img
+                    src="https://api.dicebear.com/7.x/notionists/svg?seed=cto&backgroundColor=060c1a"
+                    alt="Developer"
+                    onerror="
+                      this.style.display = 'none';
+                      this.parentNode.innerHTML = 'SM';
+                    "
+                  />
+                </div>
+              </div>
+
+              <div class="tc-name">Souvik Mahata</div>
+              <div class="tc-role">Full Stack Developer</div>
+
+              <p class="tc-bio">
+                Final-year B.Tech student at CEMK. Souvik works on the core
+                development of the platform including frontend interfaces,
+                backend integration, and system architecture to ensure the
+                RESQID platform runs smoothly and reliably.
+              </p>
+
+              <div class="tc-socials">
+                <a
+                  href="https://www.linkedin.com/in/souvik-mahata-a2b803239"
+                  rel="noopener noreferrer"
+                  class="tc-sb"
+                  target="_blank"
+                >
+                  <i class="bi bi-linkedin"></i>
+                </a>
+                <a href="mailto:souvikmahata834@gmail.com" class="tc-sb"
+                  ><i class="bi bi-envelope"></i
+                ></a>
+              </div>
+            </div>
+
+            <!-- Shruti -->
+            <div class="tc">
+              <div class="tc-corner">03</div>
+
+              <div class="tc-av-wrap">
+                <div class="tc-av">
+                  <img
+                    src="https://api.dicebear.com/7.x/notionists/svg?seed=cpo&backgroundColor=0c1a06"
+                    alt="AI Engineer"
+                    onerror="
+                      this.style.display = 'none';
+                      this.parentNode.innerHTML = 'SK';
+                    "
+                  />
+                </div>
+              </div>
+
+              <div class="tc-name">Shruti Kumari Mahata</div>
+              <div class="tc-role">AI Engineer</div>
+
+              <p class="tc-bio">
+                Final-year B.Tech student at CEMK specializing in artificial
+                intelligence. Shruti contributes to intelligent system design
+                and research that can enhance safety features and improve future
+                capabilities of the RESQID platform.
+              </p>
+
+              <div class="tc-socials">
+                <a
+                  href="https://www.linkedin.com/in/shruti-kumari-mahata-416724239"
+                  target="_blank"
+                  class="tc-sb"
+                  rel="noopener noreferrer"
+                >
+                  <i class="bi bi-linkedin"></i>
+                </a>
+                <a href="mailto:shrutikumarimahata@gmail.com" class="tc-sb"
+                  ><i class="bi bi-envelope"></i
+                ></a>
+              </div>
+            </div>
+
+            <!-- Soumya -->
+            <div class="tc">
+              <div class="tc-corner">04</div>
+
+              <div class="tc-av-wrap">
+                <div class="tc-av">
+                  <img
+                    src="https://api.dicebear.com/7.x/notionists/svg?seed=growth&backgroundColor=1a160a"
+                    alt="Developer"
+                    onerror="
+                      this.style.display = 'none';
+                      this.parentNode.innerHTML = 'SG';
+                    "
+                  />
+                </div>
+              </div>
+
+              <div class="tc-name">Soumya Kumar Ghosh</div>
+              <div class="tc-role">Full Stack Developer</div>
+
+              <p class="tc-bio">
+                Final-year B.Tech student at CEMK. Soumya works on both frontend
+                and backend development of the RESQID platform and focuses on
+                building user-friendly features that make the system easy to use
+                for parents and schools.
+              </p>
+
+              <div class="tc-socials">
+                <a
+                  href="https://www.linkedin.com/in/soumya-ghosh-23631b289/"
+                  target="_blank"
+                  class="tc-sb"
+                  rel="noopener noreferrer"
+                  ><i class="bi bi-linkedin"></i
+                ></a>
+                <a href="mailto:ghoshsoumya512@gmail.com" class="tc-sb"
+                  ><i class="bi bi-envelope"></i
+                ></a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section class="price-sec" id="pricing">
+      <div class="container">
+        <div class="text-center mb-5 rv">
+          <div class="sec-lbl justify-content-center">Simple Pricing</div>
+          <h2 class="sec-h">
+            Transparent plans.<br /><span>No hidden fees.</span>
+          </h2>
+          <p class="sec-p mx-auto">
+            Start with Basic for just ₹249. Upgrade to Premium when your school
+            wants the full dashboard experience.
+          </p>
+        </div>
+
+        <!-- Mobile cards -->
+        <div class="row g-4 d-lg-none mb-5 rv">
+          <div class="col-md-6">
+            <div
+              style="
+                background: var(--s2);
+                border: 1px solid var(--bd);
+                border-radius: var(--rxl);
+                padding: 28px 26px;
+                height: 100%;
+              "
+            >
+              <div class="pill pill-g mb-3">Basic</div>
+              <div
+                style="
+                  font-family: &quot;Cabinet Grotesk&quot;, sans-serif;
+                  font-size: 34px;
+                  font-weight: 900;
+                  margin-bottom: 3px;
+                "
+              >
+                ₹249
+                <span
+                  style="font-size: 13px; color: var(--tx3); font-weight: 400"
+                  >/ per card</span
+                >
+              </div>
+              <p
+                style="
+                  font-size: 13.5px;
+                  color: var(--tx2);
+                  margin-bottom: 22px;
+                "
+              >
+                Everything a parent needs to protect their child.
+              </p>
+              <ul
+                style="
+                  list-style: none;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 11px;
+                  margin: 0;
+                  padding: 0;
+                "
+              >
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Physical QR Card
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Emergency Profile
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Parent Mobile App
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Scan Alerts (Push)
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> 1-year Card Validity
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx3);
+                  "
+                >
+                  <span>✗</span> School Dashboard
+                </li>
+              </ul>
+              <a href="#contact" class="btn-o d-block text-center mt-4"
+                >Get Started — ₹249</a
+              >
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div
+              style="
+                background: linear-gradient(
+                  135deg,
+                  rgba(232, 52, 42, 0.07),
+                  var(--s2)
+                );
+                border: 1px solid var(--red-bd);
+                border-radius: var(--rxl);
+                padding: 28px 26px;
+                height: 100%;
+                position: relative;
+              "
+            >
+              <div class="pill pill-r mb-3">
+                Premium <span class="pop-tag">Popular</span>
+              </div>
+              <div
+                style="
+                  font-family: &quot;Cabinet Grotesk&quot;, sans-serif;
+                  font-size: 34px;
+                  font-weight: 900;
+                  margin-bottom: 3px;
+                  color: var(--red);
+                "
+              >
+                ₹349
+                <span
+                  style="font-size: 13px; color: var(--tx3); font-weight: 400"
+                  >/ student / year</span
+                >
+              </div>
+              <p
+                style="
+                  font-size: 13.5px;
+                  color: var(--tx2);
+                  margin-bottom: 22px;
+                "
+              >
+                Full school deployment with admin control.
+              </p>
+              <ul
+                style="
+                  list-style: none;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 11px;
+                  margin: 0;
+                  padding: 0;
+                "
+              >
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Everything in Basic
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> School Admin Dashboard
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Batch Card Printing
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Scan Anomaly Detection
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> SMS + Email Alerts
+                </li>
+                <li
+                  style="
+                    display: flex;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    color: var(--tx2);
+                  "
+                >
+                  <span style="color: var(--ok)">✓</span> Custom Card Branding
+                </li>
+              </ul>
+              <a href="#contact" class="btn-r d-block text-center mt-4"
+                >Contact Sales</a
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="d-none d-lg-block rv">
+          <table class="price-table">
+            <thead>
+              <tr>
+                <th style="width: 42%">
+                  <span class="th-lbl">Feature Comparison</span>
+                </th>
+                <th style="width: 29%">
+                  <span class="th-b">Basic</span
+                  ><span class="price-str free">₹249 · per card</span>
+                </th>
+                <th style="width: 29%" class="col-p-h">
+                  <span class="th-p">Premium</span
+                  ><span class="price-str paid">₹349 · student / year</span
+                  ><span class="pop-tag ms-2">Popular</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td
+                  colspan="3"
+                  style="
+                    padding: 9px 22px;
+                    background: var(--s3);
+                    font-size: 10.5px;
+                    font-weight: 700;
+                    letter-spacing: 0.12em;
+                    text-transform: uppercase;
+                    color: var(--tx3);
+                  "
+                >
+                  Core Card
+                </td>
+              </tr>
+              <tr>
+                <td>Physical QR Card (PVC Laminated)</td>
+                <td><i class="bi bi-check-circle-fill ck-y"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Emergency Medical Profile</td>
+                <td><i class="bi bi-check-circle-fill ck-y"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Card Validity</td>
+                <td style="font-weight: 700">1 Year</td>
+                <td class="col-p" style="font-weight: 700; color: var(--red)">
+                  2 Years
+                </td>
+              </tr>
+              <tr>
+                <td>Card Replacement Request</td>
+                <td><i class="bi bi-check-circle-fill ck-y"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colspan="3"
+                  style="
+                    padding: 9px 22px;
+                    background: var(--s3);
+                    font-size: 10.5px;
+                    font-weight: 700;
+                    letter-spacing: 0.12em;
+                    text-transform: uppercase;
+                    color: var(--tx3);
+                  "
+                >
+                  Parent App
+                </td>
+              </tr>
+              <tr>
+                <td>Guardian Parent Mobile App</td>
+                <td><i class="bi bi-check-circle-fill ck-y"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Push Scan Notifications</td>
+                <td><i class="bi bi-check-circle-fill ck-y"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>SMS + Email Notifications</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Scan History (full)</td>
+                <td><span class="ck-pt">Last 30 days</span></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i> Unlimited
+                </td>
+              </tr>
+              <tr>
+                <td>Privacy / Visibility Controls</td>
+                <td><i class="bi bi-check-circle-fill ck-y"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Multi-child Support</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colspan="3"
+                  style="
+                    padding: 9px 22px;
+                    background: var(--s3);
+                    font-size: 10.5px;
+                    font-weight: 700;
+                    letter-spacing: 0.12em;
+                    text-transform: uppercase;
+                    color: var(--tx3);
+                  "
+                >
+                  School Dashboard
+                </td>
+              </tr>
+              <tr>
+                <td>School Admin Dashboard</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Batch Card Printing & Management</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Scan Anomaly Detection</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Custom Card Branding</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>Trusted Scan Zones</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td>API Webhooks</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colspan="3"
+                  style="
+                    padding: 9px 22px;
+                    background: var(--s3);
+                    font-size: 10.5px;
+                    font-weight: 700;
+                    letter-spacing: 0.12em;
+                    text-transform: uppercase;
+                    color: var(--tx3);
+                  "
+                >
+                  Support
+                </td>
+              </tr>
+              <tr>
+                <td>Support</td>
+                <td>Email (72h)</td>
+                <td class="col-p" style="color: var(--red); font-weight: 700">
+                  Priority (4h SLA)
+                </td>
+              </tr>
+              <tr>
+                <td>Dedicated Account Manager</td>
+                <td><i class="bi bi-x-circle ck-n"></i></td>
+                <td class="col-p">
+                  <i class="bi bi-check-circle-fill ck-y"></i>
+                </td>
+              </tr>
+              <tr style="background: var(--s2)">
+                <td></td>
+                <td style="padding: 22px">
+                  <a
+                    href="#contact"
+                    class="btn-o d-inline-flex"
+                    style="width: 100%; justify-content: center"
+                    >Get Basic — ₹249</a
+                  >
+                </td>
+                <td class="col-p" style="padding: 22px">
+                  <a
+                    href="#contact"
+                    class="btn-r d-inline-flex"
+                    style="width: 100%; justify-content: center"
+                    >Contact Sales →</a
+                  >
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p
+          class="text-center mt-4 rv"
+          style="font-size: 12.5px; color: var(--tx3)"
+        >
+          💡 Schools purchasing 100+ cards get volume pricing.
+          <a href="#contact" style="color: var(--red); text-decoration: none"
+            >Talk to us →</a
+          >
+        </p>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq-sec">
+      <div class="container">
+        <div class="text-center mb-5 rv">
+          <div class="sec-lbl justify-content-center">FAQ</div>
+          <h2 class="sec-h">Questions parents<br /><span>always ask.</span></h2>
+        </div>
+        <div class="row justify-content-center">
+          <div class="col-lg-8 rv">
+            <div class="accordion" id="faqAcc">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#f1"
+                  >
+                    Does the person scanning need to install an app?
+                  </button>
+                </h2>
+                <div
+                  id="f1"
+                  class="accordion-collapse collapse show"
+                  data-bs-parent="#faqAcc"
+                >
+                  <div class="accordion-body">
+                    No. Anyone can scan the QR code with their phone's default
+                    camera — it opens a web page directly. Only the parent needs
+                    to install the Guardian app to manage the profile.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#f2"
+                  >
+                    Is my child's data safe?
+                  </button>
+                </h2>
+                <div
+                  id="f2"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAcc"
+                >
+                  <div class="accordion-body">
+                    All sensitive fields are encrypted at rest. You have full
+                    privacy controls — set visibility to Minimal or Hidden at
+                    any time. We never sell or share data with third parties.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#f3"
+                  >
+                    What happens if the card is lost or stolen?
+                  </button>
+                </h2>
+                <div
+                  id="f3"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAcc"
+                >
+                  <div class="accordion-body">
+                    Block the card instantly in the app with one tap. Request a
+                    replacement — when the new card arrives, activate it and all
+                    profile data transfers automatically. The old card becomes
+                    permanently invalid.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#f4"
+                  >
+                    Can I manage multiple children?
+                  </button>
+                </h2>
+                <div
+                  id="f4"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAcc"
+                >
+                  <div class="accordion-body">
+                    Yes — on the Premium plan. You can link multiple students to
+                    a single parent account, each with their own card, profile,
+                    and notification settings.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#f5"
+                  >
+                    How does the school dashboard work?
+                  </button>
+                </h2>
+                <div
+                  id="f5"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAcc"
+                >
+                  <div class="accordion-body">
+                    Schools get a web-based admin panel where they can manage
+                    all student cards, print batches, monitor scan logs, set up
+                    trusted scan zones, configure card templates, and receive
+                    anomaly alerts.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#f6"
+                  >
+                    What notification do I get when the card is scanned?
+                  </button>
+                </h2>
+                <div
+                  id="f6"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#faqAcc"
+                >
+                  <div class="accordion-body">
+                    Push notification with the date, time, approximate location
+                    (city), and device type. Unusual scans are flagged as
+                    anomalies with a high-priority alert.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT / CTA -->
+    <section class="cta-sec" id="contact">
+      <div class="cta-glow"></div>
+      <div class="cta-ring cr1"></div>
+      <div class="cta-ring cr2"></div>
+      <div class="cta-ring cr3"></div>
+      <div class="container position-relative" style="z-index: 2">
+        <div class="row justify-content-center">
+          <div class="col-lg-8 text-center rv">
+            <div class="sec-lbl justify-content-center">Ready to deploy?</div>
+            <h2 class="sec-h mb-4">
+              Protect every student<br /><span>starting today.</span>
+            </h2>
+            <p
+              style="
+                font-size: 16.5px;
+                color: var(--tx2);
+                line-height: 1.7;
+                margin-bottom: 36px;
+              "
+            >
+              Talk to our team — we'll help you onboard your school, design your
+              cards, and have your first batch activated within a week.
+            </p>
+            <div class="row justify-content-center g-3 mb-5">
+              <div class="col-md-5">
+                <input
+                  type="text"
+                  id="cName"
+                  placeholder="Your full name"
+                  class="f-field"
+                />
+              </div>
+              <div class="col-md-5">
+                <input
+                  type="email"
+                  id="cEmail"
+                  placeholder="School email address"
+                  class="f-field"
+                />
+              </div>
+              <div class="col-md-10">
+                <input
+                  type="text"
+                  id="cSchool"
+                  placeholder="School name + city"
+                  class="f-field"
+                />
+              </div>
+              <div class="col-md-5">
+                <select id="cStudents" class="f-field f-select">
+                  <option value="" disabled selected>Number of students</option>
+                  <option>Under 50 students</option>
+                  <option>50 – 200 students</option>
+                  <option>200 – 500 students</option>
+                  <option>500 – 1,000 students</option>
+                  <option>1,000+ students</option>
+                </select>
+              </div>
+              <div class="col-md-5">
+                <select id="cPlan" class="f-field f-select">
+                  <option value="" disabled selected>
+                    Plan you're interested in
+                  </option>
+                  <option>Basic (₹249/card)</option>
+                  <option>Premium (₹349/student/year)</option>
+                  <option>Not sure — show me both</option>
+                </select>
+              </div>
+              <div class="col-md-10">
+                <input
+                  type="text"
+                  id="cPhone"
+                  placeholder="WhatsApp / phone number (optional)"
+                  class="f-field"
+                />
+              </div>
+              <div class="col-md-10">
+                <button
+                  id="cSubmit"
+                  class="btn-r w-100 justify-content-center"
+                  style="padding: 15px; font-size: 15.5px"
+                >
+                  Request a Demo <i class="bi bi-arrow-right"></i>
+                </button>
+                <div class="f-ok" id="fOk">
+                  <i class="bi bi-check-circle-fill me-2"></i> Request sent!
+                  We'll contact you within 24 hours.
+                </div>
+              </div>
+            </div>
+            <div class="d-flex justify-content-center gap-4 flex-wrap">
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 7px;
+                  font-size: 12.5px;
+                  color: var(--tx3);
+                "
+              >
+                <i class="bi bi-check-circle-fill" style="color: var(--ok)"></i
+                >No commitment required
+              </div>
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 7px;
+                  font-size: 12.5px;
+                  color: var(--tx3);
+                "
+              >
+                <i class="bi bi-check-circle-fill" style="color: var(--ok)"></i
+                >Reply within 24 hours
+              </div>
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 7px;
+                  font-size: 12.5px;
+                  color: var(--tx3);
+                "
+              >
+                <i class="bi bi-check-circle-fill" style="color: var(--ok)"></i
+                >Free pilot for 50 students
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+      <div class="container">
+        <div class="row g-5">
+          <div class="col-lg-4">
+            <div class="f-logo">School<span>QR</span> Guardian</div>
+            <p class="f-desc">
+              QR-based emergency profile system for schools and parents across
+              India. Every child carries their lifeline.
+            </p>
+            <div class="d-flex gap-3 mt-4">
+              <a href="#" class="f-soc"><i class="bi bi-twitter-x"></i></a>
+              <a href="#" class="f-soc"><i class="bi bi-linkedin"></i></a>
+              <a href="#" class="f-soc"><i class="bi bi-instagram"></i></a>
+            </div>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="f-h">Product</div>
+            <ul class="f-links">
+              <li><a href="#how">How It Works</a></li>
+              <li><a href="#features">Features</a></li>
+              <li><a href="#pricing">Pricing</a></li>
+              <li><a href="#">Mobile App</a></li>
+              <li><a href="#">School Dashboard</a></li>
+            </ul>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="f-h">Company</div>
+            <ul class="f-links">
+              <li><a href="#about">About Us</a></li>
+              <li><a href="#team">Team</a></li>
+              <li><a href="#">Blog</a></li>
+              <li><a href="#contact">Contact</a></li>
+            </ul>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="f-h">Legal</div>
+            <ul class="f-links">
+              <li><a href="#">Privacy Policy</a></li>
+              <li><a href="#">Terms of Service</a></li>
+              <li><a href="#">Data Processing</a></li>
+              <li><a href="#">Security</a></li>
+            </ul>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="f-h">Contact</div>
+            <ul class="f-links">
+              <li>
+                <a href="mailto:hello@schoolqr.app">hello@schoolqr.app</a>
+              </li>
+              <li><a href="tel:+918000000000">+91 800 000 0000</a></li>
+              <li><a href="#">Live Chat</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="f-bot">
+          <p class="f-copy">
+            © 2025 SchoolQR Guardian. All rights reserved. Made with ❤️ in
+            India.
+          </p>
+          <div class="d-flex gap-3 align-items-center mt-3 mt-md-0">
+            <span class="pill pill-g" style="font-size: 9.5px"
+              ><span class="dot-live"></span> All systems operational</span
+            >
+            <span style="font-size: 11.5px; color: var(--tx3)">v1.0.0</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js"></script>
+
+    <script>
+      /* ═══════════════════════════════════════════════
+     PERFORMANCE-FIRST JS
+     Key changes vs original:
+     1. Cursor: CSS transition handles ring lag — no JS lerp rAF loop
+     2. RESQID: CSS handles idle & gradient. JS only updates transform
+        on mousemove via ONE rAF pass (no setInterval conflict)
+     3. Hero canvas: throttled mousemove, paused when offscreen
+     4. Team tilt: rAF-throttled, no raw mousemove thrashing
+     5. Counters, reveal, navbar: unchanged (already lightweight)
+  ═══════════════════════════════════════════════ */
+
+      /* ──── CURSOR ──── */
+      (function () {
+        var dot = document.getElementById("cDot");
+        var ring = document.getElementById("cRing");
+        document.addEventListener(
+          "mousemove",
+          function (e) {
+            dot.style.left = e.clientX + "px";
+            dot.style.top = e.clientY + "px";
+            ring.style.left = e.clientX + "px";
+            ring.style.top = e.clientY + "px";
+          },
+          { passive: true },
+        );
+        document
+          .querySelectorAll("a,button,.tc,.fc,.how-card,.testi-c,.trust-c")
+          .forEach(function (el) {
+            el.addEventListener("mouseenter", function () {
+              dot.classList.add("hov");
+              ring.classList.add("hov");
+            });
+            el.addEventListener("mouseleave", function () {
+              dot.classList.remove("hov");
+              ring.classList.remove("hov");
+            });
+          });
+      })();
+
+      /* ──── MAIN JQUERY ──── */
+      $(document).ready(function () {
+        /* Ticker duplicate */
+        var t = document.getElementById("tickerTrack");
+        if (t) t.innerHTML += t.innerHTML;
+
+        /* Scroll progress + navbar + active link + reveal */
+        $(window).on("scroll", function () {
+          var s = $(this).scrollTop();
+          var dh = $(document).height() - $(window).height();
+          document.getElementById("sp").style.width = (s / dh) * 100 + "%";
+          if (s > 45) $("#nav").addClass("sc");
+          else $("#nav").removeClass("sc");
+          if (s > 380) $("#btt").addClass("show");
+          else $("#btt").removeClass("show");
+          [
+            "home",
+            "how",
+            "features",
+            "pricing",
+            "team",
+            "about",
+            "contact",
+          ].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var r = el.getBoundingClientRect();
+            if (r.top <= 100 && r.bottom >= 100) {
+              $(".nav-links a").removeClass("act");
+              $('.nav-links a[href="#' + id + '"]').addClass("act");
+            }
+          });
+          revealAll();
+          startCounters();
+        });
+
+        $("#btt").on("click", function () {
+          $("html,body").animate({ scrollTop: 0 }, 580);
+        });
+
+        /* Mobile nav */
+        $("#hambBtn").on("click", function () {
+          $("#mobNav").addClass("open");
+          $(this).addClass("open");
+        });
+        $("#mobClose").on("click", function () {
+          $("#mobNav").removeClass("open");
+          $("#hambBtn").removeClass("open");
+        });
+        $(".mob-lnk").on("click", function () {
+          $("#mobNav").removeClass("open");
+          $("#hambBtn").removeClass("open");
+        });
+        $(document).on("keydown", function (e) {
+          if (e.key === "Escape") {
+            $("#mobNav").removeClass("open");
+            $("#hambBtn").removeClass("open");
+          }
+        });
+
+        /* Owl */
+        $("#testiCarousel").owlCarousel({
+          loop: true,
+          margin: 18,
+          autoplay: true,
+          autoplayTimeout: 4800,
+          autoplayHoverPause: true,
+          dots: true,
+          nav: false,
+          responsive: {
+            0: { items: 1 },
+            768: { items: 2 },
+            1200: { items: 3 },
+          },
+        });
+
+        /* Smooth anchors */
+        $('a[href^="#"]').on("click", function (e) {
+          var tgt = $(this.getAttribute("href"));
+          if (tgt.length) {
+            e.preventDefault();
+            $("html,body")
+              .stop()
+              .animate({ scrollTop: tgt.offset().top - 76 }, 760);
+          }
+        });
+
+        /* Reveal */
+        function revealAll() {
+          var wh = window.innerHeight - 70;
+          document
+            .querySelectorAll(".rv,.rv-l,.rv-r,.rv-s")
+            .forEach(function (el) {
+              if (el.getBoundingClientRect().top < wh) el.classList.add("vis");
+            });
+        }
+        revealAll();
+
+        /* Counters */
+        var countersGo = false;
+        function startCounters() {
+          if (countersGo) return;
+          var ts = document.querySelector(".trust-sec");
+          if (!ts || ts.getBoundingClientRect().top >= window.innerHeight - 60)
+            return;
+          countersGo = true;
+          document
+            .querySelectorAll(".trust-n[data-target]")
+            .forEach(function (el) {
+              var target = parseFloat(el.dataset.target),
+                suffix = el.dataset.suffix || "";
+              var cur = 0,
+                steps = 85,
+                inc = target / steps;
+              var tmr = setInterval(function () {
+                cur += inc;
+                if (cur >= target) {
+                  cur = target;
+                  clearInterval(tmr);
+                }
+                el.textContent =
+                  (target >= 1000
+                    ? Math.floor(cur).toLocaleString("en-IN")
+                    : cur.toFixed(target % 1 !== 0 ? 1 : 0)) + suffix;
+              }, 17);
+            });
+        }
+
+        /* Physical card tilt — rAF throttled */
+        var pc = document.getElementById("physCard");
+        if (pc) {
+          var pcRaf = null;
+          pc.addEventListener("mousemove", function (e) {
+            if (pcRaf) return; // throttle
+            pcRaf = requestAnimationFrame(function () {
+              var r = pc.getBoundingClientRect();
+              var x = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+              var y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+              pc.style.transform =
+                "perspective(900px) rotateY(" +
+                x * 11 +
+                "deg) rotateX(" +
+                -y * 7 +
+                "deg)";
+              pcRaf = null;
+            });
+          });
+          pc.addEventListener("mouseleave", function () {
+            if (pcRaf) {
+              cancelAnimationFrame(pcRaf);
+              pcRaf = null;
+            }
+            pc.style.transform =
+              "perspective(900px) rotateY(-5deg) rotateX(2deg)";
+          });
+        }
+
+        /* Form */
+        $("#cSubmit").on("click", function () {
+          var ok = true;
+          ["#cName", "#cEmail", "#cSchool", "#cStudents"].forEach(function (s) {
+            var $f = $(s);
+            if (!$f.val() || !$f.val().trim()) {
+              ok = false;
+              $f.css({
+                "border-color": "var(--red)",
+                "box-shadow": "0 0 0 3px rgba(232,52,42,.12)",
+              });
+              setTimeout(function () {
+                $f.css({ "border-color": "var(--bd2)", "box-shadow": "none" });
+              }, 1400);
+            }
+          });
+          if (!ok) return;
+          var $b = $(this);
+          $b.html('<i class="bi bi-hourglass-split me-2"></i>Sending...')
+            .css("opacity", ".7")
+            .prop("disabled", true);
+          setTimeout(function () {
+            $("#fOk").fadeIn(280);
+            $b.hide();
+          }, 1100);
+        });
+      });
+
+      /* ──── HERO CANVAS — optimized ──── */
+      (function () {
+        var canvas = document.getElementById("hero-canvas");
+        var ctx = canvas.getContext("2d");
+        var W,
+          H,
+          pts = [],
+          mouse = { x: -999, y: -999 },
+          animOn = true;
+        var N = 58; // reduced particle count
+
+        function resize() {
+          W = canvas.width = canvas.offsetWidth;
+          H = canvas.height = canvas.offsetHeight;
+        }
+
+        function Pt() {
+          this.x = Math.random() * W;
+          this.y = Math.random() * H;
+          this.vx = (Math.random() - 0.5) * 0.45;
+          this.vy = (Math.random() - 0.5) * 0.45;
+          this.r = Math.random() * 2 + 0.7;
+          this.red = Math.random() < 0.16;
+          this.a = Math.random() * 0.38 + 0.08;
+        }
+
+        function init() {
+          pts = [];
+          for (var i = 0; i < N; i++) pts.push(new Pt());
+        }
+
+        var lastFrame = 0;
+        function draw(ts) {
+          if (!animOn) return;
+          // Cap at ~50fps to reduce GPU load
+          if (ts - lastFrame < 20) {
+            requestAnimationFrame(draw);
+            return;
+          }
+          lastFrame = ts;
+
+          ctx.clearRect(0, 0, W, H);
+          for (var i = 0; i < N; i++) {
+            for (var j = i + 1; j < N; j++) {
+              var dx = pts[i].x - pts[j].x,
+                dy = pts[i].y - pts[j].y;
+              var d = Math.sqrt(dx * dx + dy * dy);
+              if (d < 130) {
+                var a = (1 - d / 130) * 0.16;
+                ctx.beginPath();
+                ctx.moveTo(pts[i].x, pts[i].y);
+                ctx.lineTo(pts[j].x, pts[j].y);
+                ctx.strokeStyle =
+                  pts[i].red || pts[j].red
+                    ? "rgba(232,52,42," + a * 3 + ")"
+                    : "rgba(255,255,255," + a + ")";
+                ctx.lineWidth = pts[i].red || pts[j].red ? 0.8 : 0.4;
+                ctx.stroke();
+              }
+            }
+          }
+          for (var i = 0; i < N; i++) {
+            var p = pts[i];
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = p.red
+              ? "rgba(232,52,42,.85)"
+              : "rgba(255,255,255," + p.a + ")";
+            ctx.fill();
+            var mdx = p.x - mouse.x,
+              mdy = p.y - mouse.y,
+              md = Math.sqrt(mdx * mdx + mdy * mdy);
+            if (md < 120) {
+              p.x += (mdx / md) * 1.5;
+              p.y += (mdy / md) * 1.5;
+            }
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0 || p.x > W) p.vx *= -1;
+            if (p.y < 0 || p.y > H) p.vy *= -1;
+          }
+          requestAnimationFrame(draw);
+        }
+
+        // Pause when hero not visible
+        new IntersectionObserver(function (en) {
+          animOn = en[0].isIntersecting;
+          if (animOn) requestAnimationFrame(draw);
+        }).observe(document.getElementById("home"));
+
+        // Throttle mousemove
+        var mRaf = null;
+        canvas.addEventListener(
+          "mousemove",
+          function (e) {
+            if (mRaf) return;
+            mRaf = requestAnimationFrame(function () {
+              var r = canvas.getBoundingClientRect();
+              mouse.x = e.clientX - r.left;
+              mouse.y = e.clientY - r.top;
+              mRaf = null;
+            });
+          },
+          { passive: true },
+        );
+        canvas.addEventListener("mouseleave", function () {
+          mouse.x = -999;
+          mouse.y = -999;
+        });
+
+        window.addEventListener(
+          "resize",
+          function () {
+            resize();
+            init();
+          },
+          { passive: true },
+        );
+        resize();
+        init();
+        requestAnimationFrame(draw);
+      })();
+
+      /* ──── RESQID 3D — PERFORMANCE FIXED ──────────────────────
+     Problems in original:
+     - setInterval (16ms) + rAF (16ms) = 2× redundant loops
+     - Both updating same transform = jank
+     - CSS animation + JS animation fighting each other
+
+     Fix:
+     - ONE rAF loop only
+     - CSS handles idle float & gradient (GPU)
+     - JS tilt only active during hover, pauses CSS float via class
+     - Lerp runs in JS but only when hovered
+  ──────────────────────────────────────────────────────────── */
+      (function () {
+        var wrap = document.getElementById("rqWrap");
+        var txt = document.getElementById("rqTxt");
+        if (!wrap || !txt) return;
+
+        var tRX = 0,
+          tRY = 0,
+          cRX = 0,
+          cRY = 0,
+          hovered = false;
+        var rafId = null;
+
+        function lerp(a, b, t) {
+          return a + (b - a) * t;
+        }
+
+        function tick() {
+          if (!hovered) {
+            rafId = null;
+            return;
+          } // stop loop when not hovered
+          cRX = lerp(cRX, tRX, 0.09);
+          cRY = lerp(cRY, tRY, 0.09);
+          txt.style.transform =
+            "perspective(700px) rotateX(" +
+            cRX +
+            "deg) rotateY(" +
+            cRY +
+            "deg)";
+          rafId = requestAnimationFrame(tick);
+        }
+
+        wrap.addEventListener("mouseenter", function () {
+          hovered = true;
+          txt.classList.add("js-tilt"); // pauses CSS idle animation
+          txt.style.filter = "drop-shadow(0 0 40px rgba(232,52,42,.55))";
+          if (!rafId) rafId = requestAnimationFrame(tick);
+        });
+
+        wrap.addEventListener(
+          "mousemove",
+          function (e) {
+            var r = wrap.getBoundingClientRect();
+            var nx = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+            var ny = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+            tRY = nx * 28;
+            tRX = -ny * 18;
+          },
+          { passive: true },
+        );
+
+        wrap.addEventListener("mouseleave", function () {
+          hovered = false;
+          tRX = 0;
+          tRY = 0;
+          // Smooth reset
+          (function reset() {
+            cRX = lerp(cRX, 0, 0.1);
+            cRY = lerp(cRY, 0, 0.1);
+            txt.style.transform =
+              "perspective(700px) rotateX(" +
+              cRX +
+              "deg) rotateY(" +
+              cRY +
+              "deg)";
+            if (Math.abs(cRX) > 0.05 || Math.abs(cRY) > 0.05) {
+              requestAnimationFrame(reset);
+            } else {
+              // Fully released — let CSS handle idle
+              txt.style.transform = "";
+              txt.classList.remove("js-tilt");
+              txt.style.filter = "drop-shadow(0 0 28px rgba(232,52,42,.35))";
+            }
+          })();
+        });
+
+        // Touch support
+        wrap.addEventListener(
+          "touchmove",
+          function (e) {
+            var touch = e.touches[0],
+              r = wrap.getBoundingClientRect();
+            tRY = ((touch.clientX - r.left - r.width / 2) / (r.width / 2)) * 22;
+            tRX =
+              -((touch.clientY - r.top - r.height / 2) / (r.height / 2)) * 14;
+          },
+          { passive: true },
+        );
+      })();
+
+      /* ──── TEAM TILT — rAF throttled ──── */
+      document.querySelectorAll(".tc").forEach(function (card) {
+        var raf = null;
+        card.addEventListener(
+          "mousemove",
+          function (e) {
+            if (raf) return;
+            var self = this;
+            raf = requestAnimationFrame(function () {
+              var r = self.getBoundingClientRect();
+              var x = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+              var y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+              var s = self.classList.contains("tc-ceo") ? 5 : 7;
+              self.style.transform =
+                "translateY(-5px) perspective(700px) rotateX(" +
+                -y * s * 0.5 +
+                "deg) rotateY(" +
+                x * s * 0.5 +
+                "deg)";
+              raf = null;
+            });
+          },
+          { passive: true },
+        );
+        card.addEventListener("mouseleave", function () {
+          if (raf) {
+            cancelAnimationFrame(raf);
+            raf = null;
+          }
+          this.style.transform = "";
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,37 +1,31 @@
 /**
- * TabBar — Custom bottom tab bar with floating centre Scan button.
- *
+ * TabBar — Custom bottom tab bar.
  * Used in app/(app)/_layout.jsx as the tabBar prop.
- * The centre SCAN tab has an elevated red button that floats above the bar.
  */
 
-import { colors, radius, shadows, spacing, typography } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
-    withSpring
+    withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 
-// ── SVG Icons ─────────────────────────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
 const HomeIcon = ({ active }) => (
     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
         <Path
             d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
             stroke={active ? colors.primary : colors.textTertiary}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
         />
         <Polyline
             points="9 22 9 12 15 12 15 22"
             stroke={active ? colors.primary : colors.textTertiary}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
         />
     </Svg>
 );
@@ -50,14 +44,17 @@ const QrIcon = ({ active }) => (
     </Svg>
 );
 
-const ScanIcon = () => (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+const EmergencyIcon = ({ active }) => (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
         <Path
-            d="M3 4a1 1 0 011-1h4v4H4a1 1 0 01-1-1V4zM16 3h4a1 1 0 011 1v3a1 1 0 01-1 1h-4V3zM4 16h4v5H5a1 1 0 01-1-1v-4zM16 17h4a1 1 0 011 1v2a1 1 0 01-1 1h-4v-4zM9 9h6v6H9V9z"
-            stroke={colors.white}
-            strokeWidth={2.2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"
+            stroke={active ? colors.primary : colors.textTertiary}
+            strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+        />
+        <Path
+            d="M12 8v4M12 16h.01"
+            stroke={active ? colors.primary : colors.textTertiary}
+            strokeWidth={2} strokeLinecap="round"
         />
     </Svg>
 );
@@ -120,55 +117,45 @@ function TabItem({ label, icon, active, onPress }) {
     );
 }
 
+// ── Tabs config with related routes ───────────────────────────────────────────
+const TABS = [
+    { name: 'home', label: 'HOME', Icon: HomeIcon, relatedRoutes: [] },
+    { name: 'qr', label: 'QR', Icon: QrIcon, relatedRoutes: [] },
+    { name: 'emergency', label: 'SOS', Icon: EmergencyIcon, relatedRoutes: [] },
+    { name: 'updates', label: 'UPDATE', Icon: UpdatesIcon, relatedRoutes: [] },
+    {
+        name: 'settings',
+        label: 'SETTINGS',
+        Icon: SettingsIcon,
+        relatedRoutes: ['scan-history', 'visibility', 'support', 'change-phone', 'add-child']
+    },
+];
+
 // ── Main TabBar ───────────────────────────────────────────────────────────────
 
-export default function TabBar({ state, descriptors, navigation }) {
+export default function TabBar({ state, navigation }) {
     const insets = useSafeAreaInsets();
-    const scanScale = useSharedValue(1);
 
-    const scanAnimStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scanScale.value }],
-    }));
-
-    const handleScanPress = () => {
-        scanScale.value = withSpring(0.9, { damping: 12 }, () => {
-            scanScale.value = withSpring(1);
-        });
-        navigation.navigate('scan');
+    const getCurrentRouteName = () => {
+        const currentRoute = state.routes[state.index];
+        return currentRoute?.name;
     };
 
-    const tabs = [
-        { name: 'home', label: 'HOME', Icon: HomeIcon },
-        { name: 'qr', label: 'QR', Icon: QrIcon },
-        { name: 'scan', label: 'SCAN', Icon: null },   // centre button
-        { name: 'updates', label: 'UPDATE', Icon: UpdatesIcon },
-        { name: 'settings', label: 'SETTINGS', Icon: SettingsIcon },
-    ];
+    const isTabActive = (tab, currentRouteName) => {
+        // Exact match
+        if (currentRouteName === tab.name) return true;
+        // Check related routes
+        if (tab.relatedRoutes?.includes(currentRouteName)) return true;
+        return false;
+    };
+
+    const currentRouteName = getCurrentRouteName();
 
     return (
         <View style={[styles.container, { paddingBottom: insets.bottom || spacing[3] }]}>
-            {/* Bar background */}
             <View style={styles.bar}>
-                {tabs.map((tab, index) => {
-                    const isFocused = state.routes[state.index]?.name === tab.name;
-
-                    // ── Centre SCAN button ─────────────────────────
-                    if (tab.name === 'scan') {
-                        return (
-                            <View key="scan" style={styles.scanWrap}>
-                                <Animated.View style={[scanAnimStyle]}>
-                                    <TouchableOpacity
-                                        onPress={handleScanPress}
-                                        activeOpacity={0.85}
-                                        style={[styles.scanBtn, shadows.scanBtn]}
-                                    >
-                                        <ScanIcon />
-                                    </TouchableOpacity>
-                                </Animated.View>
-                                <Text style={styles.tabLabel}>SCAN</Text>
-                            </View>
-                        );
-                    }
+                {TABS.map((tab, index) => {
+                    const isFocused = isTabActive(tab, currentRouteName);
 
                     return (
                         <TabItem
@@ -193,6 +180,8 @@ export default function TabBar({ state, descriptors, navigation }) {
         </View>
     );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     container: {
@@ -222,21 +211,5 @@ const styles = StyleSheet.create({
     },
     tabLabelActive: {
         color: colors.primary,
-    },
-
-    // ── Scan centre button ────────────────────────
-    scanWrap: {
-        flex: 1,
-        alignItems: 'center',
-        gap: spacing[1],
-    },
-    scanBtn: {
-        width: 52,
-        height: 52,
-        borderRadius: radius['3xl'],
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: -20,
     },
 });

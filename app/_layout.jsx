@@ -1,94 +1,94 @@
-// app/_layout.jsx — Production Grade
-// Fixes applied:
-//   [FIX-1] Global JS error handler (ErrorUtils) for catching async/runtime crashes
-//   [FIX-2] LogBox suppresses known non-critical noise
-//   [FIX-3] i18n loading state shows visible text (helps debug hangs on Android)
-//   [FIX-4] Removed deprecated expo-router/babel reference in comments
-//   [FIX-5] Circular dep guard: setLogoutHandler uses lazy ref pattern
-//   [FIX-6] SplashScreen.preventAutoHideAsync guarded properly
-//   [FIX-7] ErrorBoundary catches render errors
-//   [FIX-8] Stack screens explicitly declared
+/**
+ * app/_layout.jsx
+ *
+ * FIXED: Proper auth + profile initialization order
+ * FIXED: No race conditions between auth and profile
+ * FIXED: Profile refreshes only when authenticated
+ */
 
+import BiometricGate from "@/components/auth/BiometricGate";
+import { toastConfig } from '@/config/toast.config';
 import { useAuthStore } from "@/features/auth/auth.store";
+import { useProfileStore } from "@/features/profile/profile.store";
+import { useInactivityLock } from "@/hooks/useInactivityLock";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { initI18n } from "@/i18n";
 import { setLogoutHandler } from "@/lib/api/apiClient";
-import AuthProvider from "@/providers/AuthProvider";
+import { isDeviceRooted } from "@/lib/security/deviceSecurity";
+import { checkAppIntegrity } from "@/lib/security/integrityCheck";
+import AppProviders from "@/providers";
+import { useBiometricStore } from "@/store/biometricStore";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import {
     Component,
+    useCallback,
     useEffect,
     useRef,
     useState,
 } from "react";
 import {
+    Alert,
+    AppState,
+    BackHandler,
     LogBox,
     StyleSheet,
     Text,
     View,
 } from "react-native";
+import Toast from "react-native-toast-message";
 
-// ── Suppress known non-critical warnings ──────────────────────────────────────
+// ── Suppress known non-actionable warnings ────────────────────────────────────
 LogBox.ignoreLogs([
     "expo-router/babel is deprecated",
     "Require cycle: src/lib/api/apiClient",
 ]);
 
-// ── Global JS Error Handler ───────────────────────────────────────────────────
-// Catches async/runtime errors that ErrorBoundary cannot catch
-// (promise rejections, event handlers, native callbacks)
+// ── Global JS error handler ───────────────────────────────────────────────────
 if (typeof ErrorUtils !== "undefined") {
-    const originalHandler = ErrorUtils.getGlobalHandler();
+    const original = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error, isFatal) => {
         console.error(
-            `[GlobalError] isFatal=${isFatal} | message: ${error?.message}`,
+            `[GlobalError] isFatal=${isFatal}`,
+            error?.message,
+            error?.stack
         );
-        console.error("[GlobalError] stack:", error?.stack);
-        // Call the original handler so React Native's default behaviour is preserved
-        if (typeof originalHandler === "function") {
-            originalHandler(error, isFatal);
-        }
+        original?.(error, isFatal);
     });
 }
 
-// ── Splash: keep visible until i18n + auth hydration are both ready ───────────
-SplashScreen.preventAutoHideAsync().catch(() => {
-    // Already prevented — safe to ignore
-});
+// Keep splash visible until we explicitly hide it
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const I18N_TIMEOUT_MS = 5_000; // Fall back to default language after 5 s
+const I18N_TIMEOUT_MS = 5_000;
 
-// ── Error Boundary ────────────────────────────────────────────────────────────
-// Must be a class component — hooks cannot catch render-phase errors.
+// ─── Error Boundary ───────────────────────────────────────────────────────────
 class RootErrorBoundary extends Component {
-    constructor(props) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
+    state = { hasError: false, error: null };
 
     static getDerivedStateFromError(error) {
         return { hasError: true, error };
     }
 
     componentDidCatch(error, info) {
-        // Wire up Sentry / Bugsnag here if needed
         console.error("[RootErrorBoundary]", error, info?.componentStack);
     }
-
-    handleRetry = () => {
-        this.setState({ hasError: false, error: null });
-    };
 
     render() {
         if (this.state.hasError) {
             return (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorTitle}>Something went wrong</Text>
-                    <Text style={styles.errorMessage}>
-                        {this.state.error?.message ?? "An unexpected error occurred"}
+                <View style={s.errorContainer}>
+                    <Text style={s.errorTitle}>Something went wrong</Text>
+                    <Text style={s.errorMessage}>
+                        {this.state.error?.message ?? "Unexpected error"}
                     </Text>
-                    <Text style={styles.retryButton} onPress={this.handleRetry}>
+                    <Text
+                        style={s.retryBtn}
+                        onPress={() =>
+                            this.setState({ hasError: false, error: null })
+                        }
+                    >
                         Tap to retry
                     </Text>
                 </View>
@@ -98,117 +98,231 @@ class RootErrorBoundary extends Component {
     }
 }
 
-// ── Root Layout ───────────────────────────────────────────────────────────────
-export default function RootLayout() {
-    const [i18nReady, setI18nReady] = useState(false);
-    const [i18nError, setI18nError] = useState(null);
-    const logoutHandlerSet = useRef(false);
-
-    // ── Wire logout handler exactly once ────────────────────────────────────
-    useEffect(() => {
-        if (logoutHandlerSet.current) return;
-        logoutHandlerSet.current = true;
-
-        setLogoutHandler(() => {
-            useAuthStore.getState().logout();
-        });
-    }, []);
-
-    // ── Init i18n with timeout + error handling ─────────────────────────────
-    useEffect(() => {
-        let settled = false;
-
-        const settle = (error = null) => {
-            if (settled) return;
-            settled = true;
-            if (error) setI18nError(error);
-            setI18nReady(true);
-        };
-
-        // Safety net: if i18n never resolves, unblock the app after timeout
-        const timer = setTimeout(() => {
-            settle(new Error("I18N_TIMEOUT"));
-        }, I18N_TIMEOUT_MS);
-
-        initI18n()
-            .then(() => settle())
-            .catch((err) => settle(err))
-            .finally(() => clearTimeout(timer));
-
-        return () => {
-            clearTimeout(timer);
-            settled = true; // prevent setState on unmounted component
-        };
-    }, []);
-
-    // ── Log i18n fallback in dev ────────────────────────────────────────────
-    useEffect(() => {
-        if (i18nError) {
-            console.warn(
-                "[RootLayout] i18n init failed — using default language.",
-                i18nError.message,
-            );
-        }
-    }, [i18nError]);
-
-    // ── Block render until i18n is ready ────────────────────────────────────
-    // Splash screen is still visible here — no spinner flash on native.
-    // The <Text> is shown only if the splash somehow dismisses early (web / dev).
-    if (!i18nReady) {
-        return (
-            <View style={styles.loadingContainer}>
-                {/* Visible only if splash is not covering — useful for debugging */}
-                <Text style={styles.loadingText}>Loading…</Text>
-            </View>
-        );
-    }
+// ─── Root Layout Content ──────────────────────────────────────────────────────
+function RootLayoutContent({ handleRootLayout }) {
+    const panHandlers = useInactivityLock();
 
     return (
-        <RootErrorBoundary>
-            <AuthProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(app)" />
-                </Stack>
-            </AuthProvider>
-        </RootErrorBoundary>
+        <AppProviders>
+            <RootErrorBoundary>
+                <View
+                    style={s.root}
+                    onLayout={handleRootLayout}
+                    {...panHandlers}
+                >
+                    <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="index" />
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(app)" />
+                        <Stack.Screen
+                            name="(modals)"
+                            options={{ presentation: "modal" }}
+                        />
+                    </Stack>
+
+                    <StatusBar style="auto" />
+                    <Toast config={toastConfig} />
+                    <BiometricGate />
+                </View>
+            </RootErrorBoundary>
+        </AppProviders>
     );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+// ─── Root Layout ──────────────────────────────────────────────────────────────
+export default function RootLayout() {
+    usePushNotifications();
+
+    const [i18nReady, setI18nReady] = useState(false);
+    const [authReady, setAuthReady] = useState(false);
+
+    // ── Store selectors ───────────────────────────────────────────────────────
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const isHydrated = useAuthStore((s) => s.isHydrated);
+    const hydrateAuth = useAuthStore((s) => s.hydrate);
+    const logoutAuth = useAuthStore((s) => s.logout);
+    const hydrateProfile = useProfileStore((s) => s.hydrate);
+    const clearProfile = useProfileStore((s) => s.clear);
+    const onLogin = useProfileStore((s) => s.onLogin);
+    const onLogout = useProfileStore((s) => s.onLogout);
+    const setAppReady = useBiometricStore((s) => s.setAppReady);
+
+    // ── Security checks ───────────────────────────────────────────────────────
+    useEffect(() => {
+        (async () => {
+            const [rooted, integrityOk] = await Promise.all([
+                isDeviceRooted(),
+                Promise.resolve(checkAppIntegrity()),
+            ]);
+
+            if (rooted) {
+                Alert.alert(
+                    "Rooted Device Detected",
+                    "This app cannot run on rooted devices to protect your data.",
+                    [{ text: "OK", onPress: () => BackHandler.exitApp() }],
+                    { cancelable: false }
+                );
+                return;
+            }
+
+            if (!integrityOk) {
+                Alert.alert(
+                    "Security Error",
+                    "App integrity check failed. Please reinstall from the official store.",
+                    [{ text: "OK", onPress: () => BackHandler.exitApp() }],
+                    { cancelable: false }
+                );
+            }
+        })();
+    }, []);
+
+    // ── FIXED: Auth hydration FIRST, then profile ─────────────────────────────
+    const hasHydrated = useRef(false);
+    useEffect(() => {
+        if (hasHydrated.current) return;
+        hasHydrated.current = true;
+
+        const init = async () => {
+            console.log("[RootLayout] Starting initialization...");
+
+            // Step 1: Hydrate auth store first
+            await hydrateAuth();
+            console.log("[RootLayout] Auth hydrated, isAuthenticated:", isAuthenticated);
+            setAuthReady(true);
+
+            // Step 2: Hydrate profile store (it will wait for auth internally)
+            await hydrateProfile();
+            console.log("[RootLayout] Profile hydrated");
+        };
+
+        init().catch((err) => {
+            console.error("[RootLayout] Init error:", err);
+            setAuthReady(true);
+        });
+    }, [hydrateAuth, hydrateProfile, isAuthenticated]);
+
+    // ── Wire global logout handler ────────────────────────────────────────────
+    const handleLogout = useCallback(async () => {
+        console.log("[RootLayout] Global logout triggered");
+        await onLogout(); // Clear profile store
+        await logoutAuth(); // Clear auth store
+    }, [logoutAuth, onLogout]);
+
+    useEffect(() => {
+        setLogoutHandler(handleLogout);
+        return () => setLogoutHandler(null);
+    }, [handleLogout]);
+
+    // ── FIXED: Subscribe to auth changes to sync profile store ─────────────────
+    useEffect(() => {
+        const unsubscribe = useAuthStore.subscribe((state, prevState) => {
+            // On login
+            if (state.isAuthenticated && !prevState.isAuthenticated) {
+                console.log("[RootLayout] Auth changed: LOGIN detected");
+                onLogin();
+            }
+            // On logout
+            if (!state.isAuthenticated && prevState.isAuthenticated) {
+                console.log("[RootLayout] Auth changed: LOGOUT detected");
+                onLogout();
+            }
+        });
+
+        return unsubscribe;
+    }, [onLogin, onLogout]);
+
+    // ── i18n init with timeout fallback ──────────────────────────────────────
+    useEffect(() => {
+        let settled = false;
+        const settle = () => {
+            if (!settled) {
+                settled = true;
+                setI18nReady(true);
+            }
+        };
+        const timer = setTimeout(settle, I18N_TIMEOUT_MS);
+        initI18n()
+            .then(settle)
+            .catch((err) => {
+                console.warn("[RootLayout] i18n failed:", err?.message);
+                settle();
+            })
+            .finally(() => clearTimeout(timer));
+        return () => {
+            clearTimeout(timer);
+            settled = true;
+        };
+    }, []);
+
+    // ── Hide splash when BOTH i18n + auth are ready ──────────────────────────
+    useEffect(() => {
+        if (i18nReady && authReady) {
+            SplashScreen.hideAsync().catch(() => { });
+        }
+    }, [i18nReady, authReady]);
+
+    // ── FIXED: Refresh profile when app comes to foreground (ONLY if authenticated) ──
+    const fetchIfStale = useProfileStore((s) => s.fetchIfStale);
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            console.log("[RootLayout] Not authenticated, skipping foreground refresh");
+            return;
+        }
+
+        const sub = AppState.addEventListener("change", (state) => {
+            if (state === "active") {
+                console.log("[RootLayout] App foregrounded, checking stale profile");
+                fetchIfStale();
+            }
+        });
+        return () => sub.remove();
+    }, [isAuthenticated, fetchIfStale]);
+
+    // ── Mark navigator as ready on first layout pass ──────────────────────────
+    const handleRootLayout = useCallback(() => {
+        setAppReady(true);
+    }, [setAppReady]);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Block render until both i18n and auth are ready
+    // ══════════════════════════════════════════════════════════════════════════
+    if (!i18nReady || !authReady) {
+        return <View style={s.loadingContainer} />;
+    }
+
+    return <RootLayoutContent handleRootLayout={handleRootLayout} />;
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+    root: { flex: 1 },
     loadingContainer: {
         flex: 1,
-        backgroundColor: "#FFFFFF",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    loadingText: {
-        fontSize: 14,
-        color: "#AAAAAA",
+        backgroundColor: "#1a1a1a",
     },
     errorContainer: {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
         padding: 24,
-        backgroundColor: "#FFFFFF",
+        backgroundColor: "#0D0D0F",
     },
     errorTitle: {
         fontSize: 18,
         fontWeight: "600",
         marginBottom: 8,
-        color: "#1A1A1A",
+        color: "#FFFFFF",
     },
     errorMessage: {
         fontSize: 14,
-        color: "#666666",
+        color: "#888888",
         textAlign: "center",
         marginBottom: 24,
     },
-    retryButton: {
+    retryBtn: {
         fontSize: 15,
         fontWeight: "500",
-        color: "#E8342A",
+        color: "#FF3B30",
     },
 });

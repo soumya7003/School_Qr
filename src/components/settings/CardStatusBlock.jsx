@@ -4,13 +4,13 @@
  */
 
 import { colors, radius, spacing, typography } from '@/theme';
-import { fmtDate, tokenStatusMeta } from '@/utils/helpers';
+import { fmtDate, tokenMeta } from '@/utils/profile.utils';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function CardStatusBlock({ token, card }) {
     if (!token && !card) return null;
 
-    const meta = tokenStatusMeta(token?.status);
+    const meta = tokenMeta(token?.status, colors);
     const isExpiringSoon = token?.expires_at &&
         (new Date(token.expires_at) - new Date()) < 30 * 24 * 60 * 60 * 1000;
 

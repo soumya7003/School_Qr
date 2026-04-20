@@ -1,147 +1,265 @@
-/**
- * @file src/features/profile/profile.api.js
- *
- * Card-based parent registration — two API calls.
- *
- * Backend routes (parent.routes.js → parent.controller.js):
- *   POST /api/parent/auth/register/init
- *     Body:    { card_number: string, phone: string }
- *     Returns: { success: true, data: { nonce: string, masked_phone: string } }
- *
- *   POST /api/parent/auth/register/verify
- *     Body:    { nonce: string, otp: string }
- *     Returns: { success: true, data: { jwt: string, student_id: string, isProfileComplete: false } }
- *
- * SECURITY:
- *   - card_number trimmed + uppercased before sending — matches DB RESQID-XXXXXX format
- *   - phone E.164 validated client-side before it leaves the device
- *   - nonce is 64-char hex (crypto.randomBytes(32)) — never logged, never stored to disk
- *   - otp validated as exactly 6 digits — rejects anything malformed before network call
- *   - HTTP status codes preserved on errors so UI can show specific messages (400/404/409/429)
- *   - All validation throws BEFORE any network call — no partial requests sent
- */
+// features/profile/profile.api.js
 
-import { ApiError, apiClient } from "@/lib/api/apiClient";
+import { apiClient, authClient } from "@/lib/api/apiClient";
+import { mockApi } from "@/services/mockService";
+const USE_MOCK = false;
 
-// ── Validators (mirror backend parent.validation.js Zod schemas exactly) ──────
-// Client-side validation = UX guard only. Backend re-validates everything independently.
+// ── Guards ─────────────────────────────────────────────────────────────────────
 
-// E.164 loose — matches backend z.regex(/^\+?[1-9]\d{7,14}$/)
-const PHONE_RE = /^\+?[1-9]\d{7,14}$/;
-
-// nonce: 64-char hex from backend crypto.randomBytes(32).toString('hex')
-// Allow 8–128 chars to match backend Zod min(8).max(128)
-const NONCE_RE = /^[a-f0-9]{8,128}$/i;
-
-// OTP: exactly 6 digits — matches backend z.length(6).regex(/^\d{6}$/)
-const OTP_RE = /^\d{6}$/;
-
-const validators = {
-  // card_number: backend z.string().trim().min(4).max(64)
-  // phone: backend z.regex(/^\+?[1-9]\d{7,14}$/)
-  initPayload: (p) =>
-    p !== null &&
-    typeof p === "object" &&
-    typeof p.card_number === "string" &&
-    p.card_number.trim().length >= 4 &&
-    p.card_number.trim().length <= 64 &&
-    typeof p.phone === "string" &&
-    PHONE_RE.test(p.phone.trim()),
-
-  // nonce: backend z.string().trim().min(8).max(128)
-  // otp: backend z.string().length(6).regex(/^\d{6}$/)
-  verifyPayload: (p) =>
-    p !== null &&
-    typeof p === "object" &&
-    typeof p.nonce === "string" &&
-    NONCE_RE.test(p.nonce.trim()) &&
-    typeof p.otp === "string" &&
-    OTP_RE.test(p.otp),
-
-  // Backend: { success: true, data: { nonce, masked_phone } }
-  initResponse: (d) =>
-    d?.success === true &&
-    typeof d?.data?.nonce === "string" &&
-    d.data.nonce.length >= 8 &&
-    typeof d?.data?.masked_phone === "string",
-
-  // Backend: { success: true, data: { jwt, student_id, isProfileComplete } }
-  verifyResponse: (d) =>
-    d?.success === true &&
-    typeof d?.data?.jwt === "string" &&
-    d.data.jwt.trim().length > 0 &&
-    typeof d?.data?.student_id === "string" &&
-    d.data.student_id.trim().length > 0,
-};
-
-// ── Shared request wrapper ────────────────────────────────────────────────────
-
-async function post({ url, payload, errorCode, validate }) {
-  try {
-    const { data } = await apiClient.post(url, payload);
-    if (validate && !validate(data)) {
-      throw new ApiError(`INVALID_RESPONSE_${errorCode}`, null, null);
-    }
-    return data;
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    // Preserve HTTP status so UI can map 404/409/429 to specific messages
-    throw new ApiError(errorCode, error?.response?.status ?? null, error);
-  }
+function assertRegVerifyResponse(data) {
+  if (!data?.access_token) throw new Error("REG: missing access_token");
+  if (!data?.refresh_token) throw new Error("REG: missing refresh_token");
+  if (!data?.parent_id) throw new Error("REG: missing parent_id");
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+// ── Registration API (unauthenticated) ────────────────────────────────────────
 
-export const registrationApi = Object.freeze({
-  /**
-   * Step 1 — Init registration.
-   * Sends OTP to phone tied to card_number. Returns nonce for step 2.
-   *
-   * @param {{ card_number: string, phone: string }} payload
-   * @returns {{ success: true, data: { nonce: string, masked_phone: string } }}
-   * @throws {ApiError} INVALID_PAYLOAD_INIT | REGISTRATION_INIT_FAILED
-   *                    Status 404 = card not found
-   *                    Status 409 = card already registered
-   */
-  async initRegistration(payload) {
-    if (!validators.initPayload(payload)) {
-      throw new ApiError("INVALID_PAYLOAD_INIT", null, null);
-    }
-    return post({
-      url: "/parent/register/init",
-      payload: {
-        card_number: payload.card_number.trim().toUpperCase(),
-        phone: payload.phone.trim(),
-      },
-      errorCode: "REGISTRATION_INIT_FAILED",
-      validate: validators.initResponse,
+export const registrationApi = {
+  initRegistration: async ({ card_number, phone }) => {
+    const res = await authClient.post("/auth/register/init", {
+      card_number,
+      phone,
     });
+    return res?.data?.data ?? res?.data ?? res;
+  },
+
+  verifyRegistration: async ({ nonce, otp, phone }) => {
+    const res = await authClient.post("/auth/register/verify", {
+      nonce,
+      otp,
+      phone,
+    });
+    const data = res?.data?.data ?? res?.data;
+
+    assertRegVerifyResponse(data);
+
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: data.expires_at ?? null,
+      isNewUser: true,
+      parent_id: data.parent_id,
+      student_id: data.student_id,
+    };
+  },
+};
+
+// ── Profile API (authenticated) ───────────────────────────────────────────────
+
+export const profileApi = {
+  /**
+   * GET /api/parents/me
+   * Full home data — parent + all students (each with last_scan, anomaly,
+   * scan_count embedded) + global last_scan scoped to active student.
+   */
+  getFullProfile: async () => {
+    if (USE_MOCK) return mockApi.getFullProfile();
+    const res = await apiClient.get("/parents/me");
+    return res?.data?.data ?? res?.data;
   },
 
   /**
-   * Step 2 — Verify OTP and complete registration.
-   * nonce binds this call to the card + phone from step 1 (15 min TTL).
-   * OTP is single-use — backend deletes from Redis on correct attempt.
-   *
-   * @param {{ nonce: string, otp: string }} payload
-   * @returns {{ success: true, data: { jwt: string, student_id: string, isProfileComplete: boolean } }}
-   * @throws {ApiError} INVALID_PAYLOAD_VERIFY | REGISTRATION_VERIFY_FAILED
-   *                    Status 400 = wrong OTP / expired nonce
-   *                    Status 409 = card already registered
-   *                    Status 429 = too many OTP attempts
+   * PATCH /api/parents/me/profile
+   * body: { student_id, student?, emergency?, contacts? }
    */
-  async verifyRegistration(payload) {
-    if (!validators.verifyPayload(payload)) {
-      throw new ApiError("INVALID_PAYLOAD_VERIFY", null, null);
-    }
-    return post({
-      url: "/parent/register/verify",
-      payload: {
-        nonce: payload.nonce.trim(),
-        otp: payload.otp.trim(),
-      },
-      errorCode: "REGISTRATION_VERIFY_FAILED",
-      validate: validators.verifyResponse,
+  updateProfile: async (studentId, payload) => {
+    const res = await apiClient.patch("/parents/me/profile", {
+      student_id: studentId,
+      ...payload,
     });
+    return res?.data?.data ?? res?.data;
   },
-});
+
+  /**
+   * PATCH /api/parents/me/visibility
+   */
+  updateVisibility: async (studentId, { visibility, hidden_fields }) => {
+    const res = await apiClient.patch("/parents/me/visibility", {
+      student_id: studentId,
+      visibility,
+      hidden_fields,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * PATCH /api/parents/me/notifications
+   */
+  updateNotifications: async (prefs) => {
+    const res = await apiClient.patch("/parents/me/notifications", prefs);
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * PATCH /api/parents/me/location-consent
+   */
+  updateLocationConsent: async (studentId, enabled) => {
+    const res = await apiClient.patch("/parents/me/location-consent", {
+      student_id: studentId,
+      enabled,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/lock-card
+   */
+  lockCard: async (studentId) => {
+    const res = await apiClient.post("/parents/me/lock-card", {
+      student_id: studentId,
+      confirmation: "LOCK",
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/request-replace
+   */
+  requestReplace: async (studentId, reason) => {
+    const res = await apiClient.post("/parents/me/request-replace", {
+      student_id: studentId,
+      reason,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * DELETE /api/parents/me
+   */
+  deleteAccount: async () => {
+    const res = await apiClient.delete("/parents/me");
+    return res?.data ?? res;
+  },
+
+  /**
+   * GET /api/parents/me/scans
+   * FIX: studentId is now REQUIRED — the server scopes results to that student.
+   * query: { student_id (required), cursor?, limit?, filter? }
+   */
+  getScanHistory: async ({
+    studentId,
+    cursor,
+    limit = 20,
+    filter = "all",
+  } = {}) => {
+    if (!studentId) throw new Error("getScanHistory: studentId is required");
+    const params = { student_id: studentId, limit, filter };
+    if (cursor) params.cursor = cursor;
+    const res = await apiClient.get("/parents/me/scans", { params });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * GET /api/parents/me/children
+   */
+  getChildrenList: async () => {
+    if (USE_MOCK) return mockApi.getChildrenList();
+    const res = await apiClient.get("/parents/me/children");
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/link-card
+   */
+  linkCard: async ({ card_number }) => {
+    const res = await apiClient.post("/parents/me/link-card", { card_number });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * PATCH /api/parents/me/active-student
+   */
+  setActiveStudent: async (studentId) => {
+    if (USE_MOCK) return mockApi.setActiveStudent(studentId);
+    const res = await apiClient.patch("/parents/me/active-student", {
+      student_id: studentId,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/unlink-child/init
+   */
+  unlinkChildInit: async (studentId) => {
+    const res = await apiClient.post("/parents/me/unlink-child/init", {
+      student_id: studentId,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/unlink-child/verify
+   */
+  unlinkChildVerify: async (studentId, otp, nonce) => {
+    const res = await apiClient.post("/parents/me/unlink-child/verify", {
+      student_id: studentId,
+      otp,
+      nonce,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // ── Photo Upload ────────────────────────────────────────────────────────────
+
+  generateStudentPhotoUploadUrl: async (studentId, contentType, fileSize) => {
+    const res = await apiClient.post(
+      `/parents/me/students/${studentId}/photo/upload-url`,
+      { contentType, fileSize },
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  confirmStudentPhotoUpload: async (studentId, key, nonce) => {
+    const res = await apiClient.post(
+      `/parents/me/students/${studentId}/photo/confirm`,
+      { key, nonce },
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  generateAvatarUploadUrl: async (contentType, fileSize) => {
+    const res = await apiClient.post(`/parents/me/avatar/upload-url`, {
+      contentType,
+      fileSize,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  confirmAvatarUpload: async (key, nonce) => {
+    const res = await apiClient.post(`/parents/me/avatar/confirm`, {
+      key,
+      nonce,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // change phone number
+  // Add to profileApi object in profile.api.js:
+
+  /**
+   * POST /api/parents/me/send-phone-otp
+   * Send OTP to new phone number before changing
+   * body: { new_phone }
+   * → { success, message, expiresIn }
+   */
+  sendPhoneChangeOtp: async (new_phone) => {
+    const res = await apiClient.post("/parents/me/send-phone-otp", {
+      new_phone,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/change-phone
+   * Verify OTP and update phone number
+   * body: { new_phone, otp }
+   * → { success, message }
+   */
+  changePhone: async ({ new_phone, otp }) => {
+    const res = await apiClient.post("/parents/me/change-phone", {
+      new_phone,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+};

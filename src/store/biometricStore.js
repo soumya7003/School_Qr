@@ -1,50 +1,41 @@
-// // src/store/biometricStore.js
-// import * as SecureStore from "expo-secure-store";
-// import { create } from "zustand";
-// import { createJSONStorage, persist } from "zustand/middleware";
-
-// const secureStorage = {
-//   getItem: (key) => SecureStore.getItemAsync(key),
-//   setItem: (key, val) =>
-//     SecureStore.setItemAsync(key, val, {
-//       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-//     }),
-//   removeItem: (key) => SecureStore.deleteItemAsync(key),
-// };
-
-// export const useBiometricStore = create(
-//   persist((set) => ({
-//     isBiometricEnabled: false, // user's preference
-//     isDeviceSupported: false, // hardware capability
-//     biometricType: null, // 'fingerprint' | 'face' | 'iris'
-
-//     setsetEnabled: (val) => set({ isBiometricEnabled: val }),
-//     setDeviceSupported: (val) => set({ isDeviceSupported: val }),
-//     setBiometricType: (type) => set({ biometricType: type }),
-//   })),
-//   {
-//     name: "biometric-prefs",
-//     storage: createJSONStorage(() => secureStorage),
-//   },
-// );
-
-/**
- * Biometric Store — persists user's biometric preference.
- * Stored in memory only during UI dev (no SecureStore yet).
- */
-
+// src/store/biometricStore.js
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
-export const useBiometricStore = create((set) => ({
-  // ── State ──────────────────────────────────────
-  isBiometricEnabled: false, // user's on/off preference
-  isDeviceSupported: true, // set true for UI dev so BiometricRow renders
-  biometricType: "fingerprint", // 'fingerprint' | 'face' | 'iris'
+export const useBiometricStore = create(
+  persist(
+    (set) => ({
+      // ── CRITICAL: always false on startup ──
+      // App should NEVER start in a locked state.
+      // Lock only triggers when app returns FROM background.
+      isLocked: false,
 
-  // ── Actions ────────────────────────────────────
-  setEnabled: (val) => set({ isBiometricEnabled: val }),
-  setDeviceSupported: (val) => set({ isDeviceSupported: val }),
-  setBiometricType: (type) => set({ biometricType: type }),
-}));
+      // Has the user enabled biometric lock in settings?
+      isBiometricEnabled: false,
 
-export default useBiometricStore;
+      // Has the app fully mounted and the navigator is ready?
+      // Lock will NOT trigger until this is true.
+      isAppReady: false,
+
+      setLocked: (val) => set({ isLocked: val }),
+      setBiometricEnabled: (val) => set({ isBiometricEnabled: val }),
+      setAppReady: (val) => set({ isAppReady: val }),
+
+      reset: () =>
+        set({
+          isLocked: false,
+          isBiometricEnabled: false,
+          isAppReady: false,
+        }),
+    }),
+    {
+      name: "biometric-store",
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only persist the user preference, not runtime state
+      partialize: (state) => ({
+        isBiometricEnabled: state.isBiometricEnabled,
+      }),
+    },
+  ),
+);

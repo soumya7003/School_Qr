@@ -1,17 +1,22 @@
 /**
- * Providers — Single wrapper for all app providers.
- * Used in app/_layout.jsx
+ * providers/index.jsx
+ *
+ * FIXED: ThemeProvider added so useTheme() works everywhere.
+ * Order: SafeAreaProvider → ThemeProvider → AuthProvider
  */
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AuthProvider from './AuthProvider';
+import { ThemeProvider } from './ThemeProvider';
 
 export default function Providers({ children }) {
     return (
         <SafeAreaProvider>
-            <AuthProvider>
-                {children}
-            </AuthProvider>
+            <ThemeProvider>
+                <AuthProvider>
+                    {children}
+                </AuthProvider>
+            </ThemeProvider>
         </SafeAreaProvider>
     );
 }

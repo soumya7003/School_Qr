@@ -224,3 +224,40 @@ export const mockNewUserProfile = {
   contacts: [],
   scanLogs: [],
 };
+
+// Add to mockData.js
+export const mockMultipleStudents = {
+  ...mockFullProfile,
+  students: [
+    {
+      ...mockStudent,
+      id: "student-001",
+      first_name: "Arjun",
+      last_name: "Sharma",
+      class: "6",
+      section: "B",
+      token: { ...mockToken, status: "ACTIVE" },
+      emergency: { ...mockEmergencyProfile, blood_group: "B+" },
+    },
+    {
+      ...mockStudent,
+      id: "student-002",
+      first_name: "Ananya",
+      last_name: "Sharma",
+      class: "3",
+      section: "A",
+      token: { ...mockToken, id: "token-002", status: "ACTIVE" },
+      emergency: { ...mockEmergencyProfile, blood_group: "O+", id: "ep-002" },
+    },
+    {
+      ...mockStudent,
+      id: "student-003",
+      first_name: "Rohan",
+      last_name: "Sharma",
+      class: "9",
+      section: "C",
+      token: { ...mockToken, id: "token-003", status: "ISSUED" },
+      emergency: null,
+    },
+  ],
+};

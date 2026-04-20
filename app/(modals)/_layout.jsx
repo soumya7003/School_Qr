@@ -1,25 +1,24 @@
 /**
- * @file app/_layout.jsx
- * @description Root layout — SchoolQR Guardian
+ * app/(modals)/_layout.jsx
+ *
+ * Simple modal stack — presentation style is already set in root
+ * _layout.jsx via <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
+ * so we just need a plain Stack here for the screens inside.
+ *
+ * No auth guard needed here — modals are only reachable from within
+ * (app)/ screens which already have the isAuthenticated guard.
  */
 
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Providers from '../../src/providers';
+import { Stack } from "expo-router";
 
-export default function RootLayout() {
+export default function ModalsLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Providers>
-        <StatusBar style="light" translucent />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(app)" />
-          <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
-        </Stack>
-      </Providers>
-    </GestureHandlerRootView>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "transparent" },
+        animation: "slide_from_bottom",
+      }}
+    />
   );
 }
