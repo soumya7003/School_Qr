@@ -44,4 +44,4 @@ app-example
 
 # generated native folders
 /ios
-/android
+/android{env_file_path}
