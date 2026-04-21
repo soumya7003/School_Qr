@@ -1,4 +1,4 @@
-// app/(app)/updates.jsx - STUDENT ONLY (DOB + Gender added)
+// app/(app)/updates.jsx - STUDENT ONLY (DOB + Gender fixed)
 import Screen from '@/components/common/Screen';
 import {
   BloodPicker,
@@ -97,6 +97,18 @@ export default function UpdatesScreen() {
 
   const scrollRef = useRef(null);
   const [saving, setSaving] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dobInput, setDobInput] = useState(''); // For raw input before formatting
+
+  // Load DOB from student when available
+  useEffect(() => {
+    if (student?.dob) {
+      // Format from backend (YYYY-MM-DD) to display
+      const formatted = formatDisplayDate(student.dob);
+      setDob(student.dob);
+      setDobInput(formatted);
+    }
+  }, [student?.dob]);
 
   // Sync contacts
   useEffect(() => { setContacts(contacts); }, [contacts]);
@@ -126,7 +138,25 @@ export default function UpdatesScreen() {
   const formatDisplayDate = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const handleDobChange = (text) => {
+    // Remove all non-digits
+    const cleaned = text.replace(/\D/g, '');
+    setDobInput(cleaned);
+
+    // Format as YYYY-MM-DD for backend when 8 digits entered
+    if (cleaned.length === 8) {
+      const year = cleaned.slice(0, 4);
+      const month = cleaned.slice(4, 6);
+      const day = cleaned.slice(6, 8);
+      const formatted = `${year}-${month}-${day}`;
+      setDob(formatted);
+    } else {
+      setDob(cleaned); // Store raw while typing
+    }
   };
 
   const handleNext = () => {
@@ -272,26 +302,21 @@ export default function UpdatesScreen() {
                   </View>
                 </SectionCard>
 
-                <SectionCard icon={<Text style={{ fontSize: 15 }}>🎂</Text>} title="Date of Birth" subtitle="Optional — Format: YYYY-MM-DD" C={C}>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🎂</Text>} title="Date of Birth" subtitle="Enter 8 digits — YYYYMMDD" C={C}>
                   <Field
                     label="Date of Birth"
-                    value={dob}
-                    onChangeText={(text) => {
-                      const cleaned = text.replace(/[^0-9]/g, '');
-                      if (cleaned.length >= 8) {
-                        const year = cleaned.slice(0, 4);
-                        const month = cleaned.slice(4, 6);
-                        const day = cleaned.slice(6, 8);
-                        setDob(`${year}-${month}-${day}`);
-                      } else {
-                        setDob(cleaned);
-                      }
-                    }}
-                    placeholder="YYYY-MM-DD"
+                    value={dobInput}
+                    onChangeText={handleDobChange}
+                    placeholder="20020812"
                     keyboardType="numeric"
-                    maxLength={10}
+                    maxLength={8}
                     C={C}
                   />
+                  {dobInput.length === 8 && (
+                    <Text style={{ fontSize: 12, color: C.ok, marginTop: 4 }}>
+                      ✓ {dobInput.slice(0, 4)}-{dobInput.slice(4, 6)}-{dobInput.slice(6, 8)}
+                    </Text>
+                  )}
                 </SectionCard>
 
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>⚥</Text>} title="Gender" subtitle="Optional" C={C}>
@@ -326,6 +351,7 @@ export default function UpdatesScreen() {
               </View>
             )}
 
+            {/* Step 1, 2, 3 unchanged — same as before */}
             {step === 1 && (
               <View style={s.stepContent}>
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>🩸</Text>} title="Blood Group" subtitle="Critical for emergency response" C={C}>

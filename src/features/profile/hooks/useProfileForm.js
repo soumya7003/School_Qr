@@ -9,23 +9,21 @@ export function useProfileForm(student) {
     [student?.emergency?.contacts],
   );
 
-  const [firstName, setFirstName] = useState(student?.first_name ?? "");
-  const [lastName, setLastName] = useState(student?.last_name ?? "");
-  const [dob, setDob] = useState(student?.dob ?? "");
-  const [gender, setGender] = useState(student?.gender ?? "");
-  const [cls, setCls] = useState(student?.class ?? "");
-  const [section, setSection] = useState(student?.section ?? "");
-  const [profileImage, setProfileImage] = useState(null); // ✅ Start with null
-  const [bloodGroup, setBloodGroup] = useState(
-    BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? "",
-  );
-  const [allergies, setAllergies] = useState(ep?.allergies ?? "");
-  const [conditions, setConditions] = useState(ep?.conditions ?? "");
-  const [medications, setMedications] = useState(ep?.medications ?? "");
-  const [doctorName, setDoctorName] = useState(ep?.doctor_name ?? "");
-  const [doctorPhone, setDoctorPhone] = useState(ep?.doctor_phone ?? "");
-  const [notes, setNotes] = useState(ep?.notes ?? "");
-  const [contacts, setContacts] = useState(rawContacts ?? []);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [dob, setDob] = useState("");
+  const [gender, setGender] = useState("");
+  const [cls, setCls] = useState("");
+  const [section, setSection] = useState("");
+  const [profileImage, setProfileImage] = useState(null);
+  const [bloodGroup, setBloodGroup] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const [conditions, setConditions] = useState("");
+  const [medications, setMedications] = useState("");
+  const [doctorName, setDoctorName] = useState("");
+  const [doctorPhone, setDoctorPhone] = useState("");
+  const [notes, setNotes] = useState("");
+  const [contacts, setContacts] = useState([]);
 
   // ✅ Helper to get proper image URL
   const getPhotoUrl = (photoKey) => {
@@ -36,27 +34,35 @@ export function useProfileForm(student) {
     return `https://assets.getresqid.in/${photoKey}`;
   };
 
+  // ✅ Load ALL student fields when student changes
   useEffect(() => {
-    setFirstName(student?.first_name ?? "");
-    setLastName(student?.last_name ?? "");
-    setCls(student?.class ?? "");
-    setSection(student?.section ?? "");
-    // ✅ Convert photo_url to proper URL
-    setProfileImage(getPhotoUrl(student?.photo_url));
+    if (student) {
+      setFirstName(student.first_name ?? "");
+      setLastName(student.last_name ?? "");
+      setDob(student.dob ?? ""); // ✅ ADDED
+      setGender(student.gender ?? ""); // ✅ ADDED
+      setCls(student.class ?? "");
+      setSection(student.section ?? "");
+      setProfileImage(getPhotoUrl(student.photo_url));
+    }
   }, [student]);
 
+  // ✅ Load emergency fields when emergency changes
   useEffect(() => {
-    setBloodGroup(
-      BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? "",
-    );
-    setAllergies(ep?.allergies ?? "");
-    setConditions(ep?.conditions ?? "");
-    setMedications(ep?.medications ?? "");
-    setDoctorName(ep?.doctor_name ?? "");
-    setDoctorPhone(ep?.doctor_phone ?? "");
-    setNotes(ep?.notes ?? "");
+    if (ep) {
+      setBloodGroup(
+        BLOOD_GROUP_FROM_ENUM[ep.blood_group] ?? ep.blood_group ?? "",
+      );
+      setAllergies(ep.allergies ?? "");
+      setConditions(ep.conditions ?? "");
+      setMedications(ep.medications ?? "");
+      setDoctorName(ep.doctor_name ?? "");
+      setDoctorPhone(ep.doctor_phone ?? "");
+      setNotes(ep.notes ?? "");
+    }
   }, [ep]);
 
+  // ✅ Load contacts
   useEffect(() => {
     setContacts(rawContacts ?? []);
   }, [rawContacts]);
