@@ -578,15 +578,7 @@ export default function SettingsScreen() {
             setRemoveLoading(true);
             try {
                 const result = await removeChild({ studentId, otp, nonce });
-                // 🟢 Force store refresh and wait for it
                 await refreshProfile();
-
-                // 🟢 Check if we need to redirect
-                const currentStudents = useProfileStore.getState().students;
-                if (currentStudents.length === 0) {
-                    router.replace('/add-child');
-                }
-
                 return { success: true };
             } finally {
                 setRemoveLoading(false);
@@ -802,6 +794,15 @@ export default function SettingsScreen() {
                 <Animated.View entering={FadeInDown.delay(420).duration(350)}>
                     <SectionHeader title="Account" accent={C.tx3} />
                     <SettingsCard C={C}>
+                        <SettingsRow
+                            C={C}
+                            icon={<IconUser color={C.primary} size={20} />}
+                            iconBg={C.primaryBg}
+                            iconBorder={C.primaryBd}
+                            title="Parent Profile"
+                            subtitle="Manage your name, email & photo"
+                            onPress={() => router.push('/(app)/parent-profile')}
+                        />
                         <SettingsRow
                             C={C}
                             icon={<IconPhone color={C.amb} size={20} />}

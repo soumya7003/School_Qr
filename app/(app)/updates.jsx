@@ -1,4 +1,4 @@
-// app/(app)/updates.jsx - FIXED
+// app/(app)/updates.jsx - STUDENT ONLY (DOB + Gender added)
 import Screen from '@/components/common/Screen';
 import {
   BloodPicker,
@@ -45,12 +45,19 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { useShallow } from 'zustand/react/shallow';
 
 // Camera icon inline
-const CameraIcon = ({ c, s = 20 }) => (
-  <Svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+const CameraIcon = ({ c, size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={c} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
     <Circle cx="12" cy="13" r="4" stroke={c} strokeWidth={1.8} />
   </Svg>
 );
+
+const GENDER_OPTIONS = [
+  { label: 'Male', value: 'MALE' },
+  { label: 'Female', value: 'FEMALE' },
+  { label: 'Other', value: 'OTHER' },
+  { label: 'Prefer not to say', value: 'PREFER_NOT_TO_SAY' },
+];
 
 export default function UpdatesScreen() {
   const { colors: C } = useTheme();
@@ -59,6 +66,7 @@ export default function UpdatesScreen() {
 
   const isNewUser = useAuthStore((s) => s.isNewUser);
   const setIsNewUser = useAuthStore((s) => s.setIsNewUser);
+  const updateStudentBasic = useProfileStore((s) => s.updateStudentBasic);
   const patchStudent = useProfileStore((s) => s.patchStudent);
   const fetchAndPersist = useProfileStore((s) => s.fetchAndPersist);
   const students = useProfileStore((s) => s.students);
@@ -69,13 +77,15 @@ export default function UpdatesScreen() {
   );
 
   const {
-    firstName, setFirstName, lastName, setLastName, cls, setCls, section, setSection,
+    firstName, setFirstName, lastName, setLastName,
+    dob, setDob, gender, setGender,
+    cls, setCls, section, setSection,
     profileImage, setProfileImage, bloodGroup, setBloodGroup, allergies, setAllergies,
     conditions, setConditions, medications, setMedications, doctorName, setDoctorName,
     doctorPhone, setDoctorPhone, notes, setNotes, sortedContacts, canProceed, setContacts,
   } = useProfileForm(student);
 
-  const { uploading, uploadPhotoToCloudflare, getPhotoUrl } = usePhotoUpload(student?.id);
+  const { uploading, uploadPhotoToCloudflare } = usePhotoUpload(student?.id);
   const {
     contacts, modalVisible, setModalVisible, editingContact,
     handleSaveContact, handleDeleteContact, openAddModal, openEditModal,
@@ -113,10 +123,18 @@ export default function UpdatesScreen() {
 
   useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: true }); }, [step]);
 
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const handleNext = () => {
-    if (step === 0 && (!firstName.trim() || !lastName.trim())) {
-      Alert.alert('Name Required', "Please enter your child's first and last name to continue.");
-      return;
+    if (step === 0) {
+      if (!firstName.trim() || !lastName.trim()) {
+        Alert.alert('Name Required', "Please enter your child's first and last name to continue.");
+        return;
+      }
     }
     if (step < 3) {
       goNext(() => true);
@@ -138,22 +156,24 @@ export default function UpdatesScreen() {
         finalPhotoUrl = await uploadPhotoToCloudflare(profileImage);
       }
 
-      const payload = {
-        student: {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          class: cls.trim(),
-          section: section.trim(),
-          photo_url: finalPhotoUrl,
-        },
+      await updateStudentBasic(student.id, {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        class: cls.trim() || undefined,
+        section: section.trim() || undefined,
+        dob: dob || undefined,
+        gender: gender || undefined,
+      });
+
+      const emergencyPayload = {
         emergency: {
           blood_group: (BLOOD_GROUP_TO_ENUM[bloodGroup] ?? bloodGroup) || undefined,
-          allergies: allergies.trim(),
-          conditions: conditions.trim(),
-          medications: medications.trim(),
-          doctor_name: doctorName.trim(),
+          allergies: allergies.trim() || undefined,
+          conditions: conditions.trim() || undefined,
+          medications: medications.trim() || undefined,
+          doctor_name: doctorName.trim() || undefined,
           ...(doctorPhone.trim() ? { doctor_phone: doctorPhone.trim().startsWith('+') ? doctorPhone.trim() : `+91${doctorPhone.trim().replace(/^0/, '')}` } : {}),
-          notes: notes.trim(),
+          notes: notes.trim() || undefined,
         },
         contacts: contacts.map((c, i) => ({
           ...(c.id && !c.id.startsWith('tmp_') ? { id: c.id } : {}),
@@ -164,7 +184,7 @@ export default function UpdatesScreen() {
         })),
       };
 
-      await patchStudent(student.id, payload);
+      await patchStudent(student.id, emergencyPayload);
       markAllCompleted();
 
       if (isNewUser) {
@@ -218,11 +238,12 @@ export default function UpdatesScreen() {
   return (
     <Screen bg={C.bg} edges={['top', 'left', 'right']}>
       <ContactModal visible={modalVisible} contact={editingContact} onSave={handleSaveContact} onClose={() => setModalVisible(false)} C={C} />
+
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
         <View style={[s.header, { borderBottomColor: C.bd }]}>
           {(!isNewUser || step > 0) ? (
             <TouchableOpacity onPress={isNewUser ? goBack : router.back} style={s.backBtn}>
-              <ChevLeft c={C.tx} s={20} />
+              <ChevLeft c={C.tx} size={20} />
             </TouchableOpacity>
           ) : <View style={s.backBtn} />}
           <Text style={[s.headerTitle, { color: C.tx }]}>{headerTitle}</Text>
@@ -240,16 +261,63 @@ export default function UpdatesScreen() {
           <View>
             {step === 0 && (
               <View style={s.stepContent}>
-                <SectionCard icon={<CameraIcon c={C.primary} s={16} />} title="Profile Photo" subtitle="Optional but recommended — helps identify your child" C={C}>
+                <SectionCard icon={<CameraIcon c={C.primary} size={16} />} title="Profile Photo" subtitle="Optional but recommended — helps identify your child" C={C}>
                   <PhotoUpload imageUri={profileImage} onImageChange={setProfileImage} uploading={uploading || saving} C={C} />
                 </SectionCard>
+
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>👤</Text>} title="Child's Name" subtitle="Required — match the name on school records" C={C}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <View style={{ flex: 1 }}><Field label="First Name" value={firstName} onChangeText={setFirstName} placeholder="e.g., Arjun" required C={C} /></View>
                     <View style={{ flex: 1 }}><Field label="Last Name" value={lastName} onChangeText={setLastName} placeholder="e.g., Sharma" required C={C} /></View>
                   </View>
                 </SectionCard>
-                <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title="Class & Section" subtitle="Optional — helps identify your child quickly" accent={C.blue} C={C}>
+
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🎂</Text>} title="Date of Birth" subtitle="Optional — Format: YYYY-MM-DD" C={C}>
+                  <Field
+                    label="Date of Birth"
+                    value={dob}
+                    onChangeText={(text) => {
+                      const cleaned = text.replace(/[^0-9]/g, '');
+                      if (cleaned.length >= 8) {
+                        const year = cleaned.slice(0, 4);
+                        const month = cleaned.slice(4, 6);
+                        const day = cleaned.slice(6, 8);
+                        setDob(`${year}-${month}-${day}`);
+                      } else {
+                        setDob(cleaned);
+                      }
+                    }}
+                    placeholder="YYYY-MM-DD"
+                    keyboardType="numeric"
+                    maxLength={10}
+                    C={C}
+                  />
+                </SectionCard>
+
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>⚥</Text>} title="Gender" subtitle="Optional" C={C}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {GENDER_OPTIONS.map((opt) => (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={{
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          borderRadius: 20,
+                          backgroundColor: gender === opt.value ? C.primary : C.s2,
+                          borderWidth: 1,
+                          borderColor: gender === opt.value ? C.primary : C.bd,
+                        }}
+                        onPress={() => setGender(opt.value)}
+                      >
+                        <Text style={{ color: gender === opt.value ? '#fff' : C.tx, fontWeight: '500' }}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </SectionCard>
+
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🏫</Text>} title="Class & Section" subtitle="Optional — helps identify your child quickly" C={C}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <View style={{ flex: 1 }}><Field label="Class" value={cls} onChangeText={setCls} placeholder="e.g., 6" C={C} /></View>
                     <View style={{ flex: 1 }}><Field label="Section" value={section} onChangeText={setSection} placeholder="e.g., B" C={C} /></View>
@@ -257,21 +325,22 @@ export default function UpdatesScreen() {
                 </SectionCard>
               </View>
             )}
+
             {step === 1 && (
               <View style={s.stepContent}>
                 <SectionCard icon={<Text style={{ fontSize: 15 }}>🩸</Text>} title="Blood Group" subtitle="Critical for emergency response" C={C}>
                   <BloodPicker value={bloodGroup} onChange={setBloodGroup} C={C} />
                 </SectionCard>
-                <SectionCard icon={<Text style={{ fontSize: 15 }}>⚠️</Text>} title="Allergies" accent={C.amb} C={C}>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>⚠️</Text>} title="Allergies" C={C}>
                   <Field label="Known Allergies" value={allergies} onChangeText={setAllergies} placeholder="e.g., Peanuts, Penicillin" multiline C={C} />
                 </SectionCard>
-                <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title="Medical Conditions" accent={C.blue} C={C}>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>🫁</Text>} title="Medical Conditions" C={C}>
                   <Field label="Conditions" value={conditions} onChangeText={setConditions} placeholder="e.g., Asthma, Diabetes" multiline C={C} />
                 </SectionCard>
-                <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title="Medications" accent={C.blue} C={C}>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>💊</Text>} title="Medications" C={C}>
                   <Field label="Current Medications" value={medications} onChangeText={setMedications} placeholder="e.g., Ventolin Inhaler" multiline C={C} />
                 </SectionCard>
-                <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title="Family Doctor" accent={C.ok} C={C}>
+                <SectionCard icon={<Text style={{ fontSize: 15 }}>👨‍⚕️</Text>} title="Family Doctor" C={C}>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <View style={{ flex: 1 }}><Field label="Doctor Name" value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" C={C} /></View>
                     <View style={{ flex: 1 }}><Field label="Doctor's Phone" value={doctorPhone} onChangeText={setDoctorPhone} placeholder="+91 98765 43210" keyboardType="phone-pad" C={C} /></View>
@@ -279,6 +348,7 @@ export default function UpdatesScreen() {
                 </SectionCard>
               </View>
             )}
+
             {step === 2 && (
               <View style={s.stepContent}>
                 <View style={[s.callInfoBox, { backgroundColor: C.s2, borderColor: C.bd }]}>
@@ -295,7 +365,7 @@ export default function UpdatesScreen() {
                     <Text style={{ fontSize: 32 }}>📵</Text>
                     <Text style={[s.emptyTitle, { color: C.tx }]}>No Emergency Contacts Added</Text>
                     <TouchableOpacity style={[s.emptyAddBtn, { backgroundColor: C.primary }]} onPress={openAddModal}>
-                      <PlusSvg c="#fff" s={16} />
+                      <PlusSvg c="#fff" size={16} />
                       <Text style={s.emptyAddBtnText}>Add First Contact</Text>
                     </TouchableOpacity>
                   </View>
@@ -308,12 +378,13 @@ export default function UpdatesScreen() {
                 )}
                 {contacts.length > 0 && contacts.length < 5 && (
                   <TouchableOpacity style={[s.addBtn, { borderColor: C.primaryBd, backgroundColor: C.primaryBg }]} onPress={openAddModal}>
-                    <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}><PlusSvg c="#fff" s={18} /></View>
+                    <View style={[s.addBtnIcon, { backgroundColor: C.primary }]}><PlusSvg c="#fff" size={18} /></View>
                     <View><Text style={[s.addBtnLabel, { color: C.primary }]}>Add Another Contact</Text></View>
                   </TouchableOpacity>
                 )}
               </View>
             )}
+
             {step === 3 && (
               <View style={s.stepContent}>
                 <View style={[s.reviewHeader, { backgroundColor: C.s2, borderColor: C.bd }]}>
@@ -332,6 +403,8 @@ export default function UpdatesScreen() {
                 <SectionCard icon={<Text>👤</Text>} title="Student Information" C={C}>
                   <ReviewRow label="First Name" value={firstName} required C={C} />
                   <ReviewRow label="Last Name" value={lastName} required C={C} />
+                  {dob ? <ReviewRow label="Date of Birth" value={formatDisplayDate(dob)} C={C} /> : null}
+                  {gender ? <ReviewRow label="Gender" value={GENDER_OPTIONS.find(g => g.value === gender)?.label || gender} C={C} /> : null}
                 </SectionCard>
                 <SectionCard icon={<Text>❤️</Text>} title="Medical Information" C={C}>
                   <ReviewRow label="Blood Group" value={bloodGroup} C={C} />

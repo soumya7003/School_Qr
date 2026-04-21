@@ -11,6 +11,8 @@ export function useProfileForm(student) {
 
   const [firstName, setFirstName] = useState(student?.first_name ?? "");
   const [lastName, setLastName] = useState(student?.last_name ?? "");
+  const [dob, setDob] = useState(student?.dob ?? "");
+  const [gender, setGender] = useState(student?.gender ?? "");
   const [cls, setCls] = useState(student?.class ?? "");
   const [section, setSection] = useState(student?.section ?? "");
   const [profileImage, setProfileImage] = useState(null); // ✅ Start with null
@@ -67,6 +69,10 @@ export function useProfileForm(student) {
     setFirstName,
     lastName,
     setLastName,
+    dob,
+    setDob,
+    gender,
+    setGender,
     cls,
     setCls,
     section,
@@ -91,6 +97,6 @@ export function useProfileForm(student) {
     setContacts,
     sortedContacts,
     canProceed,
-    getPhotoUrl, // ✅ Export helper
+    getPhotoUrl,
   };
 }

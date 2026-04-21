@@ -3,88 +3,101 @@ import { useAuthStore } from '@/features/auth/auth.store';
 import { useProfileStore } from '@/features/profile/profile.store';
 import { storage } from '@/lib/storage/storage';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
-import { createContext, useCallback, useEffect } from 'react';
+import { createContext, useCallback, useEffect, useRef } from 'react';
 
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    // ✅ FIX: Only bypass in development, never in production
     const __DEV_BYPASS__ = false;
 
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const isHydrated = useAuthStore((s) => s.isHydrated);
+    const isNewUser = useAuthStore((s) => s.isNewUser);
 
     const profileHydrated = useProfileStore((s) => s.isHydrated);
     const students = useProfileStore((s) => s.students);
+    const lastRefreshTime = useProfileStore((s) => s.lastRefreshTime);
 
     const segments = useSegments();
     const navigationState = useRootNavigationState();
 
-    // ✅ FIX: Profile complete check includes basic student info
-    const isProfileComplete = __DEV_BYPASS__ ? true : (
-        students.length > 0 &&
-        students.some((s) =>
-            s.first_name?.trim() &&
-            s.class?.trim() &&
-            s.setup_stage === 'COMPLETE'
-        )
+    const hasRedirected = useRef(false);
+
+    const isFetching = useProfileStore((s) => s.isFetching);
+
+    const hasChildren = students.length > 0;
+    const hasCompleteProfile = __DEV_BYPASS__ ? true : (
+        hasChildren && students.some((s) => s.first_name?.trim())
     );
+
+    // Only redirect after we have data from API
+    const readyToRedirect = isHydrated && profileHydrated && lastRefreshTime !== null && !isFetching;
 
     useEffect(() => {
         if (!navigationState?.key) return;
-        if (!isHydrated || !profileHydrated) return;
+        if (!readyToRedirect) {
+            console.log('[AuthProvider] Waiting for API...', { lastRefreshTime });
+            return;
+        }
 
         const inAuthGroup = segments[0] === '(auth)';
         const inAppGroup = segments[0] === '(app)';
-        const onIndexScreen = segments[0] === undefined || segments[0] === '';
+        const currentScreen = segments[1];
 
-        // ─── NOT AUTHENTICATED ─────────────────────────────
+        // ─── NOT AUTHENTICATED ─────────────────────────────────────
         if (!isAuthenticated) {
-            if (!inAuthGroup && !onIndexScreen) {
+            if (!inAuthGroup) {
+                console.log('[AuthProvider] Not authenticated → /login');
                 router.replace('/(auth)/login');
             }
             return;
         }
 
-        // 🟢 FIX: Handle empty children state
-        const hasChildren = students.length > 0;
-        const hasCompleteProfile = students.some((s) =>
-            s.first_name?.trim() &&
-            s.class?.trim() &&
-            s.setup_stage === 'COMPLETE'
-        );
+        // ─── AUTHENTICATED ─────────────────────────────────────────
 
-        // Case 1: Has children but profile incomplete → Updates page
-        if (hasChildren && !hasCompleteProfile) {
-            if (segments[1] !== 'updates') {
-                router.replace('/(app)/updates');
-            }
+        // If we already redirected and user is navigating, don't interfere
+        if (hasRedirected.current && currentScreen !== undefined) {
             return;
         }
 
-        // Case 2: No children at all → Settings/Add-child page
+        // Case 1: No children → Add Child
         if (!hasChildren) {
-            // Don't redirect if already on settings or add-child
-            if (segments[1] !== 'settings' && segments[1] !== 'add-child') {
-                router.replace('/(app)/settings');
+            if (currentScreen !== 'add-child') {
+                console.log('[AuthProvider] No children → /add-child');
+                router.replace('/(app)/add-child');
+                hasRedirected.current = true;
             }
             return;
         }
 
-        // Case 3: Profile complete → Normal app flow
-        if (hasCompleteProfile) {
-            if (!inAppGroup) {
-                router.replace('/(app)/home');
+        // Case 2: Has children BUT new user OR profile incomplete → Updates
+        if (hasChildren && (isNewUser || !hasCompleteProfile)) {
+            if (currentScreen !== 'updates') {
+                console.log('[AuthProvider] Profile incomplete → /updates');
+                router.replace('/(app)/updates');
+                hasRedirected.current = true;
             }
+            return;
+        }
+
+        // Case 3: Has children AND profile complete → Home
+        if (hasChildren && hasCompleteProfile && !isNewUser) {
+            if (!inAppGroup || currentScreen === undefined) {
+                console.log('[AuthProvider] Complete → /home');
+                router.replace('/(app)/home');
+                hasRedirected.current = true;
+            }
+            return;
         }
 
     }, [
         navigationState?.key,
         isAuthenticated,
-        isHydrated,
-        profileHydrated,
+        readyToRedirect,
+        isNewUser,
+        students.length,
+        hasCompleteProfile,
         segments,
-        students.length, // 🟢 Add students.length as dependency
     ]);
 
     return (
@@ -108,8 +121,9 @@ export function useLoginSuccess() {
                 isNewUser ?? false
             );
 
+            // ✅ Fetch profile and wait for it to complete
             try {
-                await fetchAndPersist();
+                await fetchAndPersist({ silent: false });
             } catch (err) {
                 console.warn('[useLoginSuccess] Profile fetch failed:', err?.message);
             }
@@ -133,7 +147,7 @@ export function useRegistrationSuccess() {
             );
 
             try {
-                await fetchAndPersist();
+                await fetchAndPersist({ silent: false });
             } catch (err) {
                 console.warn('[useRegistrationSuccess] Profile fetch failed:', err?.message);
             }

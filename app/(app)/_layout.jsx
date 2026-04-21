@@ -8,7 +8,6 @@ import { useProfileStore } from '@/features/profile/profile.store';
 import { useFetchOnMount } from '@/hooks/useFetchOnMount';
 import { useInactivityLock } from '@/hooks/useInactivityLock';
 import { Tabs } from 'expo-router';
-import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 export default function AppLayout() {
@@ -16,10 +15,10 @@ export default function AppLayout() {
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const profileHydrated = useProfileStore((s) => s.isHydrated);
 
-    // Hydrate profile store on mount
-    useEffect(() => {
-        useProfileStore.getState().hydrate();
-    }, []);
+    // // Hydrate profile store on mount
+    // useEffect(() => {
+    //     useProfileStore.getState().hydrate();
+    // }, []);
 
     // Fetch fresh profile if stale
     useFetchOnMount();
@@ -56,6 +55,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="support" options={{ href: null }} />
                 <Tabs.Screen name="change-phone" options={{ href: null }} />
                 <Tabs.Screen name='add-child' options={{ href: null }} />
+                <Tabs.Screen name='parent-profile' options={{ href: null }} />
             </Tabs>
         </View>
     );

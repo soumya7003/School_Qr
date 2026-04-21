@@ -5,6 +5,7 @@
  */
 
 import { Alert } from "react-native";
+import { profileApi } from "./profile.api";
 import {
   useActiveStudent,
   useCardVisibility,
@@ -277,6 +278,8 @@ export const useProfile = () => {
 
     // ── Actions ───────────────────────────────────────────────────────────────
     patchStudent,
+    updateStudentBasic: useProfileStore((s) => s.updateStudentBasic),
+    updateParentProfile: profileApi.updateParentProfile,
     updateVisibility,
     updateNotifications,
     updateNotificationPref,
@@ -297,5 +300,12 @@ export const useProfile = () => {
     // unlink child
     initiateUnlink,
     removeChild,
+    // Photo upload
+    generateStudentPhotoUploadUrl: profileApi.generateStudentPhotoUploadUrl,
+    confirmStudentPhotoUpload: profileApi.confirmStudentPhotoUpload,
+    generateAvatarUploadUrl: profileApi.generateAvatarUploadUrl,
+    confirmAvatarUpload: profileApi.confirmAvatarUpload,
+    sendPhoneChangeOtp: profileApi.sendPhoneChangeOtp,
+    changePhone: profileApi.changePhone,
   };
 };

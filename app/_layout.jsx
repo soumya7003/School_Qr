@@ -216,11 +216,6 @@ export default function RootLayout() {
     // ── FIXED: Subscribe to auth changes to sync profile store ─────────────────
     useEffect(() => {
         const unsubscribe = useAuthStore.subscribe((state, prevState) => {
-            // On login
-            if (state.isAuthenticated && !prevState.isAuthenticated) {
-                console.log("[RootLayout] Auth changed: LOGIN detected");
-                onLogin();
-            }
             // On logout
             if (!state.isAuthenticated && prevState.isAuthenticated) {
                 console.log("[RootLayout] Auth changed: LOGOUT detected");
@@ -229,7 +224,7 @@ export default function RootLayout() {
         });
 
         return unsubscribe;
-    }, [onLogin, onLogout]);
+    }, [onLogout]);
 
     // ── i18n init with timeout fallback ──────────────────────────────────────
     useEffect(() => {

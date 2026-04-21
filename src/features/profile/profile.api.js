@@ -63,10 +63,24 @@ export const profileApi = {
    * body: { student_id, student?, emergency?, contacts? }
    */
   updateProfile: async (studentId, payload) => {
-    const res = await apiClient.patch("/parents/me/profile", {
+    const res = await apiClient.patch("/parents/me/profile/emergency", {
       student_id: studentId,
       ...payload,
     });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // Add inside profileApi object:
+  updateStudentBasicInfo: async (studentId, data) => {
+    const res = await apiClient.patch(
+      `/parents/me/students/${studentId}/basic`,
+      data,
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  updateParentProfile: async (data) => {
+    const res = await apiClient.patch("/parents/me/profile", data);
     return res?.data?.data ?? res?.data;
   },
 
