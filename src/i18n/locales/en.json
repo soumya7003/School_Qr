@@ -310,7 +310,7 @@
     "emergencyScan": "Emergency Scan",
     "generalScan": "General Scan",
     "suspiciousScan": "Suspicious scan detected",
-    "validUntil": "Valid until {{date}}",
+    "validUntil": "Valid until: ",
     "protected": "Protected",
     "notAssigned": "Not assigned",
     "statusActive": "Active",
@@ -419,7 +419,7 @@
     "notAssigned": "Not assigned",
     "qrNotGenerated": "QR not yet generated",
     "cancel": "Cancel"
-  } ,
+  },
   "support": {
     "pageTitle": "Help & Support",
     "pageSubtitle": "We're here to help",
