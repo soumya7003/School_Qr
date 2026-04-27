@@ -556,6 +556,126 @@ export const useProfileStore = create((set, get) => ({
     return profileApi.unlinkChildInit(studentId);
   },
 
+  // update parent profile
+  updateParentProfile: async (data) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    await profileApi.updateParentProfile(data);
+
+    set((state) => ({
+      parent: state.parent ? { ...state.parent, ...data } : state.parent,
+    }));
+
+    // persist to storage so name survives app restart
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = { ...snap.data.parent, ...data };
+      await storage.saveProfile(snap.data);
+    }
+  },
+
+  sendEmailOtp: async (email) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+    return profileApi.sendEmailVerificationOtp(email);
+  },
+
+  verifyEmail: async (email, otp) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.verifyEmail(email, otp);
+
+    // optimistic update — mark email verified in state + storage
+    set((state) => ({
+      parent: state.parent
+        ? { ...state.parent, email, is_email_verified: true }
+        : state.parent,
+    }));
+
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        email,
+        is_email_verified: true,
+      };
+      await storage.saveProfile(snap.data);
+    }
+
+    return result;
+  },
+
+  changeEmail: async (newEmail, otp) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.changeEmail(newEmail, otp);
+
+    set((state) => ({
+      parent: state.parent
+        ? { ...state.parent, email: newEmail, is_email_verified: true }
+        : state.parent,
+    }));
+
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        email: newEmail,
+        is_email_verified: true,
+      };
+      await storage.saveProfile(snap.data);
+    }
+
+    return result;
+  },
+
+  sendEmailChangeOtp: async (email) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+    return profileApi.sendEmailChangeOtp(email);
+  },
+
+  verifyEmailChange: async (email, otp) => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) throw new Error("Not authenticated");
+
+    const result = await profileApi.verifyEmailChange(email, otp);
+
+    set((state) => ({
+      parent: state.parent
+        ? { ...state.parent, email, is_email_verified: true }
+        : state.parent,
+    }));
+
+    const snap = await storage.readProfile();
+    if (snap?.data) {
+      snap.data.parent = {
+        ...snap.data.parent,
+        email,
+        is_email_verified: true,
+      };
+      await storage.saveProfile(snap.data);
+    }
+
+    return result;
+  },
+
+  // update parent avatar url
+  confirmAvatarUpload: async (key, nonce) => {
+    const result = await profileApi.confirmAvatarUpload(key, nonce);
+
+    set((state) => ({
+      parent: state.parent
+        ? { ...state.parent, avatar_url: result.avatar_url }
+        : state.parent,
+    }));
+
+    return result;
+  },
+
   clear: async () => {
     await storage.clearProfile();
     set({

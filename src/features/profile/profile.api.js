@@ -276,4 +276,67 @@ export const profileApi = {
     });
     return res?.data?.data ?? res?.data;
   },
+
+  // ── Email verification ──────────────────────────────────────────────────────
+
+  /**
+   * POST /api/parents/me/send-email-otp
+   * body: { email }
+   * → { success, message, expiresIn }
+   */
+  sendEmailVerificationOtp: async (email) => {
+    const res = await apiClient.post("/parents/me/send-email-otp", { email });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/verify-email
+   * body: { email, otp }
+   * → { success, message }
+   */
+  verifyEmail: async (email, otp) => {
+    const res = await apiClient.post("/parents/me/verify-email", {
+      email,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/change-email
+   * body: { new_email, otp }
+   * → { success, message }
+   */
+  changeEmail: async (newEmail, otp) => {
+    const res = await apiClient.post("/parents/me/change-email", {
+      new_email: newEmail,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/send-email-change-otp
+   * body: { email }
+   * → { success, message, expiresIn }
+   */
+  sendEmailChangeOtp: async (email) => {
+    const res = await apiClient.post("/parents/me/send-email-change-otp", {
+      email,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/verify-email-change
+   * body: { email, otp }
+   * → { success, message }
+   */
+  verifyEmailChange: async (email, otp) => {
+    const res = await apiClient.post("/parents/me/verify-email-change", {
+      email,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
 };

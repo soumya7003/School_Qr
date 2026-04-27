@@ -36,6 +36,7 @@ import { Platform } from "react-native";
 import { refreshAccessToken } from "./tokenRefresh";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+console.log("[BASE URL]", BASE_URL);
 
 if (!BASE_URL) {
   throw new Error("EXPO_PUBLIC_API_BASE_URL is not set. Check your .env file.");

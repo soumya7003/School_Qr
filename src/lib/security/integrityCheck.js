@@ -4,8 +4,8 @@ import Constants from "expo-constants";
 const EXPECTED_PACKAGE = process.env.EXPO_PUBLIC_APP_PACKAGE;
 
 export const checkAppIntegrity = () => {
-  // ✅ Skip entirely in development — only enforce in production builds
-  if (false) return true;
+  // TODO: change back to `if (false)` before Play Store release
+  if (true) return true;
 
   // ✅ Skip in Expo Go — it always has a different package name
   if (Constants.appOwnership === "expo") return true;

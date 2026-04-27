@@ -251,6 +251,8 @@ export const useProfile = () => {
     }
   };
 
+  // update parent profile
+
   return {
     // ── Data ──────────────────────────────────────────────────────────────────
     student,
@@ -279,7 +281,7 @@ export const useProfile = () => {
     // ── Actions ───────────────────────────────────────────────────────────────
     patchStudent,
     updateStudentBasic: useProfileStore((s) => s.updateStudentBasic),
-    updateParentProfile: profileApi.updateParentProfile,
+    updateParentProfile: useProfileStore((s) => s.updateParentProfile),
     updateVisibility,
     updateNotifications,
     updateNotificationPref,
@@ -304,7 +306,13 @@ export const useProfile = () => {
     generateStudentPhotoUploadUrl: profileApi.generateStudentPhotoUploadUrl,
     confirmStudentPhotoUpload: profileApi.confirmStudentPhotoUpload,
     generateAvatarUploadUrl: profileApi.generateAvatarUploadUrl,
-    confirmAvatarUpload: profileApi.confirmAvatarUpload,
+    confirmAvatarUpload: useProfileStore((s) => s.confirmAvatarUpload),
+    sendEmailOtp: useProfileStore((s) => s.sendEmailOtp),
+    verifyEmail: useProfileStore((s) => s.verifyEmail),
+    changeEmail: useProfileStore((s) => s.changeEmail),
+    sendEmailChangeOtp: useProfileStore((s) => s.sendEmailChangeOtp),
+    verifyEmailChange: useProfileStore((s) => s.verifyEmailChange),
+    load: profileApi.confirmAvatarUpload,
     sendPhoneChangeOtp: profileApi.sendPhoneChangeOtp,
     changePhone: profileApi.changePhone,
   };
