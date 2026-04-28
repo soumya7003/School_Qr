@@ -1,17 +1,24 @@
 // components/scan-history/ScanTimelineItem.jsx
 
+import { useReverseGeocode } from '@/hooks/useReverseGeocode.js';
 import { styles } from '@/styles/scanHistory.styles.js';
-import { formatFullDate, formatRelativeTime, formatTime, getLocationString } from '@/utils/geocoding.utils.js';
+import { formatFullDate, formatRelativeTime, formatTime } from '@/utils/formatters.utils.js';
 import { getScanConfig } from '@/utils/scanConfig.utils.js';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 
+
 export function ScanTimelineItem({ scan, index, onPress, C }) {
     const config = getScanConfig(scan.result, scan.scan_purpose, C);
-    const location = getLocationString(scan);
     const isEmergency = scan.scan_purpose === 'EMERGENCY';
+
+    const lat = scan?.latitude ?? scan?.lat;
+    const lng = scan?.longitude ?? scan?.lng;
+
+    const { placeName, loading } = useReverseGeocode(lat, lng, true);
+    const location = loading ? 'Loading...' : (placeName ?? 'Location unavailable');
 
     return (
         <TouchableOpacity onPress={() => onPress(scan)} activeOpacity={0.7}>

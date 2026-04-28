@@ -3,10 +3,11 @@
 import { useReverseGeocode } from '@/hooks/useReverseGeocode.js';
 import { styles } from '@/styles/scanHistory.styles.js';
 import { formatDateTime, getLocationString, hasCoordinates, openMaps } from '@/utils/formatters.utils.js';
-import { getScanConfig } from '@/utils/geocoding.utils.js';
+import { getScanConfig } from '@/utils/scanConfig.utils.js';
 import { Feather } from '@expo/vector-icons';
 import { Modal, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { LocationSkeleton } from './scanHistory.index';
+
 
 export function ScanDetailModal({ scan, visible, onClose, C }) {
     if (!scan || !visible) return null;
@@ -14,7 +15,13 @@ export function ScanDetailModal({ scan, visible, onClose, C }) {
     const config = getScanConfig(scan.result, scan.scan_purpose, C);
     const ipLocation = getLocationString(scan);
     const hasGpsLocation = hasCoordinates(scan);
-    const { placeName, loading: locationLoading, usingFallback } = useReverseGeocode(scan.latitude, scan.longitude, visible && hasGpsLocation);
+    const { placeName, loading: locationLoading, usingFallback } = useReverseGeocode(
+        scan?.latitude,
+        scan?.longitude,
+        visible && hasGpsLocation
+    );
+
+    if (!scan || !visible) return null;
 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
