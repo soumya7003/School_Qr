@@ -10,9 +10,7 @@
     "updates": {
       "enabled": false
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.animesh144.safetyqrapp",
