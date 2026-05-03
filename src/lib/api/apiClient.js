@@ -39,6 +39,8 @@ const BASE_URL = (
   process.env.EXPO_PUBLIC_API_BASE_URL || "https://api.getresqid.in/api"
 ).replace(/\/$/, "");
 
+Alert.alert("BASE_URL", BASE_URL);
+
 // ── BARE TEST CLIENT ──────────────────────────────────────────────────────────
 // This bypasses ALL interceptors. Exported so you can call it from any screen.
 export const bareTestClient = axios.create({

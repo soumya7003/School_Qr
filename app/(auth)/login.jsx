@@ -330,7 +330,9 @@ export default function LoginScreen() {
   }, [isRegister]);
 
   const handleSubmit = useCallback(async () => {
+    console.log('🔴 handleSubmit called | canSubmit:', canSubmit, '| loading:', loading);
     if (!canSubmit || loading) return;
+
     Keyboard.dismiss();
     setApiError(null);
     setFieldError(null);
@@ -339,12 +341,15 @@ export default function LoginScreen() {
 
     try {
       const phone = `+91${mobile.trim()}`;
+      console.log('🔴 phone:', phone, '| isRegister:', isRegister);
 
       if (isRegister) {
+        console.log('🔴 calling initRegistration | card:', cardNumber.trim().toUpperCase());
         const response = await registrationApi.initRegistration({
           card_number: cardNumber.trim().toUpperCase(),
           phone,
         });
+        console.log('🔴 initRegistration SUCCESS:', JSON.stringify(response));
         router.push({
           pathname: '/(auth)/otp',
           params: {
@@ -356,14 +361,22 @@ export default function LoginScreen() {
           },
         });
       } else {
-        await authApi.sendOtp(phone);
+        console.log('🔴 calling sendOtp...');
+        const res = await authApi.sendOtp(phone);
+        console.log('🔴 sendOtp SUCCESS:', JSON.stringify(res));
         router.push({ pathname: '/(auth)/otp', params: { phone, mode: 'login' } });
       }
     } catch (error) {
+      console.log('🔴 ERROR message:', error?.message);
+      console.log('🔴 ERROR status:', error?.status);
+      console.log('🔴 ERROR code:', error?.code);
+      console.log('🔴 ERROR response data:', JSON.stringify(error?.response?.data));
+      console.log('🔴 ERROR full:', JSON.stringify(error));
+
       const errorMsg = getErrorMessage(error);
+      console.log('🔴 errorMsg shown to user:', errorMsg);
       setApiError(errorMsg);
 
-      // Set field-specific errors
       if (errorMsg.includes('card')) setFieldError('card');
       else if (errorMsg.includes('phone') || errorMsg.includes('mobile')) setFieldError('mobile');
       else setFieldError(null);
