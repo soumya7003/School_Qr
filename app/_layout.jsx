@@ -13,7 +13,7 @@ import { useProfileStore } from "@/features/profile/profile.store";
 import { useInactivityLock } from "@/hooks/useInactivityLock";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { initI18n } from "@/i18n";
-import { setLogoutHandler } from "@/lib/api/apiClient";
+import { runBareTest, setLogoutHandler } from "@/lib/api/apiClient";
 import { isDeviceRooted } from "@/lib/security/deviceSecurity";
 import { checkAppIntegrity } from "@/lib/security/integrityCheck";
 import AppProviders from "@/providers";
@@ -188,11 +188,17 @@ export default function RootLayout() {
             // Step 1: Hydrate auth store first
             await hydrateAuth();
             console.log("[RootLayout] Auth hydrated, isAuthenticated:", isAuthenticated);
-            setAuthReady(true);
+            // ── BARE NETWORK TEST — fires right after auth is ready ──
+            setTimeout(() => {
+                runBareTest();
+            }, 800);
 
             // Step 2: Hydrate profile store (it will wait for auth internally)
             await hydrateProfile();
             console.log("[RootLayout] Profile hydrated");
+
+            setAuthReady(true);
+
         };
 
         init().catch((err) => {

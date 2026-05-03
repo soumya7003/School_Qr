@@ -19,8 +19,9 @@
 import { storage } from "@/lib/storage/storage";
 import axios from "axios";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
+const BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL || "https://api.getresqid.in/api"
+).replace(/\/$/, "");
 // ── Subscriber queue ──────────────────────────────────────────────────────────
 
 let _refreshing = false;
@@ -75,9 +76,12 @@ export const refreshAccessToken = async () => {
 
     // Backend returns: { success: true, data: { accessToken, refreshToken, expiresAt } }
     const data = res?.data?.data ?? res?.data;
-    const newAccessToken = data?.accessToken ?? null;
-    const newRefreshToken = data?.refreshToken ?? null;
-    const expiresAt = data?.expiresAt ?? null;
+
+    // ✅ FIXED: Backend returns snake_case (access_token, refresh_token, expires_at)
+    // Support both formats in case backend changes
+    const newAccessToken = data?.access_token ?? data?.accessToken ?? null;
+    const newRefreshToken = data?.refresh_token ?? data?.refreshToken ?? null;
+    const expiresAt = data?.expires_at ?? data?.expiresAt ?? null;
 
     if (!newAccessToken || !newRefreshToken) {
       throw new Error("MALFORMED_REFRESH_RESPONSE");

@@ -82,7 +82,7 @@ export default function UpdatesScreen() {
     cls, setCls, section, setSection,
     profileImage, setProfileImage, bloodGroup, setBloodGroup, allergies, setAllergies,
     conditions, setConditions, medications, setMedications, doctorName, setDoctorName,
-    doctorPhone, setDoctorPhone, notes, setNotes, sortedContacts, canProceed, setContacts,
+    doctorPhone, setDoctorPhone, notes, setNotes, sortedContacts, canProceed,
   } = useProfileForm(student);
 
   const { uploading, uploadPhotoToCloudflare } = usePhotoUpload(student?.id);
@@ -110,8 +110,9 @@ export default function UpdatesScreen() {
     }
   }, [student?.dob]);
 
-  // Sync contacts
-  useEffect(() => { setContacts(contacts); }, [contacts]);
+  // ✅ REMOVED: circular sync effect — useContactManagement owns contacts state.
+  // setContacts from useProfileForm no longer exists; useProfileForm now exposes
+  // only sortedContacts (derived from store) as the seed for useContactManagement.
 
   // Redirect if no children
   useEffect(() => {

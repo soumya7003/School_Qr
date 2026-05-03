@@ -32,15 +32,32 @@ import NetInfo from "@react-native-community/netinfo";
 import axios from "axios";
 import * as Application from "expo-application";
 import * as Crypto from "expo-crypto";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import { refreshAccessToken } from "./tokenRefresh";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-console.log("[BASE URL]", BASE_URL);
+const BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL || "https://api.getresqid.in/api"
+).replace(/\/$/, "");
 
-if (!BASE_URL) {
-  throw new Error("EXPO_PUBLIC_API_BASE_URL is not set. Check your .env file.");
-}
+// ── BARE TEST CLIENT ──────────────────────────────────────────────────────────
+// This bypasses ALL interceptors. Exported so you can call it from any screen.
+export const bareTestClient = axios.create({
+  baseURL: BASE_URL,
+  timeout: 15_000,
+  headers: { "Content-Type": "application/json", Accept: "application/json" },
+});
+
+export const runBareTest = async () => {
+  try {
+    const res = await bareTestClient.get("/health");
+    Alert.alert("TEST PASSED", `Status: ${res.status}`);
+    return true;
+  } catch (err) {
+    Alert.alert("TEST FAILED", err.message);
+    return false;
+  }
+};
+// ───────────────────────────────────────────────────────────────────────────────
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +181,7 @@ const triggerLogout = async () => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const isRetryable = (status) => [502, 503, 504].includes(status);
 
-// Cache fingerprint in memory — no need to hit SecureStore on every request
+// Cache fingerprint in memory
 let _cachedFingerprint = null;
 const getCachedFingerprint = async () => {
   if (!_cachedFingerprint) {
@@ -177,39 +194,39 @@ const getCachedFingerprint = async () => {
 
 apiClient.interceptors.request.use(
   async (config) => {
-    // 1. Network check — reject immediately if offline
+    // 1. Network check
     const netState = await NetInfo.fetch().catch(() => null);
     if (netState && !netState.isConnected) {
       return Promise.reject(new ApiError(ApiCode.OFFLINE, null, null));
     }
 
-    // 2. Unique request ID for distributed tracing
+    // 2. Unique request ID
     try {
       config.headers["X-Request-ID"] = Crypto.randomUUID();
     } catch {
       config.headers["X-Request-ID"] = `fb-${Date.now()}`;
     }
 
-    // 3. Timestamp — backend can reject requests older than N seconds
+    // 3. Timestamp
     config.headers["X-Timestamp"] = Date.now().toString();
 
-    // 4. Device fingerprint and Device ID
+    // 4. Device fingerprint
     const fingerprint = await getCachedFingerprint();
     config.headers["X-Device-Fingerprint"] = fingerprint;
     config.headers["X-Device-ID"] = fingerprint;
 
-    // 5. App metadata — useful for server-side analytics + version gating
+    // 5. App metadata
     config.headers["X-App-Version"] =
       Application.nativeApplicationVersion ?? "unknown";
     config.headers["X-Platform"] = Platform.OS;
 
-    // 6. Attach AbortController for request cancellation
+    // 6. AbortController
     const controller = new AbortController();
     config.signal = controller.signal;
     controllers.set(config.headers["X-Request-ID"], controller);
 
     try {
-      // 7. Proactively refresh token if expiring soon
+      // 7. Proactive refresh
       const needsRefresh = await storage.shouldProactivelyRefresh();
 
       if (needsRefresh && !refresh.recentlyFailed) {
@@ -226,11 +243,11 @@ apiClient.interceptors.request.use(
         }
       }
 
-      // 8. Attach access token
+      // 8. Access token
       const token = await storage.getAccessToken();
       if (token) config.headers.Authorization = `Bearer ${token}`;
     } catch {
-      // Fail open — let request proceed, 401 handler will catch expired token
+      // Fail open
     }
 
     return config;
@@ -250,7 +267,6 @@ apiClient.interceptors.response.use(
     const req = err.config;
     const reqId = req?.headers?.["X-Request-ID"];
 
-    // Always clean up AbortController
     cleanupController(reqId);
 
     if (axios.isCancel(err))
@@ -264,7 +280,6 @@ apiClient.interceptors.response.use(
 
     const { status } = err.response;
 
-    // ✅ ADDED: Debug logging for 400 errors
     if (status === 400) {
       console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       console.error("🔴 API 400 ERROR DEBUG:");
@@ -281,7 +296,6 @@ apiClient.interceptors.response.use(
       console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
-    // ── 401: Token expired — refresh + retry ──────────────────────────────────
     if (status === 401 && !req._retry) {
       req._retry = true;
 
@@ -316,13 +330,11 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // ── 403: Forbidden — device fingerprint mismatch or account suspended ─────
     if (status === 403) {
       await triggerLogout();
       return Promise.reject(new ApiError(ApiCode.FORBIDDEN, 403, err));
     }
 
-    // ── 502/503/504: Server down — exponential backoff retry ──────────────────
     if (isRetryable(status)) {
       req._retryCount = (req._retryCount ?? 0) + 1;
       if (req._retryCount <= MAX_RETRIES) {

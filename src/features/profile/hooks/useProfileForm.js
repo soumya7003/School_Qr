@@ -1,13 +1,16 @@
-// src/features/profile/hooks/useProfileForm.js - FIXED
+// src/features/profile/hooks/useProfileForm.js
 import { BLOOD_GROUP_FROM_ENUM } from "@/constants/profile";
 import { useEffect, useMemo, useState } from "react";
 
 export function useProfileForm(student) {
   const ep = student?.emergency ?? null;
-  const rawContacts = useMemo(
-    () => student?.emergency?.contacts ?? [],
-    [student?.emergency?.contacts],
-  );
+
+  // ✅ Derive sorted contacts directly from the store — no local state copy
+  // This is the source of truth. useContactManagement seeds from here.
+  const sortedContacts = useMemo(() => {
+    const raw = student?.emergency?.contacts ?? [];
+    return [...raw].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+  }, [student?.emergency?.contacts]);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -23,7 +26,6 @@ export function useProfileForm(student) {
   const [doctorName, setDoctorName] = useState("");
   const [doctorPhone, setDoctorPhone] = useState("");
   const [notes, setNotes] = useState("");
-  const [contacts, setContacts] = useState([]);
 
   // ✅ Helper to get proper image URL
   const getPhotoUrl = (photoKey) => {
@@ -34,18 +36,18 @@ export function useProfileForm(student) {
     return `https://assets.getresqid.in/${photoKey}`;
   };
 
-  // ✅ Load ALL student fields when student changes
+  // ✅ Load student fields when student changes
   useEffect(() => {
     if (student) {
       setFirstName(student.first_name ?? "");
       setLastName(student.last_name ?? "");
-      setDob(student.dob ?? ""); // ✅ ADDED
-      setGender(student.gender ?? ""); // ✅ ADDED
+      setDob(student.dob ?? "");
+      setGender(student.gender ?? "");
       setCls(student.class ?? "");
       setSection(student.section ?? "");
       setProfileImage(getPhotoUrl(student.photo_url));
     }
-  }, [student]);
+  }, [student?.id]); // ✅ key on student.id — avoids re-running on every emergency sub-field change
 
   // ✅ Load emergency fields when emergency changes
   useEffect(() => {
@@ -62,12 +64,6 @@ export function useProfileForm(student) {
     }
   }, [ep]);
 
-  // ✅ Load contacts
-  useEffect(() => {
-    setContacts(rawContacts ?? []);
-  }, [rawContacts]);
-
-  const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
   const canProceed = firstName.trim().length > 0 && lastName.trim().length > 0;
 
   return {
@@ -99,9 +95,9 @@ export function useProfileForm(student) {
     setDoctorPhone,
     notes,
     setNotes,
-    contacts,
-    setContacts,
-    sortedContacts,
+    // ✅ contacts state here — useContactManagement owns it
+    // ✅ setContacts here — nothing to circularly sync back
+    sortedContacts, // passed into useContactManagement as initialContacts
     canProceed,
     getPhotoUrl,
   };

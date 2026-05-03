@@ -262,8 +262,11 @@ export const useProfileStore = create((set, get) => ({
       lastRefreshTime: null,
       isFetching: false,
       isInitialized: false,
+      isHydrated: false, // ← forces consumers to wait
     });
-    return get().fetchAndPersist({ silent: false });
+    const result = await get().fetchAndPersist({ silent: false });
+    set({ isHydrated: true }); // ← mark ready only after fetch
+    return result;
   },
 
   onLogout: async () => {
@@ -288,13 +291,16 @@ export const useProfileStore = create((set, get) => ({
 
     await profileApi.updateStudentBasicInfo(studentId, data);
 
+    // ✅ FIX: optimistic update only — NO refresh() here.
+    // patchStudent is always called after this in handleSubmitAll and it
+    // already calls refresh() at the end. Calling refresh() here races
+    // against patchStudent and can overwrite the store with stale server
+    // data before patchStudent's optimistic contacts merge runs.
     set((state) => ({
       students: state.students.map((s) =>
         s.id === studentId ? { ...s, ...data } : s,
       ),
     }));
-
-    await get().refresh();
   },
 
   // ── Student update methods ──────────────────────────────────────────────────
@@ -307,19 +313,45 @@ export const useProfileStore = create((set, get) => ({
     const currentStudent = get().students.find((s) => s.id === studentId);
     if (currentStudent) {
       let updatedStudent = { ...currentStudent };
-      if (payload.student) Object.assign(updatedStudent, payload.student);
+
+      if (payload.student) {
+        Object.assign(updatedStudent, payload.student);
+      }
+
       if (payload.emergency) {
         updatedStudent.emergency = {
           ...(currentStudent.emergency ?? {}),
           ...payload.emergency,
         };
       }
+
+      // ✅ FIX: merge contacts into emergency so the store reflects what was
+      // just saved. Without this, student.emergency.contacts in the store
+      // stays as the old DB value and useProfileForm seeds the form with
+      // stale contacts on every subsequent open.
+      if (payload.contacts) {
+        updatedStudent.emergency = {
+          ...(updatedStudent.emergency ?? {}),
+          contacts: payload.contacts,
+        };
+      }
+
       set((state) => ({
         students: state.students.map((s) =>
           s.id === studentId ? updatedStudent : s,
         ),
       }));
-      await storage.patchProfileStudent(studentId, payload);
+
+      // ✅ Persist the full merged emergency (including contacts) to storage
+      // so the correct data survives app restart before the next API refresh.
+      await storage.patchProfileStudent(studentId, {
+        ...payload,
+        emergency: {
+          ...(payload.emergency ?? {}),
+          contacts:
+            payload.contacts ?? currentStudent.emergency?.contacts ?? [],
+        },
+      });
     }
 
     await get().refresh();
@@ -556,7 +588,6 @@ export const useProfileStore = create((set, get) => ({
     return profileApi.unlinkChildInit(studentId);
   },
 
-  // update parent profile
   updateParentProfile: async (data) => {
     const { isAuthenticated } = useAuthStore.getState();
     if (!isAuthenticated) throw new Error("Not authenticated");
@@ -567,7 +598,6 @@ export const useProfileStore = create((set, get) => ({
       parent: state.parent ? { ...state.parent, ...data } : state.parent,
     }));
 
-    // persist to storage so name survives app restart
     const snap = await storage.readProfile();
     if (snap?.data) {
       snap.data.parent = { ...snap.data.parent, ...data };
@@ -587,7 +617,6 @@ export const useProfileStore = create((set, get) => ({
 
     const result = await profileApi.verifyEmail(email, otp);
 
-    // optimistic update — mark email verified in state + storage
     set((state) => ({
       parent: state.parent
         ? { ...state.parent, email, is_email_verified: true }
@@ -663,7 +692,6 @@ export const useProfileStore = create((set, get) => ({
     return result;
   },
 
-  // update parent avatar url
   confirmAvatarUpload: async (key, nonce) => {
     const result = await profileApi.confirmAvatarUpload(key, nonce);
 
@@ -687,7 +715,7 @@ export const useProfileStore = create((set, get) => ({
       anomaly: null,
       isFetching: false,
       lastRefreshTime: null,
-      isInitialized: false, // ← add this
+      isInitialized: false,
     });
   },
 
