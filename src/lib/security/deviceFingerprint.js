@@ -57,28 +57,32 @@ const getOrCreateUUID = async () => {
   }
 };
 
+const withTimeout = (promise, fallback, ms = 3000) =>
+  Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+
 const buildHardwareComposite = async () => {
   const parts = [];
 
-  // ✅ FIX: iOS has no getAndroidId() – handle gracefully
   if (Platform.OS === "android") {
-    try {
-      const androidId = await Application.getAndroidId();
-      parts.push(androidId ?? "no-android-id");
-    } catch {
-      parts.push("no-android-id");
-    }
+    // ✅ Hard timeout — getAndroidId() can hang in preview builds
+    const androidId = await withTimeout(
+      Application.getAndroidId(),
+      "no-android-id",
+      2000,
+    );
+    parts.push(androidId ?? "no-android-id");
   } else {
-    // iOS: use identifierForVendor instead
-    try {
-      const iosId = await Application.getIosIdForVendorAsync();
-      parts.push(iosId ?? "no-ios-id");
-    } catch {
-      parts.push("no-ios-id");
-    }
+    const iosId = await withTimeout(
+      Application.getIosIdForVendorAsync(),
+      "no-ios-id",
+      2000,
+    );
+    parts.push(iosId ?? "no-ios-id");
   }
 
-  // Device hardware properties — stable across app reinstalls
   parts.push(Device.deviceName ?? "unknown-name");
   parts.push(Device.brand ?? "unknown-brand");
   parts.push(Device.modelName ?? "unknown-model");
@@ -93,7 +97,12 @@ const buildHardwareComposite = async () => {
 
 export const getDeviceFingerprint = async () => {
   try {
-    const cached = await SecureStore.getItemAsync(FINGERPRINT_KEY, SECURE_OPT);
+    // ✅ SecureStore can also hang on first access in preview builds
+    const cached = await withTimeout(
+      SecureStore.getItemAsync(FINGERPRINT_KEY, SECURE_OPT),
+      null,
+      2000,
+    );
     if (cached) return cached;
 
     const [hardwareComposite, uuid] = await Promise.all([
@@ -104,11 +113,13 @@ export const getDeviceFingerprint = async () => {
     const hardwareHash = await sha256(hardwareComposite);
     const fingerprint = await sha256(`${hardwareHash}:${uuid}`);
 
-    await SecureStore.setItemAsync(FINGERPRINT_KEY, fingerprint, SECURE_OPT);
+    // Best-effort save — don't await or let it block
+    SecureStore.setItemAsync(FINGERPRINT_KEY, fingerprint, SECURE_OPT).catch(
+      () => {},
+    );
 
     return fingerprint;
-  } catch (error) {
-    if (false) console.warn("[deviceFingerprint] failed:", error.message);
+  } catch {
     return sha256(Crypto.randomUUID());
   }
 };

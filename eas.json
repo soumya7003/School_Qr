@@ -6,18 +6,36 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.getresqid.in/api/",
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_APP_PACKAGE": "com.animesh144.safetyqrapp",
+        "EXPO_PUBLIC_EXPO_PROJECT_ID": "8b193d0d-4f69-41d2-8e0e-59aeecc83565"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.getresqid.in/api/",
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_APP_PACKAGE": "com.animesh144.safetyqrapp",
+        "EXPO_PUBLIC_EXPO_PROJECT_ID": "8b193d0d-4f69-41d2-8e0e-59aeecc83565"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.getresqid.in/api/",
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_APP_PACKAGE": "com.animesh144.safetyqrapp",
+        "EXPO_PUBLIC_EXPO_PROJECT_ID": "8b193d0d-4f69-41d2-8e0e-59aeecc83565"
       }
     }
   },

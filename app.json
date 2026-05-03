@@ -7,15 +7,12 @@
     "scheme": "safetyqrapp",
     "icon": "./assets/images/app_icon.png",
     "userInterfaceStyle": "automatic",
-
     "updates": {
       "enabled": false
     },
-
     "runtimeVersion": {
       "policy": "appVersion"
     },
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.animesh144.safetyqrapp",
@@ -24,15 +21,15 @@
         "NSFaceIDUsageDescription": "Face ID is used to secure your child's emergency data."
       }
     },
-
     "android": {
       "package": "com.animesh144.safetyqrapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app_icon.png",
         "backgroundColor": "#1a1a1a"
       },
-      "enableProguardInReleaseBuilds": true,
-      "enableShrinkResourcesInReleaseBuilds": true,
+      "enableProguardInReleaseBuilds": false,
+      "enableShrinkResourcesInReleaseBuilds": false,
+      "abiFilters": ["arm64-v8a"],
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.USE_BIOMETRIC",
@@ -40,12 +37,12 @@
         "android.permission.VIBRATE"
       ]
     },
-
     "plugins": [
       [
         "expo-notifications",
         {
-          "color": "#E8342A"
+          "icon": "./assets/images/app_icon.png",
+          "color": "#f97316"
         }
       ],
       "expo-router",
@@ -72,13 +69,11 @@
         }
       ]
     ],
-
     "extra": {
       "eas": {
         "projectId": "8b193d0d-4f69-41d2-8e0e-59aeecc83565"
       }
     },
-
     "owner": "optimas144"
   }
 }

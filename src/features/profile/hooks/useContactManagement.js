@@ -1,11 +1,24 @@
 // src/features/profile/hooks/useContactManagement.js
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 
 export function useContactManagement(initialContacts = []) {
   const [contacts, setContacts] = useState(initialContacts);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
+
+  // ✅ Track whether we've seeded from real data yet.
+  // useState(initialContacts) only runs on first mount — if the store was still
+  // hydrating at that point, initialContacts was [] and the real contacts never
+  // appeared. This ref lets us re-seed exactly once when the real data arrives.
+  const seededRef = useRef(initialContacts.length > 0);
+
+  useEffect(() => {
+    if (!seededRef.current && initialContacts.length > 0) {
+      setContacts(initialContacts);
+      seededRef.current = true;
+    }
+  }, [initialContacts]);
 
   const handleSaveContact = (data) => {
     if (editingContact?.id) {

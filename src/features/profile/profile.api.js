@@ -63,10 +63,24 @@ export const profileApi = {
    * body: { student_id, student?, emergency?, contacts? }
    */
   updateProfile: async (studentId, payload) => {
-    const res = await apiClient.patch("/parents/me/profile", {
+    const res = await apiClient.patch("/parents/me/profile/emergency", {
       student_id: studentId,
       ...payload,
     });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // Add inside profileApi object:
+  updateStudentBasicInfo: async (studentId, data) => {
+    const res = await apiClient.patch(
+      `/parents/me/students/${studentId}/basic`,
+      data,
+    );
+    return res?.data?.data ?? res?.data;
+  },
+
+  updateParentProfile: async (data) => {
+    const res = await apiClient.patch("/parents/me/profile", data);
     return res?.data?.data ?? res?.data;
   },
 
@@ -258,6 +272,69 @@ export const profileApi = {
   changePhone: async ({ new_phone, otp }) => {
     const res = await apiClient.post("/parents/me/change-phone", {
       new_phone,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  // ── Email verification ──────────────────────────────────────────────────────
+
+  /**
+   * POST /api/parents/me/send-email-otp
+   * body: { email }
+   * → { success, message, expiresIn }
+   */
+  sendEmailVerificationOtp: async (email) => {
+    const res = await apiClient.post("/parents/me/send-email-otp", { email });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/verify-email
+   * body: { email, otp }
+   * → { success, message }
+   */
+  verifyEmail: async (email, otp) => {
+    const res = await apiClient.post("/parents/me/verify-email", {
+      email,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/change-email
+   * body: { new_email, otp }
+   * → { success, message }
+   */
+  changeEmail: async (newEmail, otp) => {
+    const res = await apiClient.post("/parents/me/change-email", {
+      new_email: newEmail,
+      otp,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/send-email-change-otp
+   * body: { email }
+   * → { success, message, expiresIn }
+   */
+  sendEmailChangeOtp: async (email) => {
+    const res = await apiClient.post("/parents/me/send-email-change-otp", {
+      email,
+    });
+    return res?.data?.data ?? res?.data;
+  },
+
+  /**
+   * POST /api/parents/me/verify-email-change
+   * body: { email, otp }
+   * → { success, message }
+   */
+  verifyEmailChange: async (email, otp) => {
+    const res = await apiClient.post("/parents/me/verify-email-change", {
+      email,
       otp,
     });
     return res?.data?.data ?? res?.data;

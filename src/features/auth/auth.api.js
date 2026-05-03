@@ -51,6 +51,37 @@ export const authApi = {
   },
 
   /**
+   * POST /auth/refresh
+   * Exchanges a valid refresh token for a new access token.
+   * Called automatically by apiClient interceptor on 401.
+   *
+   * Returns normalised shape:
+   * {
+   *   accessToken  : string
+   *   refreshToken : string   ← rotated token from server
+   *   expiresAt    : number   ← Unix seconds
+   * }
+   */
+  refresh: async (refreshToken) => {
+    const res = await authClient.post("/auth/refresh", { refreshToken });
+    const data = res?.data?.data ?? res?.data;
+
+    if (!data?.access_token) throw new Error("REFRESH: missing access_token");
+
+    return {
+      accessToken: data.access_token,
+      // ✅ Fall back to same refresh token if server doesn't rotate
+      refreshToken: data.refresh_token ?? refreshToken,
+      // ✅ Handle both expires_at (unix) and expires_in (seconds offset)
+      expiresAt:
+        data.expires_at ??
+        (data.expires_in
+          ? Math.floor(Date.now() / 1000) + data.expires_in
+          : Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60), // 30d fallback
+    };
+  },
+
+  /**
    * POST /auth/logout
    * Best-effort — local state cleared regardless of response.
    * Sends refreshToken in body (mobile cannot use httpOnly cookies).

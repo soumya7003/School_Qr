@@ -69,11 +69,17 @@ export const useAuthStore = create((set, get) => {
           ]);
 
           const nowSecs = Math.floor(Date.now() / 1000);
-          const hasSession =
-            !!authState?.accessToken &&
-            !!authState?.refreshToken &&
-            typeof authState?.expiresAt === "number" &&
-            authState.expiresAt - nowSecs > 60;
+
+          // ✅ FIXED: expiresAt can be null if backend omits it (e.g. verifyOtp
+          // returns expires_at: null). Don't reject valid tokens just because
+          // expiry info is missing — the apiClient interceptor handles real expiry.
+          const tokensExist =
+            !!authState?.accessToken && !!authState?.refreshToken;
+          const notExpired =
+            typeof authState?.expiresAt !== "number"
+              ? true // no expiry stamp → trust the tokens, let server reject if needed
+              : authState.expiresAt - nowSecs > 60;
+          const hasSession = tokensExist && notExpired;
 
           set({
             isAuthenticated: hasSession,

@@ -1,29 +1,31 @@
-// src/features/profile/hooks/useProfileForm.js - FIXED
+// src/features/profile/hooks/useProfileForm.js
 import { BLOOD_GROUP_FROM_ENUM } from "@/constants/profile";
 import { useEffect, useMemo, useState } from "react";
 
 export function useProfileForm(student) {
   const ep = student?.emergency ?? null;
-  const rawContacts = useMemo(
-    () => student?.emergency?.contacts ?? [],
-    [student?.emergency?.contacts],
-  );
 
-  const [firstName, setFirstName] = useState(student?.first_name ?? "");
-  const [lastName, setLastName] = useState(student?.last_name ?? "");
-  const [cls, setCls] = useState(student?.class ?? "");
-  const [section, setSection] = useState(student?.section ?? "");
-  const [profileImage, setProfileImage] = useState(null); // ✅ Start with null
-  const [bloodGroup, setBloodGroup] = useState(
-    BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? "",
-  );
-  const [allergies, setAllergies] = useState(ep?.allergies ?? "");
-  const [conditions, setConditions] = useState(ep?.conditions ?? "");
-  const [medications, setMedications] = useState(ep?.medications ?? "");
-  const [doctorName, setDoctorName] = useState(ep?.doctor_name ?? "");
-  const [doctorPhone, setDoctorPhone] = useState(ep?.doctor_phone ?? "");
-  const [notes, setNotes] = useState(ep?.notes ?? "");
-  const [contacts, setContacts] = useState(rawContacts ?? []);
+  // ✅ Derive sorted contacts directly from the store — no local state copy
+  // This is the source of truth. useContactManagement seeds from here.
+  const sortedContacts = useMemo(() => {
+    const raw = student?.emergency?.contacts ?? [];
+    return [...raw].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+  }, [student?.emergency?.contacts]);
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [dob, setDob] = useState("");
+  const [gender, setGender] = useState("");
+  const [cls, setCls] = useState("");
+  const [section, setSection] = useState("");
+  const [profileImage, setProfileImage] = useState(null);
+  const [bloodGroup, setBloodGroup] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const [conditions, setConditions] = useState("");
+  const [medications, setMedications] = useState("");
+  const [doctorName, setDoctorName] = useState("");
+  const [doctorPhone, setDoctorPhone] = useState("");
+  const [notes, setNotes] = useState("");
 
   // ✅ Helper to get proper image URL
   const getPhotoUrl = (photoKey) => {
@@ -34,32 +36,34 @@ export function useProfileForm(student) {
     return `https://assets.getresqid.in/${photoKey}`;
   };
 
+  // ✅ Load student fields when student changes
   useEffect(() => {
-    setFirstName(student?.first_name ?? "");
-    setLastName(student?.last_name ?? "");
-    setCls(student?.class ?? "");
-    setSection(student?.section ?? "");
-    // ✅ Convert photo_url to proper URL
-    setProfileImage(getPhotoUrl(student?.photo_url));
-  }, [student]);
+    if (student) {
+      setFirstName(student.first_name ?? "");
+      setLastName(student.last_name ?? "");
+      setDob(student.dob ?? "");
+      setGender(student.gender ?? "");
+      setCls(student.class ?? "");
+      setSection(student.section ?? "");
+      setProfileImage(getPhotoUrl(student.photo_url));
+    }
+  }, [student?.id]); // ✅ key on student.id — avoids re-running on every emergency sub-field change
 
+  // ✅ Load emergency fields when emergency changes
   useEffect(() => {
-    setBloodGroup(
-      BLOOD_GROUP_FROM_ENUM[ep?.blood_group] ?? ep?.blood_group ?? "",
-    );
-    setAllergies(ep?.allergies ?? "");
-    setConditions(ep?.conditions ?? "");
-    setMedications(ep?.medications ?? "");
-    setDoctorName(ep?.doctor_name ?? "");
-    setDoctorPhone(ep?.doctor_phone ?? "");
-    setNotes(ep?.notes ?? "");
+    if (ep) {
+      setBloodGroup(
+        BLOOD_GROUP_FROM_ENUM[ep.blood_group] ?? ep.blood_group ?? "",
+      );
+      setAllergies(ep.allergies ?? "");
+      setConditions(ep.conditions ?? "");
+      setMedications(ep.medications ?? "");
+      setDoctorName(ep.doctor_name ?? "");
+      setDoctorPhone(ep.doctor_phone ?? "");
+      setNotes(ep.notes ?? "");
+    }
   }, [ep]);
 
-  useEffect(() => {
-    setContacts(rawContacts ?? []);
-  }, [rawContacts]);
-
-  const sortedContacts = [...contacts].sort((a, b) => a.priority - b.priority);
   const canProceed = firstName.trim().length > 0 && lastName.trim().length > 0;
 
   return {
@@ -67,6 +71,10 @@ export function useProfileForm(student) {
     setFirstName,
     lastName,
     setLastName,
+    dob,
+    setDob,
+    gender,
+    setGender,
     cls,
     setCls,
     section,
@@ -87,10 +95,10 @@ export function useProfileForm(student) {
     setDoctorPhone,
     notes,
     setNotes,
-    contacts,
-    setContacts,
-    sortedContacts,
+    // ✅ contacts state here — useContactManagement owns it
+    // ✅ setContacts here — nothing to circularly sync back
+    sortedContacts, // passed into useContactManagement as initialContacts
     canProceed,
-    getPhotoUrl, // ✅ Export helper
+    getPhotoUrl,
   };
 }
